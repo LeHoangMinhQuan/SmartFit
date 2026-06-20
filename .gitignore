@@ -64,7 +64,7 @@ build/Release
 
 # Dependency directories
 node_modules/
-package-lock.json
+*/.env
 yarn.lock
 jspm_packages/
 
@@ -162,3 +162,4 @@ dist
 .pnp.*
 *.ps1
 *.md
+
