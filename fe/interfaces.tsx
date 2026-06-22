@@ -14,6 +14,9 @@ export type ButtonVariant = "primary" | "secondary" | "default";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
-  onClick?: () => void;
   variant?: ButtonVariant;
+  // onClick is inherited from ButtonHTMLAttributes<HTMLButtonElement> with the
+  // correct signature: React.MouseEventHandler<HTMLButtonElement>.
+  // Do NOT redeclare it as () => void — that drops the event parameter and
+  // causes "not assignable" errors when the event is passed by React internally.
 }

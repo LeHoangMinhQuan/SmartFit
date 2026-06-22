@@ -20,14 +20,14 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         {/* Left: Filters Sidebar */}
         <div className="hidden md:block w-1/4 border border-gray-200 rounded-2xl p-6 h-fit sticky top-24">
           <div className="flex justify-between items-center mb-6 border-b border-gray-200 pb-4">
-            <h2 className="text-xl font-bold">Filters</h2>
+            <h2 className="text-xl font-bold text-black">Filters</h2>
             {/* Filter Icon */}
             <svg
               width="24"
               height="24"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="currentColor"
+              stroke="black"
               strokeWidth="2"
             >
               <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
@@ -48,7 +48,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
 
           {/* Price Range */}
           <div className="mb-6 border-b border-gray-200 pb-6">
-            <h3 className="font-bold mb-4">Price</h3>
+            <h3 className="font-bold mb-4 text-black">Price</h3>
             <input
               type="range"
               min="50"
@@ -58,14 +58,14 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
               className="w-full accent-black"
             />
             <div className="flex justify-between mt-2 text-sm font-medium">
-              <span>$50</span>
-              <span>${priceRange}</span>
+              <span className="text-black">$50</span>
+              <span className="text-black">${priceRange}</span>
             </div>
           </div>
 
           {/* Colors */}
           <div className="mb-6 border-b border-gray-200 pb-6">
-            <h3 className="font-bold mb-4">Colors</h3>
+            <h3 className=" text-black">Colors</h3>
             <div className="flex flex-wrap gap-3">
               {[
                 "bg-red-500",
@@ -92,7 +92,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         {/* Right: Product Grid */}
         <div className="w-full md:w-3/4">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold capitalize">
+            <h1 className="text-3xl font-bold capitalize text-black">
               {params.slug || "Casual"}
             </h1>
             <div className="text-sm text-gray-500 flex items-center gap-2">

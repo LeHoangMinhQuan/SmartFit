@@ -7,8 +7,8 @@ export interface UserRow {
   username: string;
   email: string;
   password_hash: string;
-  phone: string | null;
-  address: string | null;
+  phone: string; // CHAR(10) NOT NULL
+  address: string; // VARCHAR(70) NOT NULL
   avatar_url: string | null;
   google_id: string | null;
   created_at: Date;
@@ -21,16 +21,16 @@ export interface RefreshTokenRow {
   expires_at: Date;
 }
 
-// ─── "USER" queries ───────────────────────────────────────────────────────────
+// ─── USER queries ───────────────────────────────────────────────────────────
 
 export const findUserByEmail = (email: string): Promise<UserRow | undefined> =>
-  db<UserRow>('"USER"').where({ email }).first();
+  db<UserRow>('USER').where({ email }).first();
 
 export const findUserById = (user_id: number): Promise<UserRow | undefined> =>
-  db<UserRow>('"USER"').where({ user_id }).first();
+  db<UserRow>('USER').where({ user_id }).first();
 
 export const emailExists = async (email: string): Promise<boolean> => {
-  const row = await db<UserRow>('"USER"')
+  const row = await db<UserRow>('USER')
     .where({ email })
     .select("user_id")
     .first();
@@ -44,8 +44,9 @@ export const insertUser = (user: {
   username: string;
   email: string;
   password_hash: string;
-  phone?: string;
-}): Promise<UserRow[]> => db<UserRow>('"USER"').insert(user).returning("*");
+  phone: string; // CHAR(10) NOT NULL
+  address: string; // VARCHAR(70) NOT NULL
+}): Promise<UserRow[]> => db<UserRow>('USER').insert(user).returning("*");
 
 // ─── refresh_token queries ────────────────────────────────────────────────────
 

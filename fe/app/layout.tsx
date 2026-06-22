@@ -21,7 +21,7 @@ export default function RootLayout({
       <body className="bg-white text-black font-sans antialiased">
         <TopBanner />
         <Header />
-        <main className="min-h-screen">{children}</main>
+        <main className="min-h-screen bg-white">{children}</main>
         <Newsletter />
         <Footer />
       </body>

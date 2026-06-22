@@ -85,8 +85,23 @@ const userPublic: OpenAPIV3.SchemaObject = {
     },
     username: { type: "string", example: "jane_doe" },
     email: { type: "string", format: "email", example: "jane@example.com" },
+    phone: {
+      type: "string",
+      minLength: 10,
+      maxLength: 10,
+      description: "CHAR(10) — exactly 10 digits.",
+      example: "0901234567",
+    },
+    address: { type: "string", maxLength: 70, example: "123 Le Loi, Q1, HCMC" },
+    avatar_url: {
+      type: "string",
+      format: "uri",
+      nullable: true,
+      example: null,
+    },
+    created_at: { type: "string", format: "date-time", readOnly: true },
   },
-  required: ["user_id", "username", "email"],
+  required: ["user_id", "username", "email", "phone", "address"],
 };
 
 const registerBody: OpenAPIV3.SchemaObject = {
@@ -98,16 +113,33 @@ const registerBody: OpenAPIV3.SchemaObject = {
       maxLength: 50,
       example: "jane_doe",
     },
-    email: { type: "string", format: "email", example: "jane@example.com" },
+    email: {
+      type: "string",
+      format: "email",
+      maxLength: 50,
+      example: "jane@example.com",
+    },
     password: {
       type: "string",
       format: "password",
       minLength: 8,
       example: "correct-horse-battery-staple",
     },
-    phone: { type: "string", nullable: true, example: "0901234567" },
+    phone: {
+      type: "string",
+      minLength: 10,
+      maxLength: 10,
+      description: "CHAR(10) — exactly 10 digits, no spaces or dashes.",
+      example: "0901234567",
+    },
+    address: {
+      type: "string",
+      maxLength: 70,
+      description: "VARCHAR(70) — free-text delivery address.",
+      example: "123 Le Loi, Q1, HCMC",
+    },
   },
-  required: ["username", "email", "password"],
+  required: ["username", "email", "password", "phone", "address"],
 };
 
 const loginBody: OpenAPIV3.SchemaObject = {
