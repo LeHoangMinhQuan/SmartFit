@@ -3,12 +3,24 @@ import Link from "next/link";
 import { useCartStore } from "@/store/useCartStore";
 import { useState } from "react";
 import LoginModal from "@/components/LoginModal";
+import RegisterModal from "@/components/RegisterModal";
 import UserMenu from "@/components/UserMenu";
 
 export default function Header() {
   const cartItems = useCartStore((state) => state.items);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+
   const [loginOpen, setLoginOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
+
+  const openLogin = () => {
+    setRegisterOpen(false);
+    setLoginOpen(true);
+  };
+  const openRegister = () => {
+    setLoginOpen(false);
+    setRegisterOpen(true);
+  };
 
   return (
     <>
@@ -64,12 +76,21 @@ export default function Header() {
                 </span>
               )}
             </Link>
-            <UserMenu onLoginClick={() => setLoginOpen(true)} />
+            <UserMenu onLoginClick={openLogin} onRegisterClick={openRegister} />
           </div>
         </div>
       </header>
 
-      <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} />
+      <LoginModal
+        isOpen={loginOpen}
+        onClose={() => setLoginOpen(false)}
+        onSwitchToRegister={openRegister}
+      />
+      <RegisterModal
+        isOpen={registerOpen}
+        onClose={() => setRegisterOpen(false)}
+        onSwitchToLogin={openLogin}
+      />
     </>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import axios from "axios";
 import Button from "@/components/Button";
@@ -10,38 +9,48 @@ import { useAuthStore } from "@/store/useAuthStore";
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSwitchToRegister: () => void;
 }
 
-export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
+const initialState = {
+  email: "",
+  password: "",
+};
+
+export default function LoginModal({
+  isOpen,
+  onClose,
+  onSwitchToRegister,
+}: LoginModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const setAuth = useAuthStore((state) => state.setAuth);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(initialState.email);
+  const [password, setPassword] = useState(initialState.password);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Reset form state whenever the modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setEmail("");
-      setPassword("");
-      setError(null);
-      setLoading(false);
-    }
-  }, [isOpen]);
+  const resetForm = useCallback(() => {
+    setEmail(initialState.email);
+    setPassword(initialState.password);
+    setError(null);
+    setLoading(false);
+  }, []);
 
-  // Close on Escape key
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [resetForm, onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
-  // Lock body scroll while modal is open
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
     return () => {
@@ -60,14 +69,9 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         { email, password },
       );
 
-      // Store user + accessToken in Zustand (user is persisted to localStorage)
       setAuth(data.user, data.accessToken);
-
-      // Store raw refresh token separately — it's a one-time credential,
-      // not part of the auth store
       localStorage.setItem("refreshToken", data.refreshToken);
-
-      onClose();
+      handleClose();
     } catch (err) {
       if (axios.isAxiosError(err)) {
         setError(err.response?.data?.message ?? "Invalid email or password");
@@ -84,7 +88,7 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4 py-12 backdrop-blur-sm bg-black/40"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         ref={dialogRef}
@@ -94,9 +98,8 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         aria-modal="true"
         aria-labelledby="login-modal-title"
       >
-        {/* Close button */}
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition text-xl leading-none"
           aria-label="Close login modal"
         >
@@ -145,7 +148,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             </div>
           </div>
 
-          {/* Error message */}
           {error && (
             <p className="text-sm text-red-500 text-center -mt-2">{error}</p>
           )}
@@ -183,7 +185,6 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
               </span>
             </div>
           </div>
-
           <div className="mt-6 grid grid-cols-2 gap-4">
             <button
               type="button"
@@ -212,12 +213,12 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
         <p className="text-center text-sm text-gray-500 mt-8">
           Don&apos;t have an account?{" "}
-          <Link
-            href="/register"
+          <button
+            onClick={onSwitchToRegister}
             className="font-bold text-black hover:underline"
           >
             Sign up
-          </Link>
+          </button>
         </p>
       </div>
     </div>
