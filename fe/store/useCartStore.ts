@@ -74,6 +74,7 @@ export const useCartStore = create<CartState>()(
           0,
         );
       },
+      setItems: (items: CartItem[]) => set({ items }),
     }),
     {
       name: "shopco-cart-storage", // saves to localStorage so cart persists on refresh

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ProductCardProps } from "@/interfaces";
-import ProductCard from "./ProductCard";
+import ProductCard from "./product/ProductCard";
 
 
 export default function Carousel({ title, data }: { title: string; data: ProductCardProps[] }) {

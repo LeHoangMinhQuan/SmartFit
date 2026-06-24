@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useAuthStore } from "@/store/useAuthStore";
-import { logoutService } from "@/store/auth.client.service";
+import { logoutService } from "@/services/auth.client.service";
 
 interface UserMenuProps {
   onLoginClick: () => void;
