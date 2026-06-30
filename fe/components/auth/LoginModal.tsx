@@ -5,6 +5,10 @@ import Image from "next/image";
 import axios from "axios";
 import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCartStore } from "@/store/useCartStore";
+import api from "@/lib/axios";
+import { cartService } from "@/services/cart.service";
+import { toast } from "@/components/ui/Toast";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -22,8 +26,6 @@ export default function LoginModal({
   onClose,
   onSwitchToRegister,
 }: LoginModalProps) {
-  const BASE_URL = process.env.BASE_URL;
-
   const dialogRef = useRef<HTMLDivElement>(null);
   const setAuth = useAuthStore((state) => state.setAuth);
 
@@ -60,19 +62,47 @@ export default function LoginModal({
     };
   }, [isOpen]);
 
+  // Merge guest cart into the server cart, then replace local state with the
+  // authoritative server copy. Must run AFTER setAuth() so lib/axios.ts picks
+  // up the new access token on these requests — otherwise they 401.
+  async function mergeCartOnLogin() {
+    const localItems = useCartStore.getState().items;
+    try {
+      if (localItems.length > 0) {
+        await cartService.mergeCart(
+          localItems.map((i) => ({
+            product_id: i.product_id,
+            variant_id: i.variant_id,
+            quantity: i.quantity,
+          })),
+        );
+      }
+      const serverCart = await cartService.getCart();
+      useCartStore.getState().setItems(serverCart);
+    } catch {
+      // Non-fatal — don't block login on cart sync failure
+      toast.error("Could not sync your cart. It will retry next time.");
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const { data } = await axios.post(
-        `${BASE_URL}/auth/login`,
-        { email, password },
-      );
+      // Use the shared `api` instance (lib/axios.ts) instead of a bare axios
+      // call — this is the single place that knows NEXT_PUBLIC_API_URL and
+      // keeps the refresh-token interceptor consistent across the app.
+      // Login itself doesn't need an access token attached, but routing
+      // through `api` means the base URL is never duplicated or drifted.
+      const { data } = await api.post("/api/auth/login", { email, password });
 
       setAuth(data.user, data.accessToken);
       localStorage.setItem("refreshToken", data.refreshToken);
+
+      await mergeCartOnLogin();
+
       handleClose();
     } catch (err) {
       if (axios.isAxiosError(err)) {

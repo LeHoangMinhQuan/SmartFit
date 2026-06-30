@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useCallback , useRef, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import axios from "axios";
 import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useCartStore } from "@/store/useCartStore";
+import api from "@/lib/axios";
+import { cartService } from "@/services/cart.service";
+import { toast } from "@/components/ui/Toast";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -25,8 +29,6 @@ export default function RegisterModal({
   onClose,
   onSwitchToLogin,
 }: RegisterModalProps) {
-  const BASE_URL = process.env.BASE_URL;
-
   const dialogRef = useRef<HTMLDivElement>(null);
   const setAuth = useAuthStore((state) => state.setAuth);
 
@@ -69,6 +71,30 @@ export default function RegisterModal({
     (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  // Merge guest cart into the server cart, then replace local state with the
+  // authoritative server copy. Must run AFTER setAuth() so lib/axios.ts picks
+  // up the new access token on these requests — otherwise they 401.
+  // Identical to the merge in LoginModal.tsx — registration also auto-logs in.
+  async function mergeCartOnLogin() {
+    const localItems = useCartStore.getState().items;
+    try {
+      if (localItems.length > 0) {
+        await cartService.mergeCart(
+          localItems.map((i) => ({
+            product_id: i.product_id,
+            variant_id: i.variant_id,
+            quantity: i.quantity,
+          })),
+        );
+      }
+      const serverCart = await cartService.getCart();
+      useCartStore.getState().setItems(serverCart);
+    } catch {
+      // Non-fatal — don't block registration on cart sync failure
+      toast.error("Could not sync your cart. It will retry next time.");
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -81,20 +107,24 @@ export default function RegisterModal({
     setLoading(true);
 
     try {
-      const { data } = await axios.post(
-        `${BASE_URL}/auth/register`,
-        {
-          username: form.username,
-          email: form.email,
-          password: form.password,
-          phone: form.phone,
-          address: form.address,
-        },
-      );
+      // Use the shared `api` instance (lib/axios.ts) instead of a bare axios
+      // call — this is the single place that knows NEXT_PUBLIC_API_URL.
+      // The previous `process.env.BASE_URL` read undefined client-side
+      // (Next.js only inlines NEXT_PUBLIC_*-prefixed vars into the browser
+      // bundle), so this request was silently going to `undefined/auth/register`.
+      const { data } = await api.post("/api/auth/register", {
+        username: form.username,
+        email: form.email,
+        password: form.password,
+        phone: form.phone,
+        address: form.address,
+      });
 
       // Auto-login: store auth state exactly like the login flow
       setAuth(data.user, data.accessToken);
       localStorage.setItem("refreshToken", data.refreshToken);
+
+      await mergeCartOnLogin();
 
       handleClose();
     } catch (err) {
