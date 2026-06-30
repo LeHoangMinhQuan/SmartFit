@@ -1,124 +1,243 @@
-"use client"; // Needs to be a client component for interactivity (quantity, tabs)
-import { useState } from "react";
-// import Image from "next/image";
+"use client";
 
-export default function ProductDetail() {
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { productService } from "../../../services/product.service";
+import { cartService } from "../../../services/cart.service";
+import { wishlistService } from "../../../services/wishlist.service";
+import { useAuthStore } from "../../../store/useAuthStore";
+import { useCartStore } from "../../../store/useCartStore";
+import { useWishlistStore } from "../../../store/useWishlistStore";
+import { toast } from "../../../components/ui/Toast";
+import Spinner from "../../../components/ui/Spinner";
+import ImageGallery from "../../../components/product/ImageGallery";
+import VariantSelector from "../../../components/product/VariantSelector";
+import PriceDisplay from "../../../components/product/PriceDisplay";
+import ReviewSection from "../../../components/product/ReviewSection";
+import type { Product, ProductVariant } from "../../../interfaces";
+
+export default function ProductPage({ params }: { params: { id: string } }) {
+  const productId = Number(params.id);
+  const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const { addItem: addLocalItem } = useCartStore();
+  const { addItem: addWishlistItem, isWishlisted } = useWishlistStore();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [selected, setSelected] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState("Large");
-  const [selectedColor, setSelectedColor] = useState("bg-[#314F4A]"); // Example hex
+  const [loading, setLoading] = useState(true);
+  const [cartBusy, setCartBusy] = useState(false);
+  const [wishBusy, setWishBusy] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    productService
+      .getProduct(productId)
+      .then((p) => {
+        setProduct(p);
+        // Pre-select first in-stock variant
+        const first = p.variants.find((v) => (v.stock ?? 0) > 0);
+        if (first) setSelected(first);
+      })
+      .catch(() => toast.error("Failed to load product."))
+      .finally(() => setLoading(false));
+  }, [productId]);
+
+  // Gallery shows selected variant images, falling back to product-level images
+  const displayImages = selected?.images.length
+    ? selected.images
+    : (product?.images ?? []);
+
+  async function handleAddToCart() {
+    if (!selected) {
+      toast.error("Please select a variant.");
+      return;
+    }
+    setCartBusy(true);
+    try {
+      if (user) {
+        await cartService.addItem({
+          product_id: productId,
+          variant_id: selected.variant_id,
+          quantity,
+        });
+      } else {
+        // Guest — local store; merges with server on login
+        addLocalItem({
+          product_id: productId,
+          variant_id: selected.variant_id,
+          quantity,
+          // unit_price and subtotal are server-computed on merge;
+          // these local values are display-only until then
+          unit_price: selected.base_price,
+          subtotal: selected.base_price * quantity,
+          user_id: 0,
+          cart_id: 0,
+          product_name: product?.name,
+          variant_name: selected.name,
+          image_url: selected.images[0]?.s3_url ?? product?.images[0]?.s3_url,
+        });
+      }
+      toast.success("Added to cart!");
+    } catch {
+      toast.error("Failed to add to cart.");
+    } finally {
+      setCartBusy(false);
+    }
+  }
+
+  async function handleWishlist() {
+    if (!user) {
+      toast.info("Sign in to save items.");
+      return;
+    }
+    if (!selected) {
+      toast.error("Select a variant first.");
+      return;
+    }
+    if (isWishlisted(productId, selected.variant_id)) {
+      toast.info("Already in your wishlist.");
+      return;
+    }
+    setWishBusy(true);
+    try {
+      const item = await wishlistService.addToWishlist({
+        product_id: productId,
+        variant_id: selected.variant_id,
+      });
+      addWishlistItem(item);
+      toast.success("Saved to wishlist!");
+    } catch {
+      toast.error("Failed to update wishlist.");
+    } finally {
+      setWishBusy(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-24">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="py-24 text-center text-gray-500">Product not found.</div>
+    );
+  }
+
+  const wishlisted = selected
+    ? isWishlisted(productId, selected.variant_id)
+    : false;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Breadcrumb */}
-      <div className="text-gray-500 mb-6 flex gap-2 text-sm">
-        <span>Home</span> &gt; <span>Shop</span> &gt; <span>Men</span> &gt;{" "}
-        <span className="text-black font-medium">T-shirts</span>
-      </div>
+    <div className="mx-auto max-w-6xl px-4 py-10">
+      <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
+        {/* Left — gallery */}
+        <ImageGallery images={displayImages} />
 
-      <div className="flex flex-col md:flex-row gap-10">
-        {/* Left: Image Gallery */}
-        <div className="md:w-1/2 flex flex-col-reverse md:flex-row gap-4">
-          {/* Thumbnails */}
-          <div className="flex md:flex-col gap-4 w-full md:w-[150px]">
-            {[1, 2, 3].map((item) => (
-              <div
-                key={item}
-                className="bg-[#F0EEED] rounded-2xl aspect-square relative cursor-pointer border-2 border-transparent hover:border-black"
-              >
-                {/* <Image src={`/thumb${item}.png`} fill alt="thumbnail" className="object-cover" /> */}
-              </div>
-            ))}
-          </div>
-          {/* Main Image */}
-          <div className="bg-[#F0EEED] rounded-2xl flex-1 aspect-[4/5] relative">
-            {/* <Image src={`/main-product.png`} fill alt="Product" className="object-cover" /> */}
-          </div>
-        </div>
+        {/* Right — details */}
+        <div className="flex flex-col gap-5">
+          <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
+          <p className="text-sm text-gray-600">{product.description}</p>
 
-        {/* Right: Product Details */}
-        <div className="md:w-1/2 pt-4">
-          <h1 className="text-4xl font-black uppercase mb-2">
-            One Life Graphic T-Shirt
-          </h1>
+          {selected && (
+            <PriceDisplay
+              basePrice={selected.base_price}
+              discount={selected.discount}
+            />
+          )}
 
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-yellow-400">★★★★☆</span>
-            <span className="text-sm text-gray-500">4.5/5</span>
-          </div>
+          <VariantSelector
+            variants={product.variants}
+            selectedId={selected?.variant_id ?? null}
+            onSelect={(v) => {
+              setSelected(v);
+              setQuantity(1);
+            }}
+          />
 
-          <div className="flex items-center gap-3 mb-6">
-            <span className="font-bold text-3xl">$260</span>
-            <span className="text-gray-400 font-bold text-3xl line-through">
-              $300
-            </span>
-            <span className="bg-red-100 text-red-500 text-sm font-bold px-3 py-1 rounded-full">
-              -40%
-            </span>
-          </div>
-
-          <p className="text-gray-500 mb-8 border-b border-gray-200 pb-8">
-            This graphic t-shirt which is perfect for any occasion. Crafted from
-            a soft and breathable fabric, it offers superior comfort and style.
-          </p>
-
-          {/* Select Colors */}
-          <div className="mb-6">
-            <span className="text-gray-500 mb-3 block">Select Colors</span>
-            <div className="flex gap-3">
-              {["bg-[#314F4A]", "bg-[#31343D]", "bg-[#4F4631]"].map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
-                  className={`w-9 h-9 rounded-full ${color} flex items-center justify-center`}
-                >
-                  {selectedColor === color && (
-                    <span className="text-white text-sm">✓</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Choose Size */}
-          <div className="mb-8 border-b border-gray-200 pb-8">
-            <span className="text-gray-500 mb-3 block">Choose Size</span>
-            <div className="flex flex-wrap gap-3">
-              {["Small", "Medium", "Large", "X-Large"].map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`px-6 py-3 rounded-full font-medium transition-colors ${selectedSize === size ? "bg-black text-white" : "bg-[#F0F0F0] text-gray-500 hover:bg-gray-200"}`}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Add to Cart Action */}
-          <div className="flex gap-4">
-            {/* Quantity Selector */}
-            <div className="bg-[#F0F0F0] rounded-full flex items-center px-4 py-3 w-1/3 justify-between">
+          {/* Quantity stepper */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">Quantity</span>
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="text-2xl font-medium w-8"
+                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 hover:bg-gray-50"
               >
-                -
+                −
               </button>
-              <span className="font-medium">{quantity}</span>
+              <span className="w-8 text-center text-sm font-medium">
+                {quantity}
+              </span>
               <button
-                onClick={() => setQuantity(quantity + 1)}
-                className="text-2xl font-medium w-8"
+                onClick={() => setQuantity((q) => q + 1)}
+                className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 hover:bg-gray-50"
               >
                 +
               </button>
             </div>
-            {/* CTA */}
-            <button className="bg-black text-white rounded-full flex-1 py-3 font-medium hover:bg-gray-800 transition-colors">
-              Add to Cart
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleAddToCart}
+              disabled={cartBusy || !selected}
+              className="flex-1 rounded-xl bg-black py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40"
+            >
+              {cartBusy ? "Adding…" : "Add to Cart"}
+            </button>
+
+            <button
+              onClick={handleWishlist}
+              disabled={wishBusy}
+              aria-label={wishlisted ? "Wishlisted" : "Add to wishlist"}
+              className="rounded-xl border border-gray-300 px-4 py-3 text-xl hover:bg-gray-50 disabled:opacity-40"
+            >
+              {wishlisted ? "♥" : "♡"}
             </button>
           </div>
+
+          {/* Virtual try-on — logged-in + variant selected only */}
+          {user && selected && (
+            <button
+              onClick={() =>
+                router.push(
+                  `/tryon?product_id=${productId}&variant_id=${selected.variant_id}`,
+                )
+              }
+              className="rounded-xl border border-black py-3 text-sm font-medium hover:bg-gray-50"
+            >
+              Virtual Try-On
+            </button>
+          )}
+
+          {/* Attributes */}
+          {selected?.attributes.length ? (
+            <div className="rounded-xl bg-gray-50 p-4 text-sm">
+              {selected.attributes.map((a) => (
+                <div key={a.attribute_id} className="flex gap-2 text-gray-700">
+                  <span className="font-medium capitalize">
+                    {a.attribute_name}:
+                  </span>
+                  <span>{a.value}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
+      </div>
+
+      {/* Reviews */}
+      <div className="mt-16 border-t pt-10">
+        <ReviewSection
+          product_id={productId}
+          variant_id={selected?.variant_id ?? null}
+        />
       </div>
     </div>
   );

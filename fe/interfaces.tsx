@@ -1,6 +1,6 @@
 // Product Card Props
 export interface ProductCardProps {
-  id: string;
+  id: number;
   name: string;
   price: number;
   originalPrice?: number;
@@ -42,6 +42,15 @@ export interface Product {
   categories: Category[];
 }
 
+export interface ProductSummary {
+  product_id: number;
+  name: string;
+  description?: string;
+  image: string | null;
+  price: number | null;
+  discountActive: boolean;
+}
+
 export interface ProductVariant {
   product_id: number;
   variant_id: number;
@@ -64,6 +73,12 @@ export interface ProductAttribute {
   attribute_id: number;
   attribute_name: string;     // from attribute.name
   value: string;              // VARCHAR(20)
+}
+
+export interface VariantSelectorProps {
+  variants: ProductVariant[];
+  selectedId: number | null;
+  onSelect: (variant: ProductVariant) => void;
 }
 
 // Category

@@ -1,5 +1,5 @@
 import api from "../lib/axios";
-import type { Category, PaginatedResponse, Product } from "../interfaces";
+import type { Category, PaginatedResponse, ProductSummary } from "../interfaces";
 
 export const categoryService = {
   getCategories: () =>
@@ -18,7 +18,7 @@ export const categoryService = {
   ) =>
     api
       .get<
-        PaginatedResponse<Product>
+        PaginatedResponse<ProductSummary>
       >(`/api/categories/${category_id}/products`, { params })
       .then((r) => r.data),
 
