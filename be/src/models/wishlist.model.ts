@@ -30,13 +30,16 @@ export async function findReviewsByProduct(
     .limit(limit)
     .offset(offset);
 
-  const [{ total }] = await db("review")
+  const totalResult = await db("review")
     .where({ product_id })
     .count("review_id as total");
-  const [{ avg_rating }] = await db("review")
+  const total = totalResult[0]?.['total'] ?? 0;
+
+  const avgRatingResult = await db("review")
     .where({ product_id })
     .avg("rating as avg_rating");
-
+  const avg_rating = avgRatingResult[0]?.['avg_rating'] ?? 0;
+  
   return { rows, total: Number(total), avg_rating: Number(avg_rating) || 0 };
 }
 
@@ -95,6 +98,7 @@ export async function findAllReviews(page = 1, limit = 20) {
     .orderBy("r.review_id", "desc")
     .limit(limit)
     .offset(offset);
-  const [{ total }] = await db("review").count("review_id as total");
+  const totalResult = await db("review").count("review_id as total");
+  const total = totalResult[0]?.['total'] ?? 0;
   return { rows, total: Number(total) };
 }

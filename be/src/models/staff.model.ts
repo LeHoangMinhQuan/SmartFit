@@ -27,7 +27,8 @@ export async function findAllStaff(page = 1, limit = 20) {
     .select("staff_id", "name", "birth_date", "start_time")
     .limit(limit)
     .offset(offset);
-  const [{ total }] = await db("staff").count("staff_id as total");
+  const totalResult = await db("staff").count("staff_id as total");
+  const total = totalResult[0]?.['total'] ?? 0;
   return { rows, total: Number(total) };
 }
 

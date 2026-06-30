@@ -75,7 +75,8 @@ export async function findAllProducts(filters: {
       .join("product_category as pc", "p.product_id", "pc.product_id")
       .where("pc.category_id", category_id);
 
-  const [{ total }] = await countQuery;
+  const countResult = (await countQuery) as { total: string | number }[];
+  const total = countResult[0]?.total ?? 0;
   const rows = await query;
 
   return { rows, total: Number(total) };
@@ -87,9 +88,10 @@ export async function searchProducts(query: string, page = 1, limit = 20) {
     .whereILike("name", `%${query}%`)
     .limit(limit)
     .offset(offset);
-  const [{ total }] = await db("product")
+  const countResult = (await db("product")
     .whereILike("name", `%${query}%`)
-    .count("product_id as total");
+    .count("product_id as total")) as { total: string | number }[];
+  const total = countResult[0]?.total ?? 0;
   return { rows, total: Number(total) };
 }
 
@@ -170,7 +172,7 @@ export async function getNextVariantId(product_id: number): Promise<number> {
     .where({ product_id })
     .max("variant_id as max")
     .first();
-  return (row?.max ?? 0) + 1;
+  return (row?.["max"] ?? 0) + 1;
 }
 
 // ─── Product Category ─────────────────────────────────────────────────────────
@@ -209,9 +211,10 @@ export async function findProductsByCategory(
     .groupBy("p.product_id", "pi.s3_url")
     .limit(limit)
     .offset(offset);
-  const [{ total }] = await db("product_category")
+  const countResult = (await db("product_category")
     .where({ category_id })
-    .count("product_id as total");
+    .count("product_id as total")) as { total: string | number }[];
+  const total = countResult[0]?.total ?? 0;
   return { rows, total: Number(total) };
 }
 

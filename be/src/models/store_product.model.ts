@@ -32,7 +32,8 @@ export async function findInventory(filters: {
   const rows = await query.limit(limit).offset(offset);
   let countQ = db("store_product");
   if (store_id) countQ = countQ.where({ store_id });
-  const [{ total }] = await countQ.count("product_id as total");
+  const totalResult = await countQ.count("product_id as total");
+  const total = totalResult[0]?.['total'] ?? 0;
 
   return { rows, total: Number(total) };
 }

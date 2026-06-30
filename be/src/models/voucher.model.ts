@@ -36,7 +36,8 @@ export async function findAllVouchers(page = 1, limit = 20) {
     .orderBy("voucher_id", "desc")
     .limit(limit)
     .offset(offset);
-  const [{ total }] = await db("voucher").count("voucher_id as total");
+  const totalResult = await db("voucher").count("voucher_id as total");
+  const total = totalResult[0]?.['total'] ?? 0;
   return { rows, total: Number(total) };
 }
 

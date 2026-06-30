@@ -42,9 +42,11 @@ export async function findOrdersByUser(user_id: number, page = 1, limit = 20) {
     .orderBy("created_at", "desc")
     .limit(limit)
     .offset(offset);
-  const [{ total }] = await db('"ORDER"')
+  const totalResult = await db('"ORDER"')
     .where({ user_id })
     .count("order_id as total");
+  const total = totalResult[0]?.['total'] ?? 0;
+
   return { rows, total: Number(total) };
 }
 
@@ -73,7 +75,8 @@ export async function findAllOrders(filters: {
   let countQ = db('"ORDER"').count("order_id as total");
   if (status) countQ = countQ.where({ status });
   if (user_id) countQ = countQ.where({ user_id });
-  const [{ total }] = await countQ;
+  const totalResult = await countQ;
+  const total = totalResult[0]?.['total'] ?? 0;
 
   return { rows, total: Number(total) };
 }
