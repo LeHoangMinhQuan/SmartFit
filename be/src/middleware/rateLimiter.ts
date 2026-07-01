@@ -6,7 +6,7 @@ import { rateLimit } from "express-rate-limit";
  * Global limiter — applied to all routes in app.ts.
  * 200 requests per 15 minutes per IP.
  */
-export const globalLimiter = rateLimit({
+export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 200,
   standardHeaders: "draft-8", // modern RateLimit header (IETF draft 8)

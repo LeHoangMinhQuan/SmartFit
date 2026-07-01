@@ -6,81 +6,72 @@ import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 
 import { swaggerSpec } from "./config/swagger.js";
-import { globalLimiter } from "./middleware/rateLimiter.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
 
-// ─── Route imports ────────────────────────────────────────────────────────────
-import authRoutes from "./routes/auth.routes.js";
-// TODO: Uncomment these route imports when ready to implement each feature
-// import staffAuthRoutes from "./routes/staffAuth.routes";
-// import productRoutes from "./routes/product.routes";
-// import categoryRoutes from "./routes/category.routes";
-// import cartRoutes from "./routes/cart.routes";
-// import orderRoutes from "./routes/order.routes";
-// import paymentRoutes from "./routes/payment.routes";
-// import shippingRoutes from "./routes/shipping.routes";
-// import userRoutes from "./routes/user.routes";
-// import uploadRoutes from "./routes/upload.routes";
-// import voucherRoutes from "./routes/voucher.routes";
-// import inventoryRoutes from "./routes/inventory.routes";
-// import staffRoutes from "./routes/staff.routes";
-// import storeRoutes from "./routes/store.routes";
-// import supplierRoutes from "./routes/supplier.routes";
-// import discountRoutes from "./routes/discount.routes";
-// import tryonRoutes from "./routes/tryon.routes";
-// import adminRoutes from "./routes/admin.routes";
+// Route imports
+import authRoutes from './routes/auth.routes.js';
+import userRoutes from "./routes/user.routes.js";
+import productRoutes, {
+  attributeRouter,
+  categoryRouter,
+} from "./routes/product.routes.js";
+import cartRoutes from "./routes/cart.routes.js";
+import orderRoutes from "./routes/order.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";  
+import shippingRoutes from "./routes/shipping.routes.js";
+import voucherRoutes from "./routes/voucher.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
+import tryonRoutes from "./routes/tryon.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
+import reviewRoutes from "./routes/review.routes.js";
 
 const app = express();
 
 // ─── Security & CORS ──────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env["FRONTEND_URL"] ?? "http://localhost:3001",
+    credentials: true,
+  }),
+);
 
-// ─── VNPay IPN — must be registered BEFORE express.json() (§8) ───────────────
-// IPN sends application/x-www-form-urlencoded, not JSON.
-// Registering it here with its own parser ensures the raw body is intact
-// for HMAC-SHA512 verification. Do NOT move this below express.json().
-
-// TODO: Comment for dev test,uncomment later
-// import { ipnController } from "./controllers/payment.controller";
-// app.post(
-//   "/api/payments/vnpay/ipn",
-//   express.urlencoded({ extended: false }),
-//   ipnController,
-// );
-
-// ─── Body parsing ─────────────────────────────────────────────────────────────
+// ─── ⚠️  VNPay IPN MUST be registered BEFORE express.json() ──────────────────
+// VNPay sends IPN as application/x-www-form-urlencoded.
+// The payment router handles its own urlencoded() middleware on the IPN route.
+app.use('/api/payments', paymentRoutes);
+ 
+// ─── Body parsing (after IPN route) ──────────────────────────────────────────
 app.use(express.json());
-
-// ─── Global rate limiter ──────────────────────────────────────────────────────
-app.use(globalLimiter);
-
+app.use(express.urlencoded({ extended: true }));
+ 
+// ─── Static files ─────────────────────────────────────────────────────────────
+app.use('/uploads', express.static('public/uploads'));
+ 
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+app.use('/api/', apiLimiter);
+ 
 // ─── Health check ─────────────────────────────────────────────────────────────
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
 });
-
+ 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/api/auth", authRoutes);
-// TODO: Uncomment these route registrations when ready to implement each feature
-// app.use("/api/staff/auth", staffAuthRoutes);
-// app.use("/api/products", productRoutes);
-// app.use("/api/categories", categoryRoutes);
-// app.use("/api/cart", cartRoutes);
-// app.use("/api/orders", orderRoutes);
-// app.use("/api/payments", paymentRoutes); // excludes /ipn — already registered above
-// app.use("/api/shipping", shippingRoutes);
-// app.use("/api/users", userRoutes);
-// app.use("/api/uploads", uploadRoutes);
-// app.use("/api/vouchers", voucherRoutes);
-// app.use("/api/inventory", inventoryRoutes);
-// app.use("/api/discounts", discountRoutes);
-// app.use("/api/tryon", tryonRoutes);
-// app.use("/api/admin/staff", staffRoutes);
-// app.use("/api/admin/stores", storeRoutes);
-// app.use("/api/admin/suppliers", supplierRoutes);
-// app.use("/api/admin", adminRoutes); // covers /users, /orders, /reviews, /dashboard, /vouchers
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/attributes', attributeRouter);
+app.use('/api/categories', categoryRouter);
+app.use('/api/cart', cartRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/shipping', shippingRoutes);
+app.use('/api/vouchers', voucherRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/tryon', tryonRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

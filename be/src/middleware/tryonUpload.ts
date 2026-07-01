@@ -71,4 +71,4 @@ const tryonUploader = multer({
 });
 
 /** POST /api/tryon/session — field name: "photo" */
-export const uploadTryonPhoto = tryonUploader.single("photo");
+export const tryonUpload = tryonUploader.single("photo");
