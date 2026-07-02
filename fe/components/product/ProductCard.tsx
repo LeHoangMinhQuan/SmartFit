@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import DefaultImage from "@/app/assets/images/landing_img.jpg";
 import Button from "@/components/ui/Button";
 import { ProductCardProps } from "@/interfaces";
 
@@ -21,7 +20,7 @@ export default function ProductCard({
       {/* Image */}
       <div className="bg-[#F0EEED] rounded-xl aspect-[4/5] relative overflow-hidden mb-4">
         <Image
-          src={imageUrl ?? DefaultImage}
+          src={imageUrl ?? "/images/default-product.jpg"}
           alt={name}
           fill
           className="object-cover object-center transition-transform duration-300 group-hover:scale-105"

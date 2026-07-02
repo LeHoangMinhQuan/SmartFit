@@ -1,4 +1,3 @@
-import LandingImg from "@/app/assets/images/landing_img.jpg";
 import Carousel from "@/components/Carousel";
 import Image from "next/image";
 
@@ -9,7 +8,7 @@ const NEW_ARRIVALS = [
     name: "T-shirt with Tape Details",
     price: 120,
     rating: 4.5,
-    // imageUrl: '/public/images/landing_img.jpg',
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "2",
@@ -18,14 +17,14 @@ const NEW_ARRIVALS = [
     originalPrice: 260,
     discount: 20,
     rating: 3.5,
-    // imageUrl: "/jeans1.png",
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "3",
     name: "Checkered Shirt",
     price: 180,
     rating: 4.5,
-    // imageUrl: "/shirt1.png",
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "4",
@@ -34,7 +33,7 @@ const NEW_ARRIVALS = [
     originalPrice: 160,
     discount: 30,
     rating: 4.5,
-    // imageUrl: "/tshirt2.png",
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "5",
@@ -43,7 +42,7 @@ const NEW_ARRIVALS = [
     originalPrice: 160,
     discount: 30,
     rating: 4.5,
-    // imageUrl: "/tshirt2.png",
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "6",
@@ -52,7 +51,7 @@ const NEW_ARRIVALS = [
     originalPrice: 160,
     discount: 30,
     rating: 4.5,
-    // imageUrl: "/tshirt2.png",
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "7",
@@ -61,7 +60,7 @@ const NEW_ARRIVALS = [
     originalPrice: 160,
     discount: 30,
     rating: 4.5,
-    // imageUrl: "/tshirt2.png",
+    imageUrl: "/images/landing_img.jpg",
   },
   {
     id: "8",
@@ -70,29 +69,29 @@ const NEW_ARRIVALS = [
     originalPrice: 160,
     discount: 30,
     rating: 4.5,
-    // imageUrl: "/tshirt2.png",
+    imageUrl: "/images/landing_img.jpg",
   },
 ];
 
 const STYLES = [
   {
     name: "Casual",
-    imageUrl: "/style-casual.png",
+    imageUrl: "/images/style-casual.png",
     colSpan: "col-span-1 md:col-span-4",
   },
   {
     name: "Formal",
-    imageUrl: "/style-formal.png",
+    imageUrl: "/images/style-formal.png",
     colSpan: "col-span-1 md:col-span-8",
   },
   {
     name: "Party",
-    imageUrl: "/style-party.png",
+    imageUrl: "/images/style-party.png",
     colSpan: "col-span-1 md:col-span-8",
   },
   {
     name: "Gym",
-    imageUrl: "/style-gym.png",
+    imageUrl: "/images/style-gym.png",
     colSpan: "col-span-1 md:col-span-4",
   },
 ];
@@ -101,10 +100,10 @@ export default function Home() {
   return (
     <div className="w-full">
       {/* HERO SECTION */}
-      <section className="bg-[#F2F0F1] pt-10 md:pt-24">
+      <section className="bg-[#F2F0F1]">
         <div className="mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center md:justify-between gap-10 md:gap-20">
           {/* Left Content */}
-          <div className="md:w-1/2 z-10 pb-10">
+          <div className="md:w-1/2 z-10 pb-10 pt-10 md:pt-24">
             <h1 className="text-4xl md:text-6xl font-black text-black uppercase leading-[1.1] mb-6">
               Find clothes
               <br />
@@ -124,17 +123,17 @@ export default function Home() {
             {/* Stats */}
             <div className="flex flex-wrap gap-8 mt-12">
               <div>
-                <h4 className="text-3xl font-bold">200+</h4>
+                <h4 className="text-3xl text-black font-bold">200+</h4>
                 <p className="text-gray-500 text-sm">International Brands</p>
               </div>
               <div className="hidden md:block w-px bg-gray-300"></div>
               <div>
-                <h4 className="text-3xl font-bold">2,000+</h4>
+                <h4 className="text-3xl text-black font-bold">2,000+</h4>
                 <p className="text-gray-500 text-sm">High-Quality Products</p>
               </div>
               <div className="hidden md:block w-px bg-gray-300"></div>
               <div>
-                <h4 className="text-3xl font-bold">30,000+</h4>
+                <h4 className="text-3xl text-black font-bold">30,000+</h4>
                 <p className="text-gray-500 text-sm">Happy Customers</p>
               </div>
             </div>
@@ -142,13 +141,14 @@ export default function Home() {
 
           {/* Right Image */}
           <div className="md:w-1/2 relative h-[500px] w-full">
-            <div className="absolute inset-0 rounded-t-3xl flex items-center justify-center">
+            <div className="md:w-full relative h-[500px] w-full overflow-hidden rounded-t-3xl">
               <Image
-                src={LandingImg}
+                src="/images/landing_img.jpg"
                 alt="Models"
-                height={0}
-                width={0}
-                className="h-full w-auto object-cover object-center transition-transform group-hover:scale-105"
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover object-[center_10%]"
+                priority
               />
             </div>
           </div>
@@ -185,9 +185,17 @@ export default function Home() {
                 className={`relative bg-white rounded-3xl overflow-hidden group cursor-pointer ${style.colSpan}`}
               >
                 <div className="absolute top-6 left-8 z-10">
-                  <h3 className="text-2xl text-black font-bold">{style.name}</h3>
+                  <h3 className="text-2xl text-black font-bold">
+                    {style.name}
+                  </h3>
                 </div>
-                <Image src={style.imageUrl} alt={style.name} fill className="object-cover object-right-top transition-transform group-hover:scale-105" />
+                <Image
+                  src={style.imageUrl}
+                  alt={style.name}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-cover object-right-top transition-transform group-hover:scale-105"
+                />
                 <div className="absolute inset-0 bg-gray-200"></div>{" "}
                 {/* Placeholder */}
               </div>
