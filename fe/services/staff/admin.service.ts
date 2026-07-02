@@ -37,6 +37,18 @@ interface PriceBody {
   end_date: string;
 }
 
+// ─── Attributes ───────────────────────────────────────────────────────────────
+
+interface Attribute {
+  attribute_id: number;
+  name: string; // VARCHAR(20)
+}
+
+interface AttributeAssignBody {
+  attribute_id: number;
+  value: string; // VARCHAR(20)
+}
+
 // ─── Staff ────────────────────────────────────────────────────────────────────
 
 interface CreateStaffBody {
@@ -126,6 +138,54 @@ export const adminService = {
   upsertPrice: (product_id: number, variant_id: number, body: PriceBody) =>
     api
       .post(`/api/products/${product_id}/variants/${variant_id}/price`, body)
+      .then((r) => r.data),
+
+  // ── Attributes ──
+  getAttributes: () =>
+    api.get<Attribute[]>("/api/attributes").then((r) => r.data),
+
+  createAttribute: (body: { name: string }) =>
+    api
+      .post<{ attribute_id: number }>("/api/attributes", body)
+      .then((r) => r.data),
+
+  // product_attribute PK is (attribute_id, product_id, variant_id) — a given
+  // attribute type can only be attached once per variant. Server returns 409
+  // if it already exists; use updateAttributeValue instead.
+  assignAttribute: (
+    product_id: number,
+    variant_id: number,
+    body: AttributeAssignBody,
+  ) =>
+    api
+      .post(
+        `/api/products/${product_id}/variants/${variant_id}/attributes`,
+        body,
+      )
+      .then((r) => r.data),
+
+  updateAttributeValue: (
+    product_id: number,
+    variant_id: number,
+    attribute_id: number,
+    value: string,
+  ) =>
+    api
+      .patch(
+        `/api/products/${product_id}/variants/${variant_id}/attributes/${attribute_id}`,
+        { value },
+      )
+      .then((r) => r.data),
+
+  removeAttribute: (
+    product_id: number,
+    variant_id: number,
+    attribute_id: number,
+  ) =>
+    api
+      .delete(
+        `/api/products/${product_id}/variants/${variant_id}/attributes/${attribute_id}`,
+      )
       .then((r) => r.data),
 
   // ── Categories ──

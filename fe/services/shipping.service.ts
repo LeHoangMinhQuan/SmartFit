@@ -10,7 +10,7 @@ interface FeeBody {
   service_id: number;
   from_district_id: number;
   to_district_id: number;
-  to_ward_code: number;
+  to_ward_code: string;
   weight: number; // grams
   length?: number;
   width?: number;

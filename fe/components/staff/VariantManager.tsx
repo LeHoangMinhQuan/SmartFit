@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { adminService } from "../../services/staff/admin.service";
 import { toast } from "../ui/Toast";
 import Input from "../ui/Input";
-import Spinner from "../ui/Spinner";
 import type { ProductVariant } from "../../interfaces";
+
+interface Attribute {
+  attribute_id: number;
+  name: string;
+}
 
 interface VariantManagerProps {
   productId: number;
@@ -38,6 +42,19 @@ export default function VariantManager({
   const [form, setForm] = useState<NewVariantForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Global attribute catalog — loaded once, used by every variant's
+  // "add attribute" dropdown below.
+  const [catalog, setCatalog] = useState<Attribute[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    adminService
+      .getAttributes()
+      .then(setCatalog)
+      .catch(() => toast.error("Failed to load attribute catalog."))
+      .finally(() => setCatalogLoading(false));
+  }, []);
 
   // variant_id is app-supplied per product (1, 2, 3…) — suggest the next
   // free integer as a starting point, but let staff override it.
@@ -82,7 +99,7 @@ export default function VariantManager({
     }
   }
 
-  async function handleDelete(variant_id: number) {
+  async function handleDeleteVariant(variant_id: number) {
     if (!confirm(`Delete variant #${variant_id}? This cannot be undone.`))
       return;
     setDeletingId(variant_id);
@@ -102,54 +119,16 @@ export default function VariantManager({
   return (
     <div className="flex flex-col gap-4">
       {variants.map((v) => (
-        <div
+        <VariantRow
           key={v.variant_id}
-          className="flex flex-col gap-2 rounded-xl border border-gray-200 p-4"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">
-                #{v.variant_id} — {v.name}
-              </p>
-              <p className="text-xs text-gray-500">
-                {v.base_price
-                  ? `${v.base_price.toLocaleString()}₫`
-                  : "No active price"}
-                {" · "}
-                Stock: {v.stock ?? 0}
-              </p>
-            </div>
-            <button
-              onClick={() => handleDelete(v.variant_id)}
-              disabled={deletingId === v.variant_id}
-              className="text-xs text-red-500 hover:underline disabled:opacity-50"
-            >
-              {deletingId === v.variant_id ? "Deleting…" : "Delete"}
-            </button>
-          </div>
-
-          {/*
-            ⚠ ATTRIBUTE EDITING BLOCKED ON BACKEND
-            The API plan (ecommerce-api-plan.md §4 Products) documents no
-            endpoint to create/update product_attribute rows — only
-            GET /api/products/:id/variants returns them (read-only).
-            Until a route like POST /api/products/:id/variants/:variant_id/attributes
-            exists, attributes can only be viewed here, not edited.
-            See plan Section 9 "Known Backend Gaps" for the full note.
-          */}
-          {v.attributes.length > 0 && (
-            <div className="flex flex-wrap gap-1 border-t pt-2">
-              {v.attributes.map((a) => (
-                <span
-                  key={a.attribute_id}
-                  className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
-                >
-                  {a.attribute_name}: {a.value}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+          productId={productId}
+          variant={v}
+          catalog={catalog}
+          catalogLoading={catalogLoading}
+          onDeleteVariant={() => handleDeleteVariant(v.variant_id)}
+          deletingVariant={deletingId === v.variant_id}
+          onChange={onChange}
+        />
       ))}
 
       {adding ? (
@@ -228,6 +207,266 @@ export default function VariantManager({
           + Add variant
         </button>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-variant row, broken out so each variant manages its own attribute-editing
+// state (which catalog attribute is selected, the value being typed, etc.)
+// without that state leaking across sibling variants.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface VariantRowProps {
+  productId: number;
+  variant: ProductVariant;
+  catalog: Attribute[];
+  catalogLoading: boolean;
+  onDeleteVariant: () => void;
+  deletingVariant: boolean;
+  onChange: () => void;
+}
+
+function VariantRow({
+  productId,
+  variant,
+  catalog,
+  catalogLoading,
+  onDeleteVariant,
+  deletingVariant,
+  onChange,
+}: VariantRowProps) {
+  const [addingAttr, setAddingAttr] = useState(false);
+  const [selectedAttrId, setSelectedAttrId] = useState("");
+  const [attrValue, setAttrValue] = useState("");
+  const [savingAttr, setSavingAttr] = useState(false);
+
+  // Inline edit state — keyed by attribute_id, holds the in-progress value
+  const [editingAttrId, setEditingAttrId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [removingAttrId, setRemovingAttrId] = useState<number | null>(null);
+
+  // product_attribute PK is (attribute_id, product_id, variant_id) — an
+  // attribute already attached to this variant can't be attached again.
+  // Filter it out of the "add" dropdown to avoid a guaranteed 409.
+  const attachedIds = new Set(variant.attributes.map((a) => a.attribute_id));
+  const availableCatalog = catalog.filter(
+    (a) => !attachedIds.has(a.attribute_id),
+  );
+
+  async function handleAddAttribute(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedAttrId || !attrValue.trim()) {
+      toast.error("Select an attribute and enter a value.");
+      return;
+    }
+    setSavingAttr(true);
+    try {
+      await adminService.assignAttribute(productId, variant.variant_id, {
+        attribute_id: Number(selectedAttrId),
+        value: attrValue.trim(),
+      });
+      toast.success("Attribute added.");
+      setAddingAttr(false);
+      setSelectedAttrId("");
+      setAttrValue("");
+      onChange();
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 409) {
+        toast.error("This attribute is already attached to this variant.");
+      } else {
+        toast.error("Failed to add attribute.");
+      }
+    } finally {
+      setSavingAttr(false);
+    }
+  }
+
+  function startEdit(attributeId: number, currentValue: string) {
+    setEditingAttrId(attributeId);
+    setEditValue(currentValue);
+  }
+
+  async function handleSaveEdit(attributeId: number) {
+    if (!editValue.trim()) {
+      toast.error("Value cannot be empty.");
+      return;
+    }
+    setSavingAttr(true);
+    try {
+      await adminService.updateAttributeValue(
+        productId,
+        variant.variant_id,
+        attributeId,
+        editValue.trim(),
+      );
+      toast.success("Attribute updated.");
+      setEditingAttrId(null);
+      onChange();
+    } catch {
+      toast.error("Failed to update attribute.");
+    } finally {
+      setSavingAttr(false);
+    }
+  }
+
+  async function handleRemoveAttribute(attributeId: number) {
+    if (!confirm("Remove this attribute from the variant?")) return;
+    setRemovingAttrId(attributeId);
+    try {
+      await adminService.removeAttribute(
+        productId,
+        variant.variant_id,
+        attributeId,
+      );
+      toast.success("Attribute removed.");
+      onChange();
+    } catch {
+      toast.error("Failed to remove attribute.");
+    } finally {
+      setRemovingAttrId(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">
+            #{variant.variant_id} — {variant.name}
+          </p>
+          <p className="text-xs text-gray-500">
+            {variant.base_price
+              ? `${variant.base_price.toLocaleString()}₫`
+              : "No active price"}
+            {" · "}
+            Stock: {variant.stock ?? 0}
+          </p>
+        </div>
+        <button
+          onClick={onDeleteVariant}
+          disabled={deletingVariant}
+          className="text-xs text-red-500 hover:underline disabled:opacity-50"
+        >
+          {deletingVariant ? "Deleting…" : "Delete"}
+        </button>
+      </div>
+
+      {/* Attributes — now fully editable via /api/products/:id/variants/:variant_id/attributes */}
+      <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+        {variant.attributes.map((a) =>
+          editingAttrId === a.attribute_id ? (
+            <span key={a.attribute_id} className="flex items-center gap-1">
+              <span className="text-xs text-gray-500">{a.attribute_name}:</span>
+              <input
+                autoFocus
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                maxLength={20}
+                className="w-20 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+              />
+              <button
+                onClick={() => handleSaveEdit(a.attribute_id)}
+                disabled={savingAttr}
+                className="text-xs text-green-600 hover:underline"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setEditingAttrId(null)}
+                className="text-xs text-gray-400 hover:underline"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <span
+              key={a.attribute_id}
+              className="group flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+            >
+              {a.attribute_name}: {a.value}
+              <button
+                onClick={() => startEdit(a.attribute_id, a.value)}
+                className="ml-1 text-gray-400 hover:text-gray-700"
+                title="Edit"
+              >
+                ✎
+              </button>
+              <button
+                onClick={() => handleRemoveAttribute(a.attribute_id)}
+                disabled={removingAttrId === a.attribute_id}
+                className="text-gray-400 hover:text-red-500"
+                title="Remove"
+              >
+                ✕
+              </button>
+            </span>
+          ),
+        )}
+
+        {addingAttr ? (
+          <form
+            onSubmit={handleAddAttribute}
+            className="flex items-center gap-1"
+          >
+            <select
+              value={selectedAttrId}
+              onChange={(e) => setSelectedAttrId(e.target.value)}
+              disabled={catalogLoading}
+              className="rounded border border-gray-300 px-1.5 py-1 text-xs"
+            >
+              <option value="">
+                {catalogLoading ? "Loading…" : "Choose attribute…"}
+              </option>
+              {availableCatalog.map((a) => (
+                <option key={a.attribute_id} value={a.attribute_id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={attrValue}
+              onChange={(e) => setAttrValue(e.target.value)}
+              placeholder="Value"
+              maxLength={20}
+              className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+            />
+            <button
+              type="submit"
+              disabled={savingAttr}
+              className="text-xs text-green-600 hover:underline"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAddingAttr(false);
+                setSelectedAttrId("");
+                setAttrValue("");
+              }}
+              className="text-xs text-gray-400 hover:underline"
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <button
+            onClick={() => setAddingAttr(true)}
+            disabled={catalogLoading || availableCatalog.length === 0}
+            className="rounded border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-500 hover:border-gray-500 disabled:opacity-40"
+            title={
+              !catalogLoading && availableCatalog.length === 0
+                ? "All catalog attributes are already attached"
+                : undefined
+            }
+          >
+            + Attribute
+          </button>
+        )}
+      </div>
     </div>
   );
 }
