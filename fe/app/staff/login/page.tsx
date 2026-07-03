@@ -22,14 +22,15 @@ export default function StaffLoginPage() {
     setLoading(true);
 
     try {
-      // POST /api/staff/auth/login — body: { staff_id, password }
-      // Response payload carries { staff_id, name } per the staff JWT shape.
-      const { data } = await staffApi.post("/api/staff/auth/login", {
+      // POST /api/admin/auth/login — body: { staff_id, password }
+      // Response payload carries { staff_id, name, accessToken } per the staff JWT shape.
+      const { data } = await staffApi.post("/api/admin/auth/login", {
         staff_id: Number(staffId),
         password,
       });
+      const extractedData = data.data; // Extract the actual data object from the response
+      setAuth(extractedData.staff_id, extractedData.name, extractedData.accessToken);
 
-      setAuth(data.staff_id, data.name, data.accessToken);
       router.push("/staff");
     } catch (err) {
       if (axios.isAxiosError(err)) {

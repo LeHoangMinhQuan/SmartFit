@@ -18,7 +18,7 @@ import {
   updateAttributeValueSchema,
   categorySchema,
   submitReviewSchema,
-} from "../schemas/product.schema";
+} from "../schemas/product.schema.js";
 
 const router = Router();
 
@@ -97,7 +97,7 @@ router.delete(
 router.post(
   "/:id/images",
   authenticateStaff,
-  upload.single("image"),
+  uploadSingle,
   ProductController.uploadProductImage,
 );
 

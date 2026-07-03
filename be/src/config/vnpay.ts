@@ -12,21 +12,21 @@
  * TODO (production checklist):
  *   - Set testMode: false
  *   - Set vnpayHost to 'https://pay.vnpay.vn'
- *   - Ensure VNP_RETURN_URL and VNP_IPN_URL point to live HTTPS endpoints
- *   - Rotate VNP_HASH_SECRET and store it in a secrets manager
+ *   - Ensure VNPAY_RETURN_URL and VNPAY_IPN_URL point to live HTTPS endpoints
+ *   - Rotate VNPAY_HASH_SECRET and store it in a secrets manager
  */
 
-import { VNPay, ignoreLogger, ProductCode, VnpLocale } from "vnpay";
-import env from "./env.js";
+import { VNPay, HashAlgorithm, ignoreLogger, ProductCode, VnpLocale } from "vnpay";
+import { env } from "./env.js";
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const vnpayClient = new VNPay({
-  tmnCode: env.VNP_TMN_CODE,
-  secureSecret: env.VNP_HASH_SECRET,
+  tmnCode: env.VNPAY_TMN_CODE,
+  secureSecret: env.VNPAY_HASH_SECRET,
   vnpayHost: "https://sandbox.vnpayment.vn", // TODO: swap for production
   testMode: env.NODE_ENV !== "production",
-  hashAlgorithm: "SHA512",
+  hashAlgorithm: HashAlgorithm.SHA512,
   enableLog: env.NODE_ENV === "development",
   loggerFn: ignoreLogger,
 });
@@ -39,7 +39,7 @@ export { ProductCode, VnpLocale };
 
 /**
  * Parameters passed to vnpayService.buildPaymentUrl().
- * These map 1-to-1 to VNPay's vnp_* query parameters.
+ * These map 1-to-1 to VNPay's vnpay_* query parameters.
  */
 export interface BuildPaymentUrlParams {
   /** Unique reference per calendar day — use `${orderId}-${Date.now()}` */
@@ -61,26 +61,26 @@ export interface BuildPaymentUrlParams {
  * Only the fields we store in `payment_transaction` are listed.
  */
 export interface VnpCallbackParams {
-  vnp_TxnRef: string;
-  vnp_Amount: string;
-  vnp_BankCode: string;
-  vnp_PayDate: string;
-  vnp_TransactionNo: string;
-  vnp_ResponseCode: string;
-  vnp_SecureHash: string;
+  vnpay_TxnRef: string;
+  vnpay_Amount: string;
+  vnpay_BankCode: string;
+  vnpay_PayDate: string;
+  vnpay_TransactionNo: string;
+  vnpay_ResponseCode: string;
+  vnpay_SecureHash: string;
   [key: string]: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Return URL where VNPay redirects the user after payment */
-export const VNPAY_RETURN_URL = env.VNP_RETURN_URL;
+export const VNPAY_RETURN_URL = env.VNPAY_RETURN_URL;
 
 /** IPN endpoint that VNPay calls server-to-server */
-export const VNPAY_IPN_URL = env.VNP_IPN_URL;
+export const VNPAY_IPN_URL = env.VNPAY_IPN_URL;
 
 /**
- * Build a unique vnp_TxnRef for a given order.
+ * Build a unique vnpay_TxnRef for a given order.
  * Must be unique within the same calendar day.
  */
 export function buildTxnRef(orderId: number): string {

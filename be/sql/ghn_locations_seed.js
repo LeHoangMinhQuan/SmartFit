@@ -6,7 +6,7 @@ config();
 
 // ── CONFIG ───────────────────────────────────────────────────────────────────
 const BASE_URL = process.env.GHN_API_URL; // e.g. https://dev-online-gateway.ghn.vn/shiip/public-api/master-data
-const TOKEN = process.env.GHN_API_TOKEN;
+const TOKEN = process.env.BASE_URLTOKEN;
 const OUTPUT = "sql/ghn_locations_seed.sql";
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -119,7 +119,7 @@ function transformWards(data) {
       continue;
     }
 
-    if(wardId == 1) {
+    if (wardId == 1) {
       skipped.push({
         wardCode: w.WardCode,
         name,

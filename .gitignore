@@ -163,3 +163,9 @@ dist
 *.ps1
 *.md
 
+# ssh
+.ssh
+
+# keys
+*.pem
+*.ppk

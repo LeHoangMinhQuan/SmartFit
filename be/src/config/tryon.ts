@@ -18,7 +18,7 @@
  */
 
 import axios, { type AxiosInstance } from "axios";
-import env from "./env.js";
+import { env } from "./env.js";
 
 // ── Shared types ──────────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ class FashnProvider implements TryonProvider {
       throw new Error("FASHN_API_KEY is required when TRYON_PROVIDER=fashn");
     }
     this.client = axios.create({
-      baseURL: env.FASHN_API_URL,
+      baseURL: env.FASHN_BASE_URL,
       headers: {
         Authorization: `Bearer ${env.FASHN_API_KEY}`,
         "Content-Type": "application/json",

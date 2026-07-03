@@ -6,6 +6,7 @@ import * as ReviewModel from "../models/review.model.js";
 import * as OrderService from "../services/order.service.js";
 import * as StoreProductModel from "../models/store_product.model.js";
 import db from "../config/db.js";
+import { env } from "../config/env.js";
 
 // ─── Staff Auth ───────────────────────────────────────────────────────────────
 import jwt from "jsonwebtoken";
@@ -20,18 +21,18 @@ export const staffLogin = catchAsync(async (req: Request, res: Response) => {
     await import("../models/staff.model.js")
   ).findStaffRoles(staff.staff_id);
 
-  const token = jwt.sign(
+  const accessToken = jwt.sign(
     {
       staff_id: staff.staff_id,
       name: staff.name,
       roles: roles.map((r: any) => r.name),
     },
-    process.env.STAFF_JWT_SECRET ?? "staff_secret",
+    env.STAFF_JWT_SECRET,
     { expiresIn: "8h" },
   );
 
   res.json({
-    data: { staff_id: staff.staff_id, name: staff.name, roles, token },
+    data: { staff_id: staff.staff_id, name: staff.name, roles, accessToken },
   });
 });
 
@@ -48,7 +49,7 @@ export const listStaff = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const getStaff = catchAsync(async (req: Request, res: Response) => {
-  const staff = await StaffService.getStaff(Number(req.params.staff_id));
+  const staff = await StaffService.getStaff(Number(req.params["staff_id"]));
   res.json({ data: staff });
 });
 
@@ -58,19 +59,19 @@ export const createStaff = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateStaff = catchAsync(async (req: Request, res: Response) => {
-  await StaffService.updateStaff(Number(req.params.staff_id), req.body);
+  await StaffService.updateStaff(Number(req.params["staff_id"]), req.body);
   res.json({ data: { message: "Staff updated" } });
 });
 
 export const assignRole = catchAsync(async (req: Request, res: Response) => {
-  await StaffService.assignRole(Number(req.params.staff_id), req.body.role_id);
+  await StaffService.assignRole(Number(req.params["staff_id"]), req.body.role_id);
   res.status(201).json({ data: { message: "Role assigned" } });
 });
 
 export const removeRole = catchAsync(async (req: Request, res: Response) => {
   await StaffService.removeRole(
-    Number(req.params.staff_id),
-    Number(req.params.role_id),
+    Number(req.params["staff_id"]),
+    Number(req.params["role_id"]),
   );
   res.status(204).send();
 });
@@ -78,7 +79,7 @@ export const removeRole = catchAsync(async (req: Request, res: Response) => {
 export const getStaffHistory = catchAsync(
   async (req: Request, res: Response) => {
     const history = await StaffService.getStaffHistory(
-      Number(req.params.staff_id),
+      Number(req.params["staff_id"]),
     );
     res.json({ data: history });
   },
@@ -87,7 +88,7 @@ export const getStaffHistory = catchAsync(
 export const getCurrentStore = catchAsync(
   async (req: Request, res: Response) => {
     const assignment = await StaffService.getCurrentStoreAssignment(
-      Number(req.params.staff_id),
+      Number(req.params["staff_id"]),
     );
     res.json({ data: assignment ?? null });
   },
@@ -95,7 +96,7 @@ export const getCurrentStore = catchAsync(
 
 export const transferStaff = catchAsync(async (req: Request, res: Response) => {
   await StaffService.transferStaff(
-    Number(req.params.staff_id),
+    Number(req.params["staff_id"]),
     req.body.store_id,
     req.body.start_date,
   );
@@ -122,7 +123,7 @@ export const listStores = catchAsync(async (_req: Request, res: Response) => {
 });
 
 export const getStore = catchAsync(async (req: Request, res: Response) => {
-  const store = await StaffService.getStore(Number(req.params.store_id));
+  const store = await StaffService.getStore(Number(req.params["store_id"]));
   res.json({ data: store });
 });
 
@@ -132,14 +133,14 @@ export const createStore = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const updateStore = catchAsync(async (req: Request, res: Response) => {
-  await StaffService.updateStore(Number(req.params.store_id), req.body);
+  await StaffService.updateStore(Number(req.params["store_id"]), req.body);
   res.json({ data: { message: "Store updated" } });
 });
 
 export const getStoreInventory = catchAsync(
   async (req: Request, res: Response) => {
     const inventory = await StoreProductModel.findInventoryByStore(
-      Number(req.params.store_id),
+      Number(req.params["store_id"]),
     );
     res.json({ data: inventory });
   },
@@ -147,7 +148,7 @@ export const getStoreInventory = catchAsync(
 
 export const getStoreStaff = catchAsync(async (req: Request, res: Response) => {
   const { findStaffAtStore } = await import("../models/store.model.js");
-  const staff = await findStaffAtStore(Number(req.params.store_id));
+  const staff = await findStaffAtStore(Number(req.params["store_id"]));
   res.json({ data: staff });
 });
 
@@ -201,7 +202,7 @@ export const createSupplier = catchAsync(
 export const updateSupplier = catchAsync(
   async (req: Request, res: Response) => {
     await InventoryService.updateSupplier(
-      Number(req.params.supplier_id),
+      Number(req.params["supplier_id"]),
       req.body.name,
     );
     res.json({ data: { message: "Supplier updated" } });
@@ -210,7 +211,7 @@ export const updateSupplier = catchAsync(
 
 export const deleteSupplier = catchAsync(
   async (req: Request, res: Response) => {
-    await InventoryService.deleteSupplier(Number(req.params.supplier_id));
+    await InventoryService.deleteSupplier(Number(req.params["supplier_id"]));
     res.status(204).send();
   },
 );
@@ -224,13 +225,13 @@ export const listUsers = catchAsync(async (req: Request, res: Response) => {
     .select("user_id", "username", "email", "phone", "created_at")
     .limit(Number(limit))
     .offset(offset);
-  const [{ total }] = await db('"USER"').count("user_id as total");
+  const total  = await db('"USER"').count("user_id as total");
   res.json({ data: rows, meta: { total: Number(total) } });
 });
 
 export const getUser = catchAsync(async (req: Request, res: Response) => {
   const user = await db('"USER"')
-    .where({ user_id: req.params.user_id })
+    .where({ user_id: req.params["user_id"] })
     .select("user_id", "username", "email", "phone", "address", "created_at")
     .first();
   if (!user) {
@@ -272,7 +273,7 @@ export const adminListOrders = catchAsync(
 
 export const adminGetOrder = catchAsync(async (req: Request, res: Response) => {
   const result = await OrderService.adminGetOrderDetail(
-    Number(req.params.order_id),
+    Number(req.params['order_id']),
   );
   res.json({ data: result });
 });
@@ -280,7 +281,7 @@ export const adminGetOrder = catchAsync(async (req: Request, res: Response) => {
 export const adminUpdateOrderStatus = catchAsync(
   async (req: Request, res: Response) => {
     await OrderService.adminUpdateStatus(
-      Number(req.params.order_id),
+      Number(req.params['order_id']),
       req.body.status,
     );
     res.json({ data: { message: "Status updated" } });
@@ -291,9 +292,9 @@ export const adminUpdateOrderStatus = catchAsync(
 
 export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
   const [
-    [{ total_revenue }],
-    [{ total_orders }],
-    [{ new_users }],
+    total_revenue,
+    total_orders,
+    new_users,
     ordersByStatus,
     topProducts,
   ] = await Promise.all([
@@ -327,3 +328,72 @@ export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
     },
   });
 });
+
+// ─── Vouchers (staff-facing) ──────────────────────────────────────────────────
+import * as VoucherService from "../services/voucher.service.js";
+import {
+  createVoucherSchema,
+  updateVoucherSchema,
+  createDiscountSchema,
+  assignDiscountSchema,
+} from "../schemas/voucher.schema.js";
+
+export const adminListVouchers = catchAsync(
+  async (req: Request, res: Response) => {
+    const { page, limit } = req.query as any;
+    const result = await VoucherService.adminListVouchers(
+      Number(page ?? 1),
+      Number(limit ?? 20),
+    );
+    res.json({ data: result.rows, meta: { total: result.total } });
+  },
+);
+
+export const adminCreateVoucher = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await VoucherService.adminCreateVoucher(req.body);
+    res.status(201).json({ data: result });
+  },
+);
+
+export const adminUpdateVoucher = catchAsync(
+  async (req: Request, res: Response) => {
+    await VoucherService.adminUpdateVoucher(
+      Number(req.params['voucher_id']),
+      req.body,
+    );
+    res.json({ data: { message: "Voucher updated" } });
+  },
+);
+
+export const listDiscounts = catchAsync(
+  async (_req: Request, res: Response) => {
+    const discounts = await VoucherService.listDiscounts();
+    res.json({ data: discounts });
+  },
+);
+
+export const createDiscount = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await VoucherService.createDiscount(req.body);
+    res.status(201).json({ data: result });
+  },
+);
+
+export const assignDiscount = catchAsync(
+  async (req: Request, res: Response) => {
+    await VoucherService.assignDiscount(
+      Number(req.params["discount_id"]),
+      req.body.product_id,
+      req.body.variant_id,
+    );
+    res.status(201).json({ data: { message: "Discount assigned" } });
+  },
+);
+
+export const deleteDiscount = catchAsync(
+  async (req: Request, res: Response) => {
+    await VoucherService.deleteDiscount(Number(req.params["discount_id"]));
+    res.status(204).send();
+  },
+);

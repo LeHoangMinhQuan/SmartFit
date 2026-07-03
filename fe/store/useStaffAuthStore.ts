@@ -30,7 +30,7 @@ export const useStaffAuthStore = create<StaffAuthStore>()(
       // Staff has no refresh flow, so a stale persisted token is just dead
       // weight — re-login is required after any page reload that loses it
       // from memory anyway once accessToken itself isn't persisted.
-      partialize: (state) => ({ staffId: state.staffId, name: state.name }),
+      partialize: (state) => ({ staffId: state.staffId, name: state.name, accessToken: state.accessToken }),
     },
   ),
 );

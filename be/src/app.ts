@@ -5,7 +5,7 @@ import cors from "cors";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 
-import { swaggerSpec } from "./config/swagger.js";
+import { setupSwagger } from "./config/swagger.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
@@ -74,7 +74,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 
 // ─── Swagger UI ───────────────────────────────────────────────────────────────
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+setupSwagger(app);
 
 // ─── 404 + error handler — must be last ──────────────────────────────────────
 app.use(notFound);

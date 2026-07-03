@@ -13,9 +13,9 @@ export default function PaymentResultPage() {
   const params = useSearchParams();
   const router = useRouter();
 
-  const responseCode = params.get("vnp_ResponseCode");
-  const vnpTxnRef = params.get("vnp_TxnRef"); // our order_id is embedded here by the backend
-  const orderId = params.get("vnp_OrderInfo"); // backend may pass order_id here
+  const responseCode = params.get("vnpay_ResponseCode");
+  const vnpTxnRef = params.get("vnpay_TxnRef"); // our order_id is embedded here by the backend
+  const orderId = params.get("vnpay_OrderInfo"); // backend may pass order_id here
 
   const isSuccess = responseCode === SUCCESS_CODE;
 

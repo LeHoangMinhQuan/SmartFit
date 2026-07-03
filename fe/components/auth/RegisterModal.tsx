@@ -108,7 +108,7 @@ export default function RegisterModal({
 
     try {
       // Use the shared `api` instance (lib/axios.ts) instead of a bare axios
-      // call — this is the single place that knows NEXT_PUBLIC_API_URL.
+      // call — this is the single place that knows NEXT_PUBLIC_BASE_URL.
       // The previous `process.env.BASE_URL` read undefined client-side
       // (Next.js only inlines NEXT_PUBLIC_*-prefixed vars into the browser
       // bundle), so this request was silently going to `undefined/auth/register`.

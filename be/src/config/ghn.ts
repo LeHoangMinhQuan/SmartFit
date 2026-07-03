@@ -19,7 +19,7 @@
  */
 
 import axios, { type AxiosInstance } from "axios";
-import env from "./env.js";
+import { env } from "./env.js";
 
 // ── Base URLs ─────────────────────────────────────────────────────────────────
 

@@ -26,8 +26,8 @@ export interface User {
   user_id: number;
   username: string;
   email: string;
-  phone: string | null;       // CHAR(10)
-  address: string | null;     // VARCHAR(70)
+  phone: string | null; // CHAR(10)
+  address: string | null; // VARCHAR(70)
   avatar_url: string | null;
   created_at: string;
 }
@@ -35,8 +35,8 @@ export interface User {
 // Product
 export interface Product {
   product_id: number;
-  name: string;               // VARCHAR(20)
-  description: string;        // VARCHAR(100)
+  name: string; // VARCHAR(20)
+  description: string; // VARCHAR(100)
   images: ProductImage[];
   variants: ProductVariant[];
   categories: Category[];
@@ -54,12 +54,12 @@ export interface ProductSummary {
 export interface ProductVariant {
   product_id: number;
   variant_id: number;
-  name: string;               // VARCHAR(100)
-  base_price: number;         // from product_price
+  name: string; // VARCHAR(100)
+  base_price: number; // from product_price
   attributes: ProductAttribute[];
   images: ProductImage[];
   discount?: Discount | null;
-  stock?: number;             // from store_product
+  stock?: number; // from store_product
 }
 
 export interface ProductImage {
@@ -71,8 +71,8 @@ export interface ProductImage {
 
 export interface ProductAttribute {
   attribute_id: number;
-  attribute_name: string;     // from attribute.name
-  value: string;              // VARCHAR(20)
+  attribute_name: string; // from attribute.name
+  value: string; // VARCHAR(20)
 }
 
 export interface VariantSelectorProps {
@@ -84,7 +84,7 @@ export interface VariantSelectorProps {
 // Category
 export interface Category {
   category_id: number;
-  name: string;               // VARCHAR(30)
+  name: string; // VARCHAR(30)
   parent_id: number | null;
   children?: Category[];
 }
@@ -104,7 +104,7 @@ export interface Voucher {
   voucher_id: number;
   code: string;
   description: string;
-  type: 'percent' | 'fixed';
+  type: "percent" | "fixed";
   value: number;
   max_discount: number;
   min_amount: number;
@@ -121,8 +121,8 @@ export interface CartItem {
   user_id: number;
   cart_id: number;
   quantity: number;
-  unit_price: number;         // computed server-side
-  subtotal: number;           // computed server-side
+  unit_price: number; // computed server-side
+  subtotal: number; // computed server-side
   // enriched by frontend:
   product_name?: string;
   variant_name?: string;
@@ -131,9 +131,15 @@ export interface CartItem {
 
 // Order
 export type OrderStatus =
-  | 'pending_payment' | 'paid' | 'preparing' | 'shipping'
-  | 'delivered' | 'cancelled' | 'payment_failed'
-  | 'refund_requested' | 'refunded';
+  | "pending_payment"
+  | "paid"
+  | "preparing"
+  | "shipping"
+  | "delivered"
+  | "cancelled"
+  | "payment_failed"
+  | "refund_requested"
+  | "refunded";
 
 export interface Order {
   order_id: number;
@@ -144,7 +150,7 @@ export interface Order {
   created_at: string;
   updated_at: string | null;
   total_amount: number;
-  shipping_address: string;   // VARCHAR(70) denormalized
+  shipping_address: string; // VARCHAR(70) denormalized
   shipping_order_id: number | null;
   items: OrderItem[];
   shipping?: ShippingOrder;
@@ -163,13 +169,13 @@ export interface OrderItem {
 export interface PaymentTransaction {
   transaction_id: number;
   order_id: number;
-  vnp_txn_ref: string;
-  vnp_amount: number;
-  vnp_bank_code: string;
-  vnp_pay_date: string;
-  vnp_transaction_no: string;
-  vnp_response_code: string;
-  status: 'pending' | 'success' | 'failed';
+  vnpay_txn_ref: string;
+  vnpay_amount: number;
+  vnpay_bank_code: string;
+  vnpay_pay_date: string;
+  vnpay_transaction_no: string;
+  vnpay_response_code: string;
+  status: "pending" | "success" | "failed";
   created_at: string;
 }
 
@@ -185,7 +191,7 @@ export interface ShippingOrder {
 
 export interface ShippingLog {
   shipping_order_id: number;
-  status: string;             // VARCHAR(10) — mapped from GHN
+  status: string; // VARCHAR(10) — mapped from GHN
   updated_date: string;
 }
 
@@ -201,7 +207,7 @@ export interface District {
   province_id: number;
   district_name: string;
   district_code: string;
-  supporttype: number;        // 0=locked, 3=full service
+  supporttype: number; // 0=locked, 3=full service
   status: number;
 }
 
@@ -217,7 +223,7 @@ export interface Ward {
 // Address
 export interface Address {
   address_id: number;
-  address_line: string;       // VARCHAR(20)
+  address_line: string; // VARCHAR(20)
   province_id: number;
   district_id: number;
   ward_id: number;
@@ -225,7 +231,7 @@ export interface Address {
 
 export interface UserAddress extends Address {
   is_default: boolean;
-  label: string;              // VARCHAR(20)
+  label: string; // VARCHAR(20)
 }
 
 // Review
@@ -234,7 +240,7 @@ export interface Review {
   variant_id: number;
   user_id: number;
   review_id: number;
-  rating: number;             // 1–5
+  rating: number; // 1–5
   comment: string;
 }
 
@@ -247,7 +253,7 @@ export interface WishlistItem {
 }
 
 // Try-On
-export type TryOnStatus = 'processing' | 'ready' | 'failed';
+export type TryOnStatus = "processing" | "ready" | "failed";
 
 export interface TryOnSession {
   session_id: number;

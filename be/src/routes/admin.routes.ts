@@ -1,18 +1,18 @@
 import { Router } from "express";
 import { authenticateStaff } from "../middleware/authenticateStaff.js";
 import * as Admin from "../controllers/admin.controller.js";
-import * as OrderController from "../controllers/order.controller.js";
 import { updateOrderStatusSchema } from "../schemas/order.schema.js";
 import { validate } from "../middleware/validate.js";
 
 const router = Router();
 
-// ─── Staff Auth (public — no authenticateStaff guard here) ───────────────────
-router.post("/staff/auth/login", Admin.staffLogin);
+// ─── Staff Auth (public — no authenticateStaff guard) ────────────────────────
+router.post("/auth/login", Admin.staffLogin);
 
-// All routes below require staff JWT
+// Everything below requires a valid staff JWT
 router.use(authenticateStaff);
-router.post("/staff/auth/logout", Admin.staffLogout);
+
+router.post("/auth/logout", Admin.staffLogout);
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard", Admin.getDashboard);
@@ -41,13 +41,16 @@ router.get("/stores/:store_id/inventory", Admin.getStoreInventory);
 router.get("/stores/:store_id/staff", Admin.getStoreStaff);
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
+// ⚠ Static paths (/import-history, /import) MUST come before the parameterised
+// route (:product_id/:variant_id/:store_id) or Express matches the literal
+// string "import-history" as the product_id param.
 router.get("/inventory", Admin.listInventory);
+router.get("/inventory/import-history", Admin.getImportHistory);
+router.post("/inventory/import", Admin.recordImport);
 router.patch(
   "/inventory/:product_id/:variant_id/:store_id",
   Admin.adjustQuantity,
 );
-router.get("/inventory/import-history", Admin.getImportHistory);
-router.post("/inventory/import", Admin.recordImport);
 
 // ─── Suppliers ────────────────────────────────────────────────────────────────
 router.get("/suppliers", Admin.listSuppliers);
@@ -59,13 +62,6 @@ router.delete("/suppliers/:supplier_id", Admin.deleteSupplier);
 router.get("/users", Admin.listUsers);
 router.get("/users/:user_id", Admin.getUser);
 
-// ─── Reviews ─────────────────────────────────────────────────────────────────
-router.get("/reviews", Admin.listReviews);
-router.delete(
-  "/reviews/:product_id/:variant_id/:user_id/:review_id",
-  Admin.adminDeleteReview,
-);
-
 // ─── Orders ──────────────────────────────────────────────────────────────────
 router.get("/orders", Admin.adminListOrders);
 router.get("/orders/:order_id", Admin.adminGetOrder);
@@ -74,5 +70,23 @@ router.patch(
   validate(updateOrderStatusSchema),
   Admin.adminUpdateOrderStatus,
 );
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+router.get("/reviews", Admin.listReviews);
+router.delete(
+  "/reviews/:product_id/:variant_id/:user_id/:review_id",
+  Admin.adminDeleteReview,
+);
+
+// ─── Vouchers (staff-facing) ──────────────────────────────────────────────────
+router.get("/vouchers", Admin.adminListVouchers);
+router.post("/vouchers", Admin.adminCreateVoucher);
+router.patch("/vouchers/:voucher_id", Admin.adminUpdateVoucher);
+
+// ─── Discounts (variant-level markdowns) ─────────────────────────────────────
+router.get("/discounts", Admin.listDiscounts);
+router.post("/discounts", Admin.createDiscount);
+router.post("/discounts/:discount_id/products", Admin.assignDiscount);
+router.delete("/discounts/:discount_id", Admin.deleteDiscount);
 
 export default router;

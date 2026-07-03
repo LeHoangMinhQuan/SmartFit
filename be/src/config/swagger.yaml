@@ -1,0 +1,2388 @@
+openapi: 3.0.3
+info:
+  title: E-Commerce API
+  version: 1.0.0
+  description: |
+    E-Commerce backend — Node.js · Express 5 · PostgreSQL · Knex · VNPay · GHN.
+
+    **Auth:**
+    - Customer endpoints use `Bearer <accessToken>` (user JWT, secret = `JWT_SECRET`)
+    - Staff endpoints use `Bearer <staffToken>` (staff JWT, secret = `STAFF_JWT_SECRET`)
+    - IPN and webhook endpoints are unsigned (verified internally by HMAC / GHN token)
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development
+
+tags:
+  - name: Auth
+  - name: Products
+  - name: Attributes
+  - name: Categories
+  - name: Reviews
+  - name: Cart
+  - name: Orders
+  - name: Payments
+  - name: Shipping
+  - name: Users
+  - name: Vouchers
+  - name: Inventory
+  - name: Admin
+  - name: TryOn
+  - name: Uploads
+
+# ─── Reusable components ────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    userAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Customer JWT from /auth/login or /auth/register
+    staffAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Staff JWT from /admin/staff/auth/login
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        status: { type: string, example: error }
+        statusCode: { type: integer, example: 404 }
+        message: { type: string, example: Resource not found }
+
+    ValidationError:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+
+    Paginated:
+      type: object
+      properties:
+        data: { type: array, items: {} }
+        meta:
+          type: object
+          properties:
+            total: { type: integer }
+            page: { type: integer }
+            limit: { type: integer }
+
+    Product:
+      type: object
+      properties:
+        product_id: { type: integer }
+        name: { type: string, maxLength: 20 }
+        description: { type: string, maxLength: 100 }
+
+    Variant:
+      type: object
+      properties:
+        product_id: { type: integer }
+        variant_id: { type: integer }
+        name: { type: string }
+        base_price: { type: number }
+        attributes:
+          type: array
+          items:
+            type: object
+            properties:
+              attribute_id: { type: integer }
+              value: { type: string }
+
+    CartItem:
+      type: object
+      properties:
+        product_id: { type: integer }
+        variant_id: { type: integer }
+        quantity: { type: integer }
+        unit_price: { type: number }
+        subtotal: { type: number }
+        product_name: { type: string }
+        variant_name: { type: string }
+        image_url: { type: string }
+
+    Order:
+      type: object
+      properties:
+        order_id: { type: integer }
+        user_id: { type: integer }
+        staff_id: { type: integer }
+        payment_method_id: { type: integer }
+        shipping_address: { type: string }
+        total_amount: { type: number }
+        status:
+          {
+            type: string,
+            enum:
+              [
+                pending_payment,
+                paid,
+                preparing,
+                shipping,
+                delivered,
+                cancelled,
+                payment_failed,
+                refund_requested,
+                refunded,
+              ],
+          }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    OrderItem:
+      type: object
+      properties:
+        order_id: { type: integer }
+        product_id: { type: integer }
+        variant_id: { type: integer }
+        quantity: { type: integer }
+        unit_price: { type: number }
+        subtotal: { type: number }
+        product_name: { type: string }
+        variant_name: { type: string }
+
+    Review:
+      type: object
+      properties:
+        product_id: { type: integer }
+        variant_id: { type: integer }
+        user_id: { type: integer }
+        review_id: { type: integer }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, maxLength: 255 }
+        username: { type: string }
+
+    Address:
+      type: object
+      properties:
+        address_id: { type: integer }
+        address_line: { type: string, maxLength: 20 }
+        province_id: { type: integer }
+        district_id: { type: integer }
+        ward_id: { type: integer }
+        is_default: { type: boolean }
+        label: { type: string, maxLength: 20 }
+        province_name: { type: string }
+        district_name: { type: string }
+        ward_name: { type: string }
+
+    Staff:
+      type: object
+      properties:
+        staff_id: { type: integer }
+        name: { type: string, maxLength: 30 }
+        birth_date: { type: string, format: date }
+        start_time: { type: string, format: date }
+
+    Store:
+      type: object
+      properties:
+        store_id: { type: integer }
+        name: { type: string, maxLength: 40 }
+        address: { type: string, maxLength: 20 }
+
+    Voucher:
+      type: object
+      properties:
+        voucher_id: { type: integer }
+        code: { type: string, maxLength: 15 }
+        type: { type: string, enum: [percent, fixed] }
+        value: { type: number }
+        max_discount: { type: number }
+        min_amount: { type: number }
+        start_date: { type: string, format: date-time }
+        end_date: { type: string, format: date-time }
+        usage_limit: { type: integer }
+        usage_count: { type: integer }
+        description: { type: string, maxLength: 30 }
+
+    TryonSession:
+      type: object
+      properties:
+        session_id: { type: integer }
+        status: { type: string, enum: [processing, ready, failed] }
+        result_url: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time }
+
+# ─── Paths ──────────────────────────────────────────────────────────────────────
+paths:
+  # ── Auth ─────────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register with email + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+      responses:
+        "201":
+          {
+            description: Registered,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties:
+                                  {
+                                    accessToken: { type: string },
+                                    user: { type: object },
+                                  },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+        "409": { description: Email already exists }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login — returns access + refresh tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: OK }
+        "401": { description: Invalid credentials }
+
+  /auth/google:
+    post:
+      tags: [Auth]
+      summary: Google OAuth2 — exchange ID token for app JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token: { type: string }
+      responses:
+        "200": { description: OK }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token
+      responses:
+        "200": { description: New access token issued }
+        "401": { description: Invalid or expired refresh token }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout — deletes refresh_token row
+      security: [{ userAuth: [] }]
+      responses:
+        "204": { description: Logged out }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Send password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Reset email sent if account exists }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Set new password using reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token: { type: string }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Password updated }
+        "400": { description: Invalid or expired token }
+
+  # ── Products ─────────────────────────────────────────────────────────────────
+  /products:
+    get:
+      tags: [Products]
+      summary: List products
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 20 } }
+        - { name: sort, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: integer } }
+        - { name: minPrice, in: query, schema: { type: number } }
+        - { name: maxPrice, in: query, schema: { type: number } }
+        - { name: attribute_id, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          {
+            description: OK,
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/Paginated" } },
+              },
+          }
+    post:
+      tags: [Products]
+      summary: Create product (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, description]
+              properties:
+                name: { type: string, maxLength: 20 }
+                description: { type: string, maxLength: 100 }
+                category_ids: { type: array, items: { type: integer } }
+      responses:
+        "201":
+          {
+            description: Created,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties: { product_id: { type: integer } },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+
+  /products/search:
+    get:
+      tags: [Products]
+      summary: Search products by name (ILIKE) — must precede /{id}
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Product detail with variants, images, price
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not found }
+    put:
+      tags: [Products]
+      summary: Full update (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 20 }
+                description: { type: string, maxLength: 100 }
+                category_ids: { type: array, items: { type: integer } }
+      responses:
+        "200": { description: Updated }
+    patch:
+      tags: [Products]
+      summary: Partial update (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 20 }
+                description: { type: string, maxLength: 100 }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Products]
+      summary: Delete product (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Deleted }
+
+  /products/{id}/images:
+    post:
+      tags: [Products]
+      summary: Upload product image (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+                variant_id: { type: integer }
+      responses:
+        "201":
+          {
+            description: Uploaded,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties: { image_id: { type: integer } },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+
+  /products/{id}/variants:
+    get:
+      tags: [Products]
+      summary: List variants with attributes + price
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Products]
+      summary: Create variant (Staff) — app supplies variant_id
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variant_id, name]
+              properties:
+                variant_id:
+                  {
+                    type: integer,
+                    description: App-supplied per-product counter,
+                  }
+                name: { type: string }
+      responses:
+        "201": { description: Created }
+
+  /products/{id}/variants/{variant_id}:
+    put:
+      tags: [Products]
+      summary: Update variant (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Products]
+      summary: Delete variant (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  /products/{id}/variants/{variant_id}/price:
+    post:
+      tags: [Products]
+      summary: Upsert variant price (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base_price, start_date, end_date]
+              properties:
+                base_price: { type: number }
+                start_date: { type: string, format: date-time }
+                end_date: { type: string, format: date-time }
+      responses:
+        "200": { description: Price upserted }
+
+  /products/{id}/variants/{variant_id}/attributes:
+    post:
+      tags: [Attributes]
+      summary: Attach attribute value to variant (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attribute_id, value]
+              properties:
+                attribute_id:
+                  {
+                    type: integer,
+                    description: Must exist in global attribute catalog,
+                  }
+                value: { type: string, maxLength: 20 }
+      responses:
+        "201": { description: Attached }
+        "409":
+          {
+            description: Attribute already attached — use PATCH to update value,
+          }
+
+  /products/{product_id}/variants/{variant_id}/attributes/{attribute_id}:
+    patch:
+      tags: [Attributes]
+      summary: Update attribute value on variant (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: attribute_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string, maxLength: 20 }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Attributes]
+      summary: Remove attribute from variant (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: attribute_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Removed }
+
+  /products/{id}/reviews:
+    get:
+      tags: [Reviews]
+      summary: Reviews for a product
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /products/{product_id}/variants/{variant_id}/reviews:
+    post:
+      tags: [Reviews]
+      summary: Submit review (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, comment]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, maxLength: 255 }
+      responses:
+        "201":
+          {
+            description: Created,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties: { review_id: { type: integer } },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+
+  # ── Attributes ───────────────────────────────────────────────────────────────
+  /attributes:
+    get:
+      tags: [Attributes]
+      summary: List global attribute catalog
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Attributes]
+      summary: Create attribute type (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 20 }
+      responses:
+        "201": { description: Created }
+        "409": { description: Name already exists (case-insensitive) }
+
+  # ── Reviews (standalone edit/delete) ─────────────────────────────────────────
+  /reviews/{product_id}/{variant_id}/{review_id}:
+    patch:
+      tags: [Reviews]
+      summary: Edit own review (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: review_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, maxLength: 255 }
+      responses:
+        "200": { description: Updated }
+        "404": { description: Not found or not yours }
+    delete:
+      tags: [Reviews]
+      summary: Delete own review (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: review_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  # ── Categories ───────────────────────────────────────────────────────────────
+  /categories:
+    get:
+      tags: [Categories]
+      summary: Full nested category tree
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Categories]
+      summary: Create category (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 30 }
+                parent_id: { type: integer, nullable: true }
+      responses:
+        "201": { description: Created }
+
+  /categories/{category_id}:
+    put:
+      tags: [Categories]
+      summary: Update category (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: category_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 30 }
+                parent_id: { type: integer, nullable: true }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Categories]
+      summary: Delete category (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: category_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  /categories/{category_id}/products:
+    get:
+      tags: [Categories]
+      summary: Products in category with preview image + price range
+      parameters:
+        - {
+            name: category_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  # ── Cart ─────────────────────────────────────────────────────────────────────
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get cart with line items + totals (JWT)
+      security: [{ userAuth: [] }]
+      responses:
+        "200": { description: OK }
+    delete:
+      tags: [Cart]
+      summary: Clear all cart items (JWT)
+      security: [{ userAuth: [] }]
+      responses:
+        "204": { description: Cleared }
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Add item to cart (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, variant_id, quantity]
+              properties:
+                product_id: { type: integer }
+                variant_id: { type: integer }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          {
+            description: Added,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      { type: object, properties: { data: { type: object } } },
+                  },
+              },
+          }
+        "404": { description: Variant not found }
+        "422": { description: No price set for variant }
+    patch:
+      tags: [Cart]
+      summary: Update item quantity (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, variant_id, quantity]
+              properties:
+                product_id: { type: integer }
+                variant_id: { type: integer }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Cart]
+      summary: Remove item from cart (JWT) — composite key in request body
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, variant_id]
+              properties:
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "200": { description: Removed }
+
+  /cart/merge:
+    post:
+      tags: [Cart]
+      summary: Merge guest cart on login (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [product_id, variant_id, quantity]
+                    properties:
+                      product_id: { type: integer }
+                      variant_id: { type: integer }
+                      quantity: { type: integer }
+      responses:
+        "200": { description: Merged }
+
+  # ── Orders ───────────────────────────────────────────────────────────────────
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Create order from cart (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_method_id, shipping_address, ward_id]
+              properties:
+                payment_method_id: { type: integer }
+                shipping_address: { type: string, maxLength: 70 }
+                ward_id: { type: integer }
+                voucher_code: { type: string, maxLength: 15 }
+      responses:
+        "201":
+          {
+            description: Created,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties:
+                                  {
+                                    order_id: { type: integer },
+                                    total_amount: { type: number },
+                                  },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+        "400": { description: Cart empty / voucher invalid }
+        "409": { description: Insufficient stock }
+    get:
+      tags: [Orders]
+      summary: My orders (JWT, paginated)
+      security: [{ userAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /orders/{order_id}:
+    get:
+      tags: [Orders]
+      summary: Order detail + items + shipping (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: order_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not found }
+
+  /orders/{order_id}/cancel:
+    patch:
+      tags: [Orders]
+      summary: Cancel order (JWT) — only when status is paid or preparing
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: order_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: Cancelled }
+        "400": { description: Cannot cancel order with current status }
+
+  # ── Payments (VNPay) ─────────────────────────────────────────────────────────
+  /payments/vnpay/create:
+    post:
+      tags: [Payments]
+      summary: Create VNPay payment URL (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id: { type: integer }
+      responses:
+        "200":
+          {
+            description: OK,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties:
+                                  {
+                                    paymentUrl: { type: string },
+                                    vnpay_txn_ref: { type: string },
+                                  },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+
+  /payments/vnpay/return:
+    get:
+      tags: [Payments]
+      summary: VNPay return URL — display only, no DB write
+      responses:
+        "200": { description: Display feedback }
+
+  /payments/vnpay/ipn:
+    post:
+      tags: [Payments]
+      summary: VNPay IPN webhook — HMAC-verified, idempotent
+      description: |
+        Registered **before** `express.json()` in app.ts. Receives `application/x-www-form-urlencoded`.
+        Always responds with `{ RspCode, Message }` — never uses standard error handler.
+        Idempotent on duplicate `vnpay_txn_ref` — returns `{ RspCode: "00" }` without side effects.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                vnpay_TxnRef: { type: string }
+                vnpay_Amount: { type: string }
+                vnpay_ResponseCode: { type: string }
+                vnpay_TransactionStatus: { type: string }
+                vnpay_SecureHash: { type: string }
+      responses:
+        "200":
+          description: Always 200 — check RspCode in body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  RspCode: { type: string, example: "00" }
+                  Message: { type: string, example: Confirmed }
+
+  # ── Shipping (GHN) ───────────────────────────────────────────────────────────
+  /shipping/provinces:
+    get:
+      tags: [Shipping]
+      summary: List provinces (cached daily)
+      responses:
+        "200": { description: OK }
+
+  /shipping/districts/{province_id}:
+    get:
+      tags: [Shipping]
+      summary: Districts by province (cached daily)
+      parameters:
+        - {
+            name: province_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /shipping/wards/{district_id}:
+    get:
+      tags: [Shipping]
+      summary: Wards by district (cached daily) — includes canupdatecod, status, supporttype
+      parameters:
+        - {
+            name: district_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /shipping/services:
+    post:
+      tags: [Shipping]
+      summary: Available GHN service tiers (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_district_id, to_district_id]
+              properties:
+                from_district_id: { type: integer }
+                to_district_id: { type: integer }
+      responses:
+        "200": { description: OK }
+
+  /shipping/fee:
+    post:
+      tags: [Shipping]
+      summary: Estimate shipping fee (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [
+                  service_id,
+                  from_district_id,
+                  to_district_id,
+                  to_ward_code,
+                  weight,
+                ]
+              properties:
+                service_id: { type: integer }
+                from_district_id: { type: integer }
+                to_district_id: { type: integer }
+                to_ward_code: { type: string }
+                weight: { type: integer, description: Weight in grams }
+      responses:
+        "200": { description: OK }
+
+  /shipping/track/{tracking_code}:
+    get:
+      tags: [Shipping]
+      summary: Latest shipping status (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: tracking_code,
+            in: path,
+            required: true,
+            schema: { type: string },
+          }
+      responses:
+        "200": { description: OK }
+        "404": { description: Tracking code not found }
+
+  /shipping/webhook:
+    post:
+      tags: [Shipping]
+      summary: GHN delivery status webhook
+      description: |
+        GHN calls this when shipment status changes. Maps GHN status strings to
+        ≤10 chars before inserting into `shipping_logs.status`. If status = 'delivered',
+        updates `"ORDER".status` to 'delivered'.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                OrderCode: { type: string }
+                Status: { type: string }
+      responses:
+        "200": { description: OK }
+
+  # ── Users / Profile ──────────────────────────────────────────────────────────
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Get my profile (JWT)
+      security: [{ userAuth: [] }]
+      responses:
+        "200": { description: OK }
+    patch:
+      tags: [Users]
+      summary: Update profile (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string, maxLength: 30 }
+                phone: { type: string, pattern: '^\d{10}$' }
+                address: { type: string, maxLength: 70 }
+                avatar_url: { type: string, format: uri }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Users]
+      summary: Delete account (JWT)
+      security: [{ userAuth: [] }]
+      responses:
+        "204": { description: Deleted }
+
+  /users/me/password:
+    patch:
+      tags: [Users]
+      summary: Change password (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [old_password, new_password]
+              properties:
+                old_password: { type: string }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Updated }
+        "401": { description: Wrong current password }
+
+  /users/me/addresses:
+    get:
+      tags: [Users]
+      summary: List addresses (JWT)
+      security: [{ userAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Users]
+      summary: Add address (JWT) — auto-sets default if first address
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address_line, province_id, district_id, ward_id]
+              properties:
+                address_line: { type: string, maxLength: 20 }
+                province_id: { type: integer }
+                district_id: { type: integer }
+                ward_id: { type: integer }
+                label: { type: string, maxLength: 20 }
+      responses:
+        "201": { description: Created }
+
+  /users/me/addresses/{address_id}:
+    put:
+      tags: [Users]
+      summary: Update address (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: address_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address_line: { type: string, maxLength: 20 }
+                province_id: { type: integer }
+                district_id: { type: integer }
+                ward_id: { type: integer }
+                label: { type: string, maxLength: 20 }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Users]
+      summary: Remove address link (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: address_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Removed }
+
+  /users/me/addresses/{address_id}/default:
+    patch:
+      tags: [Users]
+      summary: Set default address — clears others in transaction (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: address_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: Default set }
+
+  /users/me/wishlist:
+    get:
+      tags: [Users]
+      summary: Wishlist (active items, deleted_at IS NULL) (JWT)
+      security: [{ userAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Users]
+      summary: Add to wishlist — upsert, clears deleted_at if soft-deleted (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, variant_id]
+              properties:
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "201": { description: Added }
+
+  /users/me/wishlist/{product_id}/{variant_id}:
+    delete:
+      tags: [Users]
+      summary: Soft-delete wishlist item (sets deleted_at = NOW()) (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Soft-deleted }
+
+  # ── Vouchers ─────────────────────────────────────────────────────────────────
+  /vouchers/validate:
+    post:
+      tags: [Vouchers]
+      summary: Validate voucher code at checkout (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, order_amount]
+              properties:
+                code: { type: string, maxLength: 15 }
+                order_amount: { type: number }
+      responses:
+        "200": { description: Valid, returns discount_amount }
+        "400": { description: Invalid / expired / below min amount }
+
+  /vouchers/admin:
+    get:
+      tags: [Vouchers]
+      summary: List all vouchers (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Vouchers]
+      summary: Create voucher (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Voucher"
+      responses:
+        "201": { description: Created }
+        "409": { description: Code already exists }
+
+  /vouchers/admin/{voucher_id}:
+    patch:
+      tags: [Vouchers]
+      summary: Update / deactivate voucher (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: voucher_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: Updated }
+
+  /vouchers/discounts:
+    get:
+      tags: [Vouchers]
+      summary: List variant discounts (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Vouchers]
+      summary: Create variant discount (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                [
+                  voucher_code,
+                  voucher_type,
+                  voucher_value,
+                  start_date,
+                  end_date,
+                ]
+              properties:
+                voucher_code: { type: string, maxLength: 15 }
+                voucher_type: { type: string, maxLength: 15 }
+                voucher_value: { type: number }
+                start_date: { type: string, format: date-time }
+                end_date: { type: string, format: date-time }
+      responses:
+        "201": { description: Created }
+
+  /vouchers/discounts/{discount_id}:
+    delete:
+      tags: [Vouchers]
+      summary: Delete discount (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: discount_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  /vouchers/discounts/{discount_id}/products:
+    post:
+      tags: [Vouchers]
+      summary: Assign discount to variant (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: discount_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, variant_id]
+              properties:
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "201": { description: Assigned }
+
+  # ── Inventory ────────────────────────────────────────────────────────────────
+  /admin/inventory:
+    get:
+      tags: [Inventory]
+      summary: List store_product rows (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: store_id, in: query, schema: { type: integer } }
+        - { name: min_quantity, in: query, schema: { type: integer } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /admin/inventory/{product_id}/{variant_id}/{store_id}:
+    patch:
+      tags: [Inventory]
+      summary: Manual quantity adjustment (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: store_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0 }
+      responses:
+        "200": { description: Updated }
+
+  /admin/inventory/import-history:
+    get:
+      tags: [Inventory]
+      summary: List import history (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: staff_id, in: query, schema: { type: integer } }
+        - { name: supplier_id, in: query, schema: { type: integer } }
+        - { name: product_id, in: query, schema: { type: integer } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /admin/inventory/import:
+    post:
+      tags: [Inventory]
+      summary: Record import (Staff) — no quantity column, composite PK of 5 fields
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplier_id, product_id, variant_id]
+              properties:
+                supplier_id: { type: integer }
+                product_id: { type: integer }
+                variant_id: { type: integer }
+                import_date:
+                  {
+                    type: string,
+                    format: date-time,
+                    description: Defaults to NOW() if omitted,
+                  }
+      responses:
+        "201": { description: Recorded }
+
+  # ── Admin ─────────────────────────────────────────────────────────────────────
+  /admin/staff/auth/login:
+    post:
+      tags: [Admin]
+      summary: Staff login by staff_id + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [staff_id, password]
+              properties:
+                staff_id: { type: integer }
+                password: { type: string }
+      responses:
+        "200":
+          {
+            description: OK,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties:
+                                  {
+                                    staff_id: { type: integer },
+                                    token: { type: string },
+                                    roles:
+                                      { type: array, items: { type: object } },
+                                  },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+        "401": { description: Invalid credentials }
+
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Revenue + order stats + top products + new users (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+
+  /admin/staff:
+    get:
+      tags: [Admin]
+      summary: List all staff (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Admin]
+      summary: Create staff (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, password]
+              properties:
+                name: { type: string, maxLength: 30 }
+                birth_date: { type: string, format: date }
+                start_time: { type: string, format: date }
+                password: { type: string, minLength: 8 }
+      responses:
+        "201":
+          {
+            description: Created,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data:
+                              {
+                                type: object,
+                                properties: { staff_id: { type: integer } },
+                              },
+                          },
+                      },
+                  },
+              },
+          }
+
+  /admin/staff/{staff_id}:
+    get:
+      tags: [Admin]
+      summary: Staff detail + roles (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+    patch:
+      tags: [Admin]
+      summary: Update staff (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: Updated }
+
+  /admin/staff/{staff_id}/roles:
+    post:
+      tags: [Admin]
+      summary: Assign role to staff (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_id]
+              properties:
+                role_id: { type: integer }
+      responses:
+        "201": { description: Assigned }
+
+  /admin/staff/{staff_id}/roles/{role_id}:
+    delete:
+      tags: [Admin]
+      summary: Remove role from staff (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - { name: role_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Removed }
+
+  /admin/staff/{staff_id}/history:
+    get:
+      tags: [Admin]
+      summary: Staff working history ordered by start_date DESC (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /admin/staff/{staff_id}/store:
+    get:
+      tags: [Admin]
+      summary: Current store assignment (end_date IS NULL) (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /admin/staff/{staff_id}/transfer:
+    post:
+      tags: [Admin]
+      summary: Transfer staff to new store — closes open row, inserts new (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: staff_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [store_id]
+              properties:
+                store_id: { type: integer }
+                start_date: { type: string, format: date-time }
+      responses:
+        "200": { description: Transferred }
+
+  /admin/roles:
+    get:
+      tags: [Admin]
+      summary: List roles (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Admin]
+      summary: Create role (Staff) — column is `name`, not `role_name`
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 20 }
+      responses:
+        "201": { description: Created }
+
+  /admin/stores:
+    get:
+      tags: [Admin]
+      summary: List stores (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Admin]
+      summary: Create store (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, address]
+              properties:
+                name: { type: string, maxLength: 40 }
+                address: { type: string, maxLength: 20 }
+      responses:
+        "201": { description: Created }
+
+  /admin/stores/{store_id}:
+    get:
+      tags: [Admin]
+      summary: Store detail + current staff (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: store_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+    patch:
+      tags: [Admin]
+      summary: Update store (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: store_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: Updated }
+
+  /admin/stores/{store_id}/inventory:
+    get:
+      tags: [Admin]
+      summary: Inventory for a specific store (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: store_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /admin/stores/{store_id}/staff:
+    get:
+      tags: [Admin]
+      summary: Current staff at store (end_date IS NULL) (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: store_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /admin/suppliers:
+    get:
+      tags: [Admin]
+      summary: List suppliers (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Admin]
+      summary: Create supplier (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 50 }
+      responses:
+        "201": { description: Created }
+
+  /admin/suppliers/{supplier_id}:
+    put:
+      tags: [Admin]
+      summary: Update supplier (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: supplier_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Admin]
+      summary: Delete supplier (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: supplier_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: All users paginated (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /admin/users/{user_id}:
+    get:
+      tags: [Admin]
+      summary: User detail (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: user_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /admin/orders:
+    get:
+      tags: [Admin]
+      summary: All orders with filters (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: user_id, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /admin/orders/{order_id}:
+    get:
+      tags: [Admin]
+      summary: Order detail (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: order_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200": { description: OK }
+
+  /admin/orders/{order_id}/status:
+    patch:
+      tags: [Admin]
+      summary: Update order status (Staff) — enforces valid transitions
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: order_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum:
+                    [
+                      pending_payment,
+                      paid,
+                      preparing,
+                      shipping,
+                      delivered,
+                      cancelled,
+                      payment_failed,
+                      refund_requested,
+                      refunded,
+                    ]
+      responses:
+        "200": { description: Updated }
+        "400": { description: Invalid status transition }
+
+  /admin/reviews:
+    get:
+      tags: [Admin]
+      summary: All reviews (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK }
+
+  /admin/reviews/{product_id}/{variant_id}/{user_id}/{review_id}:
+    delete:
+      tags: [Admin]
+      summary: Delete review by full composite PK (Staff)
+      security: [{ staffAuth: [] }]
+      parameters:
+        - {
+            name: product_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - {
+            name: variant_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+        - { name: user_id, in: path, required: true, schema: { type: integer } }
+        - {
+            name: review_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  # ── Try-On ───────────────────────────────────────────────────────────────────
+  /tryon/session:
+    post:
+      tags: [TryOn]
+      summary: Upload photo, create session (JWT) — rate limited 5/10min
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [photo, product_id, variant_id]
+              properties:
+                photo: { type: string, format: binary }
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "201":
+          {
+            description: Session created,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            data: { $ref: "#/components/schemas/TryonSession" },
+                          },
+                      },
+                  },
+              },
+          }
+        "429": { description: Rate limit — 5 per 10 minutes }
+
+  /tryon/session/{session_id}:
+    delete:
+      tags: [TryOn]
+      summary: Delete session + S3 objects (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: session_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+
+  /tryon/preview:
+    post:
+      tags: [TryOn]
+      summary: Submit garment preview job (JWT)
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_id, product_id, variant_id]
+              properties:
+                session_id: { type: integer }
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "200":
+          {
+            description: "Job submitted — poll /tryon/preview/{session_id} for result",
+          }
+        "403": { description: Session not found or access denied }
+        "410": { description: Session expired }
+
+  /tryon/preview/{session_id}:
+    get:
+      tags: [TryOn]
+      summary: Poll try-on status (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: session_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200":
+          description: Current status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TryonSession"
+
+  # ── Uploads ──────────────────────────────────────────────────────────────────
+  /uploads/images:
+    post:
+      tags: [Uploads]
+      summary: Single image upload → insert product_image → returns image_id (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, product_id]
+              properties:
+                image: { type: string, format: binary }
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "201": { description: Uploaded }
+
+  /uploads/images/bulk:
+    post:
+      tags: [Uploads]
+      summary: Bulk image upload (max 10, 5MB each, jpeg/png/webp) — returns image_id[] (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [images, product_id]
+              properties:
+                images:
+                  {
+                    type: array,
+                    items: { type: string, format: binary },
+                    maxItems: 10,
+                  }
+                product_id: { type: integer }
+                variant_id: { type: integer }
+      responses:
+        "201": { description: Uploaded }
+
+  # ── Health ───────────────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Admin]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  uptime: { type: number }

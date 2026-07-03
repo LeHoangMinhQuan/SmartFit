@@ -5,12 +5,12 @@ export type PaymentStatus = "pending" | "success" | "failed";
 export interface PaymentTransaction {
   transaction_id?: number; // IDENTITY
   order_id: number;
-  vnp_txn_ref: string; // UNIQUE — format: `${order_id}-${Date.now()}`
-  vnp_amount: number;
-  vnp_bank_code?: string;
-  vnp_pay_date?: string;
-  vnp_transaction_no?: string;
-  vnp_response_code?: string;
+  vnpay_txn_ref: string; // UNIQUE — format: `${order_id}-${Date.now()}`
+  vnpay_amount: number;
+  vnpay_bank_code?: string;
+  vnpay_pay_date?: string;
+  vnpay_transaction_no?: string;
+  vnpay_response_code?: string;
   status: PaymentStatus;
 }
 
@@ -23,8 +23,8 @@ export async function createTransaction(
   return row.transaction_id;
 }
 
-export async function findTransactionByRef(vnp_txn_ref: string) {
-  return db("payment_transaction").where({ vnp_txn_ref }).first();
+export async function findTransactionByRef(vnpay_txn_ref: string) {
+  return db("payment_transaction").where({ vnpay_txn_ref }).first();
 }
 
 export async function findTransactionByOrderId(order_id: number) {
@@ -39,16 +39,16 @@ export async function findTransactionByOrderId(order_id: number) {
  * Returns number of rows affected (0 = already processed).
  */
 export async function confirmTransaction(
-  vnp_txn_ref: string,
+  vnpay_txn_ref: string,
   update: {
     status: PaymentStatus;
-    vnp_bank_code: string;
-    vnp_pay_date: string;
-    vnp_transaction_no: string;
-    vnp_response_code: string;
+    vnpay_bank_code: string;
+    vnpay_pay_date: string;
+    vnpay_transaction_no: string;
+    vnpay_response_code: string;
   },
 ): Promise<number> {
   return db("payment_transaction")
-    .where({ vnp_txn_ref, status: "pending" })
+    .where({ vnpay_txn_ref, status: "pending" })
     .update(update);
 }

@@ -92,7 +92,7 @@ export default function LoginModal({
 
     try {
       // Use the shared `api` instance (lib/axios.ts) instead of a bare axios
-      // call — this is the single place that knows NEXT_PUBLIC_API_URL and
+      // call — this is the single place that knows NEXT_PUBLIC_BASE_URL and
       // keeps the refresh-token interceptor consistent across the app.
       // Login itself doesn't need an access token attached, but routing
       // through `api` means the base URL is never duplicated or drifted.

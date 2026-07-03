@@ -5,7 +5,7 @@ import { useStaffAuthStore } from "../store/useStaffAuthStore";
 // STAFF_JWT_SECRET (different from the customer JWT secret) and must never
 // be attached to customer API calls or vice versa.
 const staffApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000",
+  baseURL: process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000",
   withCredentials: true,
 });
 
@@ -16,7 +16,7 @@ staffApi.interceptors.request.use((config) => {
 });
 
 // No refresh flow for staff — the API plan exposes only
-// POST /api/staff/auth/login and POST /api/staff/auth/logout, no refresh
+// POST /api/admin/auth/login and POST /api/admin/auth/logout, no refresh
 // endpoint. On 401, the session is simply over: clear state and bounce to
 // /staff/login. (Compare to lib/axios.ts, which retries once via
 // refreshAccessToken() before giving up — that machinery doesn't exist here.)

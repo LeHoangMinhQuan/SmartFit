@@ -1,22 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { productService } from "../../../services/product.service";
-import { cartService } from "../../../services/cart.service";
-import { wishlistService } from "../../../services/wishlist.service";
-import { useAuthStore } from "../../../store/useAuthStore";
-import { useCartStore } from "../../../store/useCartStore";
-import { useWishlistStore } from "../../../store/useWishlistStore";
-import { toast } from "../../../components/ui/Toast";
-import Spinner from "../../../components/ui/Spinner";
-import ImageGallery from "../../../components/product/ImageGallery";
-import VariantSelector from "../../../components/product/VariantSelector";
-import PriceDisplay from "../../../components/product/PriceDisplay";
-import ReviewSection from "../../../components/product/ReviewSection";
-import type { Product, ProductVariant } from "../../../interfaces";
+import { useRouter, useParams } from "next/navigation";
+import { productService } from "../../../../services/product.service";
+import { cartService } from "../../../../services/cart.service";
+import { wishlistService } from "../../../../services/wishlist.service";
+import { useAuthStore } from "../../../../store/useAuthStore";
+import { useCartStore } from "../../../../store/useCartStore";
+import { useWishlistStore } from "../../../../store/useWishlistStore";
+import { toast } from "../../../../components/ui/Toast";
+import Spinner from "../../../../components/ui/Spinner";
+import ImageGallery from "../../../../components/product/ImageGallery";
+import VariantSelector from "../../../../components/product/VariantSelector";
+import PriceDisplay from "../../../../components/product/PriceDisplay";
+import ReviewSection from "../../../../components/product/ReviewSection";
+import type { Product, ProductVariant } from "../../../../interfaces";
 
-export default function ProductPage({ params }: { params: { id: string } }) {
+export default function ProductPage() {
+  const params = useParams();
   const productId = Number(params.id);
   const router = useRouter();
   const user = useAuthStore((s) => s.user);

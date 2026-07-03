@@ -1,46 +1,42 @@
-"use client";
+import type { Discount } from "../../interfaces";
+import { formatPrice } from "../../lib/utils";
 
-import { clsx } from "clsx";
-import type { ProductVariant } from "../../interfaces";
-
-interface VariantSelectorProps {
-  variants: ProductVariant[];
-  selectedId: number | null;
-  onSelect: (variant: ProductVariant) => void;
+interface PriceDisplayProps {
+  basePrice: number;
+  discount?: Discount | null;
 }
 
-export default function VariantSelector({
-  variants,
-  selectedId,
-  onSelect,
-}: VariantSelectorProps) {
-  if (!variants.length) return null;
+function calcDiscounted(base: number, d: Discount): number {
+  if (d.voucher_type === "percent") {
+    return Math.max(0, base - (base * d.voucher_value) / 100);
+  }
+  return Math.max(0, base - d.voucher_value);
+}
+
+export default function PriceDisplay({
+  basePrice,
+  discount,
+}: PriceDisplayProps) {
+  const discounted = discount ? calcDiscounted(basePrice, discount) : null;
 
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-gray-700">Variant</p>
-      <div className="flex flex-wrap gap-2">
-        {variants.map((v) => {
-          const outOfStock = !v.stock || v.stock === 0;
-          return (
-            <button
-              key={v.variant_id}
-              onClick={() => !outOfStock && onSelect(v)}
-              disabled={outOfStock}
-              title={outOfStock ? "Out of stock" : v.name}
-              className={clsx(
-                "rounded-lg border px-4 py-2 text-sm transition",
-                v.variant_id === selectedId
-                  ? "border-black bg-black text-white"
-                  : "border-gray-300 text-gray-700 hover:border-gray-500",
-                outOfStock && "cursor-not-allowed opacity-40 line-through",
-              )}
-            >
-              {v.name}
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex items-baseline gap-3">
+      {discounted !== null ? (
+        <>
+          <span className="text-2xl font-bold text-red-600">
+            {formatPrice(discounted)}
+          </span>
+          <span className="text-base text-gray-400 line-through">
+            {formatPrice(basePrice)}
+          </span>
+          <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-600">
+            -{discount!.voucher_value}
+            {discount!.voucher_type === "percent" ? "%" : "₫"}
+          </span>
+        </>
+      ) : (
+        <span className="text-2xl font-bold">{formatPrice(basePrice)}</span>
+      )}
     </div>
   );
 }
