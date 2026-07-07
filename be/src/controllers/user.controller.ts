@@ -52,7 +52,7 @@ export const updateAddress = catchAsync(async (req: Request, res: Response) => {
   const user_id = (req as any).user.user_id;
   await UserService.updateAddress(
     user_id,
-    Number(req.params.address_id),
+    Number(req.params['address_id']),
     req.body,
   );
   res.json({ data: { message: "Address updated" } });
@@ -60,14 +60,14 @@ export const updateAddress = catchAsync(async (req: Request, res: Response) => {
 
 export const removeAddress = catchAsync(async (req: Request, res: Response) => {
   const user_id = (req as any).user.user_id;
-  await UserService.removeAddress(user_id, Number(req.params.address_id));
+  await UserService.removeAddress(user_id, Number(req.params['address_id']));
   res.status(204).send();
 });
 
 export const setDefaultAddress = catchAsync(
   async (req: Request, res: Response) => {
     const user_id = (req as any).user.user_id;
-    await UserService.setDefaultAddress(user_id, Number(req.params.address_id));
+    await UserService.setDefaultAddress(user_id, Number(req.params['address_id']));
     res.json({ data: { message: "Default address updated" } });
   },
 );
@@ -95,8 +95,8 @@ export const removeFromWishlist = catchAsync(
     const user_id = (req as any).user.user_id;
     await UserService.removeFromWishlist(
       user_id,
-      Number(req.params.product_id),
-      Number(req.params.variant_id),
+      Number(req.params['product_id']),
+      Number(req.params['variant_id']),
     );
     res.status(204).send();
   },

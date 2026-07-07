@@ -1,137 +1,49 @@
 import db from "../config/db.js";
 
-export async function findInventory(filters: {
-  store_id?: number;
-  min_quantity?: number;
+export async function findImportHistory(filters: {
+  staff_id?: number;
+  supplier_id?: number;
+  product_id?: number;
   page?: number;
   limit?: number;
 }) {
-  const { store_id, min_quantity, page = 1, limit = 50 } = filters;
+  const { staff_id, supplier_id, product_id, page = 1, limit = 50 } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db("store_product as sp")
-    .join("product as p", "sp.product_id", "p.product_id")
-    .join("product_variant as pv", function () {
-      this.on("sp.product_id", "pv.product_id").andOn(
-        "sp.variant_id",
-        "pv.variant_id",
-      );
-    })
-    .join("store as s", "sp.store_id", "s.store_id")
-    .select(
-      "sp.*",
-      "p.name as product_name",
-      "pv.name as variant_name",
-      "s.name as store_name",
-    );
+  let query = db("import_history as ih")
+    .join("supplier as s", "ih.supplier_id", "s.supplier_id")
+    .join("product as p", "ih.product_id", "p.product_id")
+    .select("ih.*", "s.name as supplier_name", "p.name as product_name")
+    .orderBy("ih.import_date", "desc");
 
-  if (store_id) query = query.where("sp.store_id", store_id);
-  if (min_quantity !== undefined)
-    query = query.where("sp.quantity", ">=", min_quantity);
+  if (staff_id) query = query.where("ih.staff_id", staff_id);
+  if (supplier_id) query = query.where("ih.supplier_id", supplier_id);
+  if (product_id) query = query.where("ih.product_id", product_id);
 
   const rows = await query.limit(limit).offset(offset);
-  let countQ = db("store_product");
-  if (store_id) countQ = countQ.where({ store_id });
-  const totalResult = await countQ.count("product_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
+
+  let countQ = db("import_history");
+  if (staff_id) countQ = countQ.where({ staff_id });
+  if (supplier_id) countQ = countQ.where({ supplier_id });
+  if (product_id) countQ = countQ.where({ product_id });
+  const totalResult = await countQ.count("staff_id as total");
+  const total = totalResult[0]?.["total"] ?? 0;
 
   return { rows, total: Number(total) };
 }
 
-export async function findStoreProduct(
-  product_id: number,
-  variant_id: number,
-  store_id: number,
-) {
-  return db("store_product")
-    .where({ product_id, variant_id, store_id })
-    .first();
-}
-
-export async function upsertStoreProduct(
-  product_id: number,
-  variant_id: number,
-  store_id: number,
-  quantity: number,
-) {
-  return db("store_product")
-    .insert({ product_id, variant_id, store_id, quantity })
-    .onConflict(["product_id", "variant_id", "store_id"])
-    .merge(["quantity"]);
-}
-
-export async function adjustStoreProductQuantity(
-  product_id: number,
-  variant_id: number,
-  store_id: number,
-  delta: number, // positive = add, negative = decrement
-) {
-  return db("store_product")
-    .where({ product_id, variant_id, store_id })
-    .increment("quantity", delta);
-}
-
-/**
- * Decrement stock for multiple items in a single transaction.
- * Throws if any item has insufficient stock.
- */
-export async function decrementStockForOrder(
-  items: { product_id: number; variant_id: number; quantity: number }[],
-  store_id: number,
-) {
-  return db.transaction(async (trx) => {
-    for (const item of items) {
-      const row = await trx("store_product")
-        .where({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          store_id,
-        })
-        .first();
-
-      if (!row || row.quantity < item.quantity) {
-        throw new Error(
-          `Insufficient stock for product ${item.product_id} variant ${item.variant_id}`,
-        );
-      }
-
-      await trx("store_product")
-        .where({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          store_id,
-        })
-        .decrement("quantity", item.quantity);
-    }
+export async function createImportRecord(data: {
+  staff_id: number;
+  supplier_id: number;
+  product_id: number;
+  variant_id: number;
+  import_date?: string;
+}) {
+  return db("import_history").insert({
+    staff_id: data.staff_id,
+    supplier_id: data.supplier_id,
+    product_id: data.product_id,
+    variant_id: data.variant_id,
+    ...(data.import_date ? { import_date: data.import_date } : {}),
   });
-}
-
-export async function restoreStockForOrder(
-  items: { product_id: number; variant_id: number; quantity: number }[],
-  store_id: number,
-) {
-  return db.transaction(async (trx) => {
-    for (const item of items) {
-      await trx("store_product")
-        .where({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          store_id,
-        })
-        .increment("quantity", item.quantity);
-    }
-  });
-}
-
-export async function findInventoryByStore(store_id: number) {
-  return db("store_product as sp")
-    .join("product as p", "sp.product_id", "p.product_id")
-    .join("product_variant as pv", function () {
-      this.on("sp.product_id", "pv.product_id").andOn(
-        "sp.variant_id",
-        "pv.variant_id",
-      );
-    })
-    .where("sp.store_id", store_id)
-    .select("sp.*", "p.name as product_name", "pv.name as variant_name");
 }

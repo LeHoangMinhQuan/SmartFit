@@ -2,6 +2,7 @@ import { ApiError } from "../utils/ApiError.js";
 import * as OrderModel from "../models/order.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
 import { ghnClient } from "../config/ghn.js";
+import { env } from "../config/env.js";
 
 // ─── Simple in-memory location cache (daily TTL) ──────────────────────────────
 const cache = new Map<string, { data: any; expires: number }>();
@@ -89,7 +90,7 @@ export async function getAvailableServices(
   const { data } = await ghnClient.post(
     "/v2/shipping-order/available-services",
     {
-      shop_id: Number(process.env.GHN_SHOP_ID ?? 0),
+      shop_id: Number(env.GHN_SHOP_ID),
       from_district,
       to_district,
     },

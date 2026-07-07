@@ -42,7 +42,7 @@ export const searchProducts = catchAsync(
 );
 
 export const getProduct = catchAsync(async (req: Request, res: Response) => {
-  const product = await ProductService.getProduct(Number(req.params.id));
+  const product = await ProductService.getProduct(Number(req.params['id']));
   res.json({ data: product });
 });
 
@@ -53,14 +53,14 @@ export const createProduct = catchAsync(async (req: Request, res: Response) => {
 
 export const updateProduct = catchAsync(async (req: Request, res: Response) => {
   const product = await ProductService.updateProduct(
-    Number(req.params.id),
+    Number(req.params['id']),
     req.body,
   );
   res.json({ data: product });
 });
 
 export const deleteProduct = catchAsync(async (req: Request, res: Response) => {
-  await ProductService.deleteProduct(Number(req.params.id));
+  await ProductService.deleteProduct(Number(req.params['id']));
   res.status(204).send();
 });
 
@@ -72,7 +72,7 @@ export const uploadProductImage = catchAsync(
       ? Number(req.body.variant_id)
       : undefined;
     const result = await ProductService.addProductImage(
-      Number(req.params.id),
+      Number(req.params['id']),
       variant_id,
       s3_url,
     );
@@ -83,13 +83,13 @@ export const uploadProductImage = catchAsync(
 // ─── Variants ─────────────────────────────────────────────────────────────────
 
 export const getVariants = catchAsync(async (req: Request, res: Response) => {
-  const variants = await ProductService.getVariants(Number(req.params.id));
+  const variants = await ProductService.getVariants(Number(req.params['id']));
   res.json({ data: variants });
 });
 
 export const createVariant = catchAsync(async (req: Request, res: Response) => {
   const result = await ProductService.createVariant(
-    Number(req.params.id),
+    Number(req.params['id']),
     req.body,
   );
   res.status(201).json({ data: result });
@@ -97,8 +97,8 @@ export const createVariant = catchAsync(async (req: Request, res: Response) => {
 
 export const updateVariant = catchAsync(async (req: Request, res: Response) => {
   await ProductService.updateVariant(
-    Number(req.params.id),
-    Number(req.params.variant_id),
+    Number(req.params['id']),
+    Number(req.params['variant_id']),
     req.body,
   );
   res.json({ data: { message: "Variant updated" } });
@@ -106,8 +106,8 @@ export const updateVariant = catchAsync(async (req: Request, res: Response) => {
 
 export const deleteVariant = catchAsync(async (req: Request, res: Response) => {
   await ProductService.deleteVariant(
-    Number(req.params.id),
-    Number(req.params.variant_id),
+    Number(req.params['id']),
+    Number(req.params['variant_id']),
   );
   res.status(204).send();
 });
@@ -115,8 +115,8 @@ export const deleteVariant = catchAsync(async (req: Request, res: Response) => {
 export const upsertVariantPrice = catchAsync(
   async (req: Request, res: Response) => {
     await ProductService.upsertVariantPrice(
-      Number(req.params.id),
-      Number(req.params.variant_id),
+      Number(req.params['id']),
+      Number(req.params['variant_id']),
       req.body,
     );
     res.json({ data: { message: "Price updated" } });
@@ -142,8 +142,8 @@ export const createAttribute = catchAsync(
 export const attachAttribute = catchAsync(
   async (req: Request, res: Response) => {
     await ProductService.attachAttribute(
-      Number(req.params.product_id),
-      Number(req.params.variant_id),
+      Number(req.params['product_id']),
+      Number(req.params['variant_id']),
       req.body,
     );
     res.status(201).json({ data: { message: "Attribute attached" } });
@@ -153,9 +153,9 @@ export const attachAttribute = catchAsync(
 export const updateAttributeValue = catchAsync(
   async (req: Request, res: Response) => {
     await ProductService.updateAttributeValue(
-      Number(req.params.product_id),
-      Number(req.params.variant_id),
-      Number(req.params.attribute_id),
+      Number(req.params['product_id']),
+      Number(req.params['variant_id']),
+      Number(req.params['attribute_id']),
       req.body.value,
     );
     res.json({ data: { message: "Attribute value updated" } });
@@ -165,9 +165,9 @@ export const updateAttributeValue = catchAsync(
 export const removeAttribute = catchAsync(
   async (req: Request, res: Response) => {
     await ProductService.removeAttribute(
-      Number(req.params.product_id),
-      Number(req.params.variant_id),
-      Number(req.params.attribute_id),
+      Number(req.params['product_id']),
+      Number(req.params['variant_id']),
+      Number(req.params['attribute_id']),
     );
     res.status(204).send();
   },
@@ -186,7 +186,7 @@ export const getProductsByCategory = catchAsync(
   async (req: Request, res: Response) => {
     const { page, limit } = req.query as any;
     const result = await ProductService.getProductsByCategory(
-      Number(req.params.category_id),
+      Number(req.params['category_id']),
       page,
       limit,
     );
@@ -204,7 +204,7 @@ export const createCategory = catchAsync(
 export const updateCategory = catchAsync(
   async (req: Request, res: Response) => {
     await ProductService.updateCategory(
-      Number(req.params.category_id),
+      Number(req.params['category_id']),
       req.body,
     );
     res.json({ data: { message: "Category updated" } });
@@ -213,7 +213,7 @@ export const updateCategory = catchAsync(
 
 export const deleteCategory = catchAsync(
   async (req: Request, res: Response) => {
-    await ProductService.deleteCategory(Number(req.params.category_id));
+    await ProductService.deleteCategory(Number(req.params['category_id']));
     res.status(204).send();
   },
 );
@@ -224,7 +224,7 @@ export const getProductReviews = catchAsync(
   async (req: Request, res: Response) => {
     const { page, limit } = req.query as any;
     const result = await ProductService.getProductReviews(
-      Number(req.params.id),
+      Number(req.params['id']),
       page,
       limit,
     );
@@ -238,8 +238,8 @@ export const getProductReviews = catchAsync(
 export const submitReview = catchAsync(async (req: Request, res: Response) => {
   const user_id = (req as any).user.user_id;
   const result = await ProductService.submitReview(
-    Number(req.params.product_id),
-    Number(req.params.variant_id),
+    Number(req.params['product_id']),
+    Number(req.params['variant_id']),
     user_id,
     req.body,
   );

@@ -13,46 +13,35 @@ import { z } from "zod";
  */
 
 export const registerSchema = z.object({
-  username: z
-    .string()
-    .min(2, "Username must be at least 2 characters")
-    .max(50, "Username must be at most 50 characters")
-    .trim(),
-  email: z
-    .string()
-    .email("Invalid email address")
-    .max(50, "Email must be at most 50 characters") // VARCHAR(50) in DDL
-    .trim()
-    .toLowerCase(),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(72, "Password must be at most 72 characters"), // bcrypt limit
-  phone: z
-    .string()
-    .length(10, "Phone must be exactly 10 digits") // CHAR(10) NOT NULL
-    .regex(/^\d{10}$/, "Phone must contain only digits"),
-  address: z
-    .string()
-    .min(1, "Address is required")
-    .max(70, "Address must be at most 70 characters") // VARCHAR(70) NOT NULL
-    .trim(),
+  body: z.object({
+    username: z.string().min(2).max(50).trim(),
+    email: z.email().max(50).trim().toLowerCase(),
+    password: z.string().min(8).max(72),
+    phone: z
+      .string()
+      .length(10)
+      .regex(/^\d{10}$/),
+    address: z.string().min(1).max(70).trim(),
+  }),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email("Invalid email address").trim().toLowerCase(),
-  password: z.string().min(1, "Password is required"),
+  body: z.object({
+    email: z.email().trim().toLowerCase(),
+    password: z.string().min(1),
+  }),
 });
 
-// Both /refresh and /logout expect the same body shape.
-// A single schema covers both — imported under the right name at each call site.
 export const refreshSchema = z.object({
-  refreshToken: z.string().min(1, "Refresh token is required"),
+  body: z.object({
+    refreshToken: z.string().min(1),
+  }),
 });
 
 export const logoutSchema = refreshSchema;
 
-export type RegisterBody = z.infer<typeof registerSchema>;
-export type LoginBody = z.infer<typeof loginSchema>;
-export type RefreshBody = z.infer<typeof refreshSchema>;
-export type LogoutBody = z.infer<typeof logoutSchema>;
+// Update types
+export type RegisterBody = z.infer<typeof registerSchema>["body"];
+export type LoginBody = z.infer<typeof loginSchema>["body"];
+export type RefreshBody = z.infer<typeof refreshSchema>["body"];
+export type LogoutBody = z.infer<typeof logoutSchema>["body"];

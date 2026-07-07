@@ -34,7 +34,7 @@ const BASE_URL =
 export const ghnClient: AxiosInstance = axios.create({
   baseURL: `${BASE_URL}/v2`,
   headers: {
-    Token: env.GHN_TOKEN,
+    Token: env.GHN_API_TOKEN,
     ShopId: String(env.GHN_SHOP_ID),
     "Content-Type": "application/json",
   },
@@ -45,7 +45,7 @@ export const ghnClient: AxiosInstance = axios.create({
 export const ghnMasterClient: AxiosInstance = axios.create({
   baseURL: `${BASE_URL}/master-data`,
   headers: {
-    Token: env.GHN_TOKEN,
+    Token: env.GHN_API_TOKEN,
     "Content-Type": "application/json",
   },
   timeout: 10_000,

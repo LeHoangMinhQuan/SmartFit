@@ -17,17 +17,6 @@ interface ValidationErrorDetail {
   message: string;
 }
 
-/**
- * Zod v4 request validation middleware.
- * Validates { body, params, query } together against the given schema.
- * Replaces req.body/req.params/req.query with the parsed (coerced + stripped) data on success.
- * On failure, passes an ApiError(422) with field-level details to next().
- *
- * Usage:
- *   router.post('/products',    validate(createProductSchema), controller)
- *   router.get('/products',     validate(listProductsSchema),  controller)
- *   router.get('/products/:id', validate(productParamsSchema), controller)
- */
 export const validate = <Output extends ParsedRequestShape, Input = Output>(
   schema: ZodType<Output, Input>,
 ) => {

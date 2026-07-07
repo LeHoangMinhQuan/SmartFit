@@ -1,104 +1,138 @@
 import db from "../config/db.js";
 
-export interface Review {
-  product_id: number;
-  variant_id: number;
-  user_id: number;
-  review_id?: number; // GENERATED ALWAYS AS IDENTITY — never supply on insert
-  rating: number; // SMALLINT 1–5
-  comment: string; // VARCHAR(255)
+export interface Address {
+  address_id: number;
+  address_line: string;
+  province_id: number;
+  district_id: number;
+  ward_id: number;
 }
 
-export async function createReview(
-  data: Omit<Review, "review_id">,
+export interface UserAddress extends Address {
+  is_default: boolean;
+  label: string | null;
+}
+
+export interface CreateAddressInput {
+  address_line: string;
+  province_id: number;
+  district_id: number;
+  ward_id: number;
+}
+
+export interface UpdateAddressInput {
+  address_line?: string;
+  province_id?: number;
+  district_id?: number;
+  ward_id?: number;
+}
+
+/**
+ * List all addresses for a user (via user_address JOIN address)
+ */
+export async function findUserAddresses(
+  user_id: number,
+): Promise<UserAddress[]> {
+  return db("user_address as ua")
+    .join("address as a", "ua.address_id", "a.address_id")
+    .where("ua.user_id", user_id)
+    .select(
+      "a.address_id",
+      "a.address_line",
+      "a.province_id",
+      "a.district_id",
+      "a.ward_id",
+      "ua.is_default",
+      "ua.label",
+    );
+}
+
+/**
+ * Find a single address owned by a user (used to check ownership before update/delete)
+ */
+export async function findAddressByIdAndUser(
+  address_id: number,
+  user_id: number,
+): Promise<UserAddress | undefined> {
+  return db("user_address as ua")
+    .join("address as a", "ua.address_id", "a.address_id")
+    .where({ "ua.address_id": address_id, "ua.user_id": user_id })
+    .first(
+      "a.address_id",
+      "a.address_line",
+      "a.province_id",
+      "a.district_id",
+      "a.ward_id",
+      "ua.is_default",
+      "ua.label",
+    );
+}
+
+/**
+ * Insert a new address row. address_id is IDENTITY — do not supply it.
+ */
+export async function createAddress(data: CreateAddressInput): Promise<number> {
+  const [row] = await db("address").insert(data).returning("address_id");
+  return row.address_id;
+}
+
+/**
+ * Link an address to a user via user_address (composite PK: address_id, user_id)
+ */
+export async function addUserAddress(
+  address_id: number,
+  user_id: number,
+  label: string | null = null,
+): Promise<void> {
+  await db("user_address").insert({
+    address_id,
+    user_id,
+    is_default: false,
+    label,
+  });
+}
+
+/**
+ * Update the address row itself (address_line, province_id, district_id, ward_id)
+ */
+export async function updateAddress(
+  address_id: number,
+  data: UpdateAddressInput,
 ): Promise<number> {
-  const [row] = await db("review").insert(data).returning("review_id");
-  return row.review_id;
+  const updates: Record<string, unknown> = {};
+  if (data.address_line !== undefined) updates['address_line'] = data.address_line;
+  if (data.province_id !== undefined) updates['province_id'] = data.province_id;
+  if (data.district_id !== undefined) updates['district_id'] = data.district_id;
+  if (data.ward_id !== undefined) updates['ward_id'] = data.ward_id;
+
+  return db("address").where({ address_id }).update(updates);
 }
 
-export async function findReviewsByProduct(
-  product_id: number,
-  page = 1,
-  limit = 20,
-) {
-  const offset = (page - 1) * limit;
-  const rows = await db("review as r")
-    .join('"USER" as u', "r.user_id", "u.user_id")
-    .where("r.product_id", product_id)
-    .select("r.*", "u.username", "u.avatar_url")
-    .orderBy("r.review_id", "desc")
-    .limit(limit)
-    .offset(offset);
-
-  const totalResult = await db("review")
-    .where({ product_id })
-    .count("review_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
-
-  const avgRatingResult = await db("review")
-    .where({ product_id })
-    .avg("rating as avg_rating");
-  const avg_rating = avgRatingResult[0]?.['avg_rating'] ?? 0;
-
-  return { rows, total: Number(total), avg_rating: Number(avg_rating) || 0 };
-}
-
-export async function findReview(
-  product_id: number,
-  variant_id: number,
+/**
+ * Remove the user_address link only (per FR-11 — address row itself is left alone)
+ */
+export async function removeUserAddress(
+  address_id: number,
   user_id: number,
-  review_id: number,
-) {
-  return db("review")
-    .where({ product_id, variant_id, user_id, review_id })
-    .first();
+): Promise<number> {
+  return db("user_address").where({ address_id, user_id }).del();
 }
 
-export async function updateReview(
-  product_id: number,
-  variant_id: number,
+/**
+ * Set one address as default for a user, clearing is_default on all others.
+ */
+export async function setDefaultAddress(
+  address_id: number,
   user_id: number,
-  review_id: number,
-  data: Partial<Pick<Review, "rating" | "comment">>,
-) {
-  return db("review")
-    .where({ product_id, variant_id, user_id, review_id })
-    .update(data);
-}
+): Promise<number> {
+  return db.transaction<number>(async (trx) => {
+    await trx("user_address").where({ user_id }).update({ is_default: false });
 
-export async function deleteReview(
-  product_id: number,
-  variant_id: number,
-  user_id: number,
-  review_id: number,
-) {
-  return db("review")
-    .where({ product_id, variant_id, user_id, review_id })
-    .delete();
-}
+    const updates: Record<string, unknown> = { is_default: true };
+    const result = await trx("user_address")
+      .where({ address_id, user_id })
+      .update(updates);
 
-// Admin: delete by full composite PK (all 4 parts)
-export async function adminDeleteReview(
-  product_id: number,
-  variant_id: number,
-  user_id: number,
-  review_id: number,
-) {
-  return db("review")
-    .where({ product_id, variant_id, user_id, review_id })
-    .delete();
-}
-
-export async function findAllReviews(page = 1, limit = 20) {
-  const offset = (page - 1) * limit;
-  const rows = await db("review as r")
-    .join('"USER" as u', "r.user_id", "u.user_id")
-    .join("product as p", "r.product_id", "p.product_id")
-    .select("r.*", "u.username", "p.name as product_name")
-    .orderBy("r.review_id", "desc")
-    .limit(limit)
-    .offset(offset);
-  const totalResult = await db("review").count("review_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
-  return { rows, total: Number(total) };
+    return result;
+  });
 }

@@ -16,6 +16,7 @@ const required = [
   // Server
   "PORT",
   "FRONTEND_URL",
+  "NODE_ENV",
 
   // Database
   "DB_HOST",
@@ -43,6 +44,8 @@ const required = [
   "GHN_API_URL",
   "GHN_API_TOKEN",
   "GHN_SHOP_ID",
+  "GHN_FROM_DISTRICT",
+  "GHN_FROM_WARD",
 
   // TODO: Remove to test without Try-on
   // "TRYON_API_KEY",
@@ -61,7 +64,7 @@ if (missing.length > 0) {
 export const env = {
   PORT: parseInt(process.env["PORT"] ?? "3000", 10),
   FRONTEND_URL: process.env["FRONTEND_URL"]!,
-
+  NODE_ENV: process.env["NODE_ENV"]!,
 
   DB_HOST: process.env["DB_HOST"]!,
   DB_PORT: process.env["DB_PORT"]!,
@@ -85,6 +88,8 @@ export const env = {
   GHN_API_URL: process.env["GHN_API_URL"]!,
   GHN_API_TOKEN: process.env["GHN_API_TOKEN"]!,
   GHN_SHOP_ID: process.env["GHN_SHOP_ID"]!,
+  GHN_FROM_DISTRICT: process.env["GHN_FROM_DISTRICT"]!,
+  GHN_FROM_WARD: process.env["GHN_FROM_WARD"]!,
 
   // TODO: Remove these two env vars to test MVP
   // TRYON_API_KEY: process.env["TRYON_API_KEY"]!,

@@ -23,7 +23,7 @@ export const getUserOrders = catchAsync(async (req: Request, res: Response) => {
 export const getOrderDetail = catchAsync(
   async (req: Request, res: Response) => {
     const result = await OrderService.getOrderDetail(
-      Number(req.params.order_id),
+      Number(req.params['order_id']),
       (req as any).user.user_id,
     );
     res.json({ data: result });
@@ -32,7 +32,7 @@ export const getOrderDetail = catchAsync(
 
 export const cancelOrder = catchAsync(async (req: Request, res: Response) => {
   await OrderService.cancelOrder(
-    Number(req.params.order_id),
+    Number(req.params['order_id']),
     (req as any).user.user_id,
   );
   res.json({ data: { message: "Order cancelled" } });
@@ -50,7 +50,7 @@ export const adminListOrders = catchAsync(
 export const adminGetOrderDetail = catchAsync(
   async (req: Request, res: Response) => {
     const result = await OrderService.adminGetOrderDetail(
-      Number(req.params.order_id),
+      Number(req.params['order_id']),
     );
     res.json({ data: result });
   },
@@ -59,7 +59,7 @@ export const adminGetOrderDetail = catchAsync(
 export const adminUpdateStatus = catchAsync(
   async (req: Request, res: Response) => {
     await OrderService.adminUpdateStatus(
-      Number(req.params.order_id),
+      Number(req.params['order_id']),
       req.body.status,
     );
     res.json({ data: { message: "Order status updated" } });

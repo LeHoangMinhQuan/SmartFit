@@ -19,7 +19,7 @@ export const estimateFee = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const trackOrder = catchAsync(async (req: Request, res: Response) => {
-  const data = await GhnService.trackOrder(req.params.tracking_code);
+  const data = await GhnService.trackOrder(req.params['tracking_code'] as string);
   res.json({ data });
 });
 
@@ -34,11 +34,11 @@ export const getProvinces = catchAsync(async (_req: Request, res: Response) => {
 });
 
 export const getDistricts = catchAsync(async (req: Request, res: Response) => {
-  const data = await GhnService.getDistricts(Number(req.params.province_id));
+  const data = await GhnService.getDistricts(Number(req.params['province_id']));
   res.json({ data });
 });
 
 export const getWards = catchAsync(async (req: Request, res: Response) => {
-  const data = await GhnService.getWards(Number(req.params.district_id));
+  const data = await GhnService.getWards(Number(req.params['district_id']));
   res.json({ data });
 });
