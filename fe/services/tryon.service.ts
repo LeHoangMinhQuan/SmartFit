@@ -20,7 +20,7 @@ export const tryonService = {
     const form = new FormData();
     form.append("photo", file);
     return api
-      .post<UploadPhotoResponse>("/api/tryon/session", form, {
+      .post<UploadPhotoResponse>("/tryon/session", form, {
         headers: { "Content-Type": "multipart/form-data" },
       })
       .then((r) => r.data);
@@ -29,15 +29,15 @@ export const tryonService = {
   // Triggers the AI composite. Status transitions to 'processing' or 'ready'
   // depending on whether the AI call is sync or async.
   requestPreview: (body: RequestPreviewBody) =>
-    api.post("/api/tryon/preview", body).then((r) => r.data),
+    api.post("/tryon/preview", body).then((r) => r.data),
 
   // Poll this every 3 s until status === 'ready' or 'failed'.
   // On 429, show rate-limit message (5 requests per 10 minutes per user).
   getPreviewStatus: (session_id: number) =>
     api
-      .get<TryOnSession>(`/api/tryon/preview/${session_id}`)
+      .get<TryOnSession>(`/tryon/preview/${session_id}`)
       .then((r) => r.data),
 
   deleteSession: (session_id: number) =>
-    api.delete(`/api/tryon/session/${session_id}`).then((r) => r.data),
+    api.delete(`/tryon/session/${session_id}`).then((r) => r.data),
 };

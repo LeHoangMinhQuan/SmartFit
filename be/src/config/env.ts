@@ -15,6 +15,7 @@ config();
 const required = [
   // Server
   "PORT",
+  "FRONTEND_URL",
 
   // Database
   "DB_HOST",
@@ -59,6 +60,8 @@ if (missing.length > 0) {
 
 export const env = {
   PORT: parseInt(process.env["PORT"] ?? "3000", 10),
+  FRONTEND_URL: process.env["FRONTEND_URL"]!,
+
 
   DB_HOST: process.env["DB_HOST"]!,
   DB_PORT: process.env["DB_PORT"]!,

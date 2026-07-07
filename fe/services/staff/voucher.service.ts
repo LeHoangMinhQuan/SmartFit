@@ -27,21 +27,21 @@ export const voucherAdminService = {
   // ── Vouchers (promo codes) ──
   createVoucher: (body: CreateVoucherBody) =>
     api
-      .post<{ voucher_id: number }>("/api/admin/vouchers", body)
+      .post<{ voucher_id: number }>("/admin/vouchers", body)
       .then((r) => r.data),
 
   listVouchers: () =>
-    api.get<Voucher[]>("/api/admin/vouchers").then((r) => r.data),
+    api.get<Voucher[]>("/admin/vouchers").then((r) => r.data),
 
   updateVoucher: (voucher_id: number, body: Partial<CreateVoucherBody>) =>
     api
-      .patch<Voucher>(`/api/admin/vouchers/${voucher_id}`, body)
+      .patch<Voucher>(`/admin/vouchers/${voucher_id}`, body)
       .then((r) => r.data),
 
   // ── Discounts (variant markdowns) ──
   createDiscount: (body: CreateDiscountBody) =>
     api
-      .post<{ discount_id: number }>("/api/discounts", body)
+      .post<{ discount_id: number }>("/discounts", body)
       .then((r) => r.data),
 
   // Links a discount to a specific product variant via product_discount table
@@ -50,9 +50,9 @@ export const voucherAdminService = {
     body: { product_id: number; variant_id: number },
   ) =>
     api
-      .post(`/api/discounts/${discount_id}/products`, body)
+      .post(`/discounts/${discount_id}/products`, body)
       .then((r) => r.data),
 
   deleteDiscount: (discount_id: number) =>
-    api.delete(`/api/discounts/${discount_id}`).then((r) => r.data),
+    api.delete(`/discounts/${discount_id}`).then((r) => r.data),
 };

@@ -12,7 +12,7 @@ interface DashboardStats {
   total_revenue: number;
   orders_by_status: Record<OrderStatus, number>;
   top_products: Array<{ product_id: number; name: string; sold: number }>;
-  new_users: number;
+  new_users_last_30d: number;
 }
 
 export default function StaffDashboardPage() {
@@ -46,15 +46,15 @@ export default function StaffDashboardPage() {
           label="Total Revenue"
           value={formatPrice(stats.total_revenue)}
         />
-        <StatsCard label="New Users" value={stats.new_users} />
+        <StatsCard label="New Users" value={stats.new_users_last_30d} />
         <StatsCard
           label="Delivered Orders"
-          value={stats.orders_by_status["delivered"] ?? 0}
+          value={stats.orders_by_status?.["delivered"] ?? 0}
           variant="success"
         />
         <StatsCard
           label="Pending Payment"
-          value={stats.orders_by_status["pending_payment"] ?? 0}
+          value={stats.orders_by_status?.["pending_payment"] ?? 0}
           variant="warning"
         />
       </div>

@@ -10,17 +10,17 @@ interface CreateOrderBody {
 
 export const orderService = {
   createOrder: (body: CreateOrderBody) =>
-    api.post<{ order_id: number }>("/api/orders", body).then((r) => r.data),
+    api.post<{ order_id: number }>("/orders", body).then((r) => r.data),
 
   getOrders: (params?: { page?: number; limit?: number }) =>
     api
-      .get<PaginatedResponse<Order>>("/api/orders", { params })
+      .get<PaginatedResponse<Order>>("/orders", { params })
       .then((r) => r.data),
 
   getOrder: (order_id: number) =>
-    api.get<Order>(`/api/orders/${order_id}`).then((r) => r.data),
+    api.get<Order>(`/orders/${order_id}`).then((r) => r.data),
 
   // Only allowed when status is 'paid' or 'preparing'
   cancelOrder: (order_id: number) =>
-    api.patch(`/api/orders/${order_id}/cancel`).then((r) => r.data),
+    api.patch(`/orders/${order_id}/cancel`).then((r) => r.data),
 };

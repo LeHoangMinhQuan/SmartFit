@@ -96,7 +96,7 @@ export default function LoginModal({
       // keeps the refresh-token interceptor consistent across the app.
       // Login itself doesn't need an access token attached, but routing
       // through `api` means the base URL is never duplicated or drifted.
-      const { data } = await api.post("/api/auth/login", { email, password });
+      const { data } = await api.post("/auth/login", { email, password });
 
       setAuth(data.user, data.accessToken);
       localStorage.setItem("refreshToken", data.refreshToken);

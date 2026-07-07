@@ -7,7 +7,6 @@ import { userService } from "../../../services/user.service";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { toast } from "../../../components/ui/Toast";
 import Input from "../../../components/ui/Input";
-import Spinner from "../../../components/ui/Spinner";
 import AddressBook from "../../../components/profile/AddressBook";
 import WishlistGrid from "../../../components/profile/WishlistGrid";
 
@@ -35,7 +34,7 @@ export default function ProfilePage() {
   const [address, setAddress] = useState(user?.address ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
 
-  async function handleSaveInfo(e: React.FormEvent) {
+  async function handleSaveInfo(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setSavingInfo(true);
     try {
@@ -45,8 +44,18 @@ export default function ProfilePage() {
         address,
       });
       // Keep the access token, just refresh the cached user object
-      if (user)
-        setAuth({ ...user, ...updated }, useAuthStore.getState().accessToken!);
+      if (user) {
+        setAuth(
+          {
+            ...user,
+            ...updated,
+            phone: updated.phone ?? "",
+            address: updated.address ?? "",
+            avatar_url: updated.avatar_url ?? "",
+          },
+          useAuthStore.getState().accessToken!,
+        );
+      }
       toast.success("Profile updated.");
     } catch {
       toast.error("Failed to update profile.");

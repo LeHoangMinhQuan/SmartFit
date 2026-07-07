@@ -112,7 +112,7 @@ export default function RegisterModal({
       // The previous `process.env.BASE_URL` read undefined client-side
       // (Next.js only inlines NEXT_PUBLIC_*-prefixed vars into the browser
       // bundle), so this request was silently going to `undefined/auth/register`.
-      const { data } = await api.post("/api/auth/register", {
+      const { data } = await api.post("/auth/register", {
         username: form.username,
         email: form.email,
         password: form.password,

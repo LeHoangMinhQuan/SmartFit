@@ -12,7 +12,7 @@ export const reviewService = {
     api
       .post<{
         review_id: number;
-      }>(`/api/products/${product_id}/variants/${variant_id}/reviews`, body)
+      }>(`/products/${product_id}/variants/${variant_id}/reviews`, body)
       .then((r) => r.data),
 
   editReview: (
@@ -23,13 +23,13 @@ export const reviewService = {
   ) =>
     api
       .patch<Review>(
-        `/api/reviews/${product_id}/${variant_id}/${review_id}`,
+        `/reviews/${product_id}/${variant_id}/${review_id}`,
         body,
       )
       .then((r) => r.data),
 
   deleteReview: (product_id: number, variant_id: number, review_id: number) =>
     api
-      .delete(`/api/reviews/${product_id}/${variant_id}/${review_id}`)
+      .delete(`/reviews/${product_id}/${variant_id}/${review_id}`)
       .then((r) => r.data),
 };

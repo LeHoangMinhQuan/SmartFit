@@ -6,6 +6,6 @@ export const paymentService = {
   // URL — the IPN endpoint is authoritative.
   createVNPayUrl: (order_id: number) =>
     api
-      .post<{ paymentUrl: string }>("/api/payments/vnpay/create", { order_id })
+      .post<{ paymentUrl: string }>("/payments/vnpay/create", { order_id })
       .then((r) => r.data),
 };

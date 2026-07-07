@@ -1,14 +1,16 @@
-import { productService } from "../../../services/product.service";
-import ProductGrid from "../../../components/product/ProductGrid";
-import Pagination from "../../../components/ui/Pagination";
+import { Suspense } from "react";
+import { productService } from "@/services/product.service";
+import ProductGrid from "@/components/product/ProductGrid";
+import Pagination from "@/components/ui/Pagination";
 
 interface Props {
-  searchParams: { q?: string; page?: string };
+  searchParams: Promise<{ q?: string; page?: string }>;
 }
 
 export default async function SearchPage({ searchParams }: Props) {
-  const q = searchParams.q?.trim() ?? "";
-  const page = Number(searchParams.page ?? 1);
+  const query = await searchParams;
+  const q = query.q?.trim() ?? "";
+  const page = Number(query.page ?? 1);
 
   if (!q) {
     return (
@@ -27,10 +29,13 @@ export default async function SearchPage({ searchParams }: Props) {
         {result.meta.total} product(s) found
       </p>
 
-      <ProductGrid
-        products={result.data}
-        emptyMessage={`No products matched "${q}".`}
-      />
+      <Suspense fallback={null}>
+        <ProductGrid
+          products={result.data}
+          emptyMessage={`No products matched "${q}".`}
+        />
+      </Suspense>
+
       <div className="mt-8">
         <Pagination meta={result.meta} />
       </div>

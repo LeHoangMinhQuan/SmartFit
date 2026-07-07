@@ -23,7 +23,7 @@ export async function findReviewsByProduct(
 ) {
   const offset = (page - 1) * limit;
   const rows = await db("review as r")
-    .join('"USER" as u', "r.user_id", "u.user_id")
+    .join("USER as u", "r.user_id", "u.user_id")
     .where("r.product_id", product_id)
     .select("r.*", "u.username", "u.avatar_url")
     .orderBy("r.review_id", "desc")
@@ -92,7 +92,7 @@ export async function adminDeleteReview(
 export async function findAllReviews(page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   const rows = await db("review as r")
-    .join('"USER" as u', "r.user_id", "u.user_id")
+    .join("USER as u", "r.user_id", "u.user_id")
     .join("product as p", "r.product_id", "p.product_id")
     .select("r.*", "u.username", "p.name as product_name")
     .orderBy("r.review_id", "desc")

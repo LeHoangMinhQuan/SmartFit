@@ -7,8 +7,7 @@ import { useAuthStore } from "../../store/useAuthStore";
 import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
 import type { Review } from "../../interfaces";
-// ReviewCard already exists — adjust path if needed after migration
-import ReviewCard from "./ReviewCard";
+import ReviewCard from "../product/ReviewCard";
 
 interface ReviewSectionProps {
   product_id: number;
@@ -30,7 +29,7 @@ export default function ReviewSection({
     setLoading(true);
     productService
       .getReviews(product_id)
-      .then(setReviews)
+      .then((data) => setReviews(data.data))
       .catch(() => toast.error("Failed to load reviews."))
       .finally(() => setLoading(false));
   }, [product_id]);
@@ -51,7 +50,7 @@ export default function ReviewSection({
       setComment("");
       setRating(5);
       // Refresh list
-      const fresh = await productService.getReviews(product_id);
+      const fresh = (await productService.getReviews(product_id)).data;
       setReviews(fresh);
     } catch {
       toast.error("Failed to submit review.");
@@ -71,7 +70,7 @@ export default function ReviewSection({
       ) : (
         <div className="flex flex-col gap-4">
           {reviews.map((r) => (
-            <ReviewCard key={`${r.user_id}-${r.review_id}`} review={r} />
+            <ReviewCard key={`${r.user_id}-${r.review_id}`} {...r} />
           ))}
         </div>
       )}

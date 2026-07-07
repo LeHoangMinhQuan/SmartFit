@@ -1,17 +1,20 @@
 import Carousel from "@/components/Carousel";
 import Image from "next/image";
+import { ProductCardProps } from "@/interfaces";
 
 // Add this dummy data at the top of your file or in a separate constants file
-const NEW_ARRIVALS = [
+const NEW_ARRIVALS: ProductCardProps[] = [
   {
-    id: "1",
+    id: 1,
     name: "T-shirt with Tape Details",
-    price: 120,
+    price: 80,
+    originalPrice: 100,
+    discount: 20,
     rating: 4.5,
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "2",
+    id: 2,
     name: "Skinny Fit Jeans",
     price: 240,
     originalPrice: 260,
@@ -20,14 +23,16 @@ const NEW_ARRIVALS = [
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "3",
+    id: 3,
     name: "Checkered Shirt",
     price: 180,
+    originalPrice: 200,
+    discount: 10,
     rating: 4.5,
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "4",
+    id: 4,
     name: "Sleeve Striped T-shirt",
     price: 130,
     originalPrice: 160,
@@ -36,7 +41,7 @@ const NEW_ARRIVALS = [
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "5",
+    id: 5,
     name: "Sleeve Striped T-shirt",
     price: 130,
     originalPrice: 160,
@@ -45,7 +50,7 @@ const NEW_ARRIVALS = [
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "6",
+    id: 6,
     name: "Sleeve Striped T-shirt",
     price: 130,
     originalPrice: 160,
@@ -54,7 +59,7 @@ const NEW_ARRIVALS = [
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "7",
+    id: 7,
     name: "Sleeve Striped T-shirt",
     price: 130,
     originalPrice: 160,
@@ -63,7 +68,7 @@ const NEW_ARRIVALS = [
     imageUrl: "/images/landing_img.jpg",
   },
   {
-    id: "8",
+    id: 8,
     name: "Sleeve Striped T-shirt",
     price: 130,
     originalPrice: 160,

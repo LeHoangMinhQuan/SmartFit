@@ -15,10 +15,6 @@ export type ButtonVariant = "primary" | "secondary" | "default";
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
   variant?: ButtonVariant;
-  // onClick is inherited from ButtonHTMLAttributes<HTMLButtonElement> with the
-  // correct signature: React.MouseEventHandler<HTMLButtonElement>.
-  // Do NOT redeclare it as () => void — that drops the event parameter and
-  // causes "not assignable" errors when the event is passed by React internally.
 }
 
 // Auth
@@ -26,10 +22,27 @@ export interface User {
   user_id: number;
   username: string;
   email: string;
-  phone: string | null; // CHAR(10)
-  address: string | null; // VARCHAR(70)
+  phone: string | null;
+  address: string | null;
   avatar_url: string | null;
   created_at: string;
+}
+
+// Auth state for Zustand store
+export interface AuthUser {
+  user_id: number;
+  username: string;
+  email: string;
+  phone: string;
+  address: string;
+  avatar_url?: string | null;
+}
+
+export interface AuthState {
+  user: AuthUser | null;
+  accessToken: string | null;
+  setAuth: (user: AuthUser, accessToken: string) => void;
+  clearAuth: () => void;
 }
 
 // Product
@@ -46,9 +59,11 @@ export interface ProductSummary {
   product_id: number;
   name: string;
   description?: string;
-  image: string | null;
-  price: number | null;
+  image: string | null; // first product_image.s3_url — null if no image
+  price: number | null; // product_price.base_price — null if not yet priced
+  originalPrice?: number; // base_price before discount, present when discountActive
   discountActive: boolean;
+  avg_rating: number | null; // Option A: always null on list pages, only populated on detail page
 }
 
 export interface ProductVariant {
@@ -121,9 +136,8 @@ export interface CartItem {
   user_id: number;
   cart_id: number;
   quantity: number;
-  unit_price: number; // computed server-side
-  subtotal: number; // computed server-side
-  // enriched by frontend:
+  unit_price: number; // computed server-side — never compute on frontend
+  subtotal: number; // computed server-side — never compute on frontend
   product_name?: string;
   variant_name?: string;
   image_url?: string;
@@ -242,6 +256,18 @@ export interface Review {
   review_id: number;
   rating: number; // 1–5
   comment: string;
+}
+
+// ReviewCardProps
+export interface Review {
+  product_id: number;
+  variant_id: number;
+  user_id: number;
+  review_id: number;
+  rating: number;
+  comment: string;
+  username: string;
+  avatar_url?: string;
 }
 
 // Wishlist

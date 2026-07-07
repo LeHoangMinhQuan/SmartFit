@@ -7,11 +7,11 @@ import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import Input from "../../../components/ui/Input";
-import type { PaginationMeta, Product } from "../../../interfaces";
+import type { PaginationMeta, Product, ProductSummary } from "../../../interfaces";
 
 export default function StaffProductsPage() {
   const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductSummary[]>([]);
   const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");

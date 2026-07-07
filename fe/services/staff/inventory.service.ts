@@ -24,7 +24,7 @@ interface RecordImportBody {
 
 export const inventoryService = {
   getInventory: (params?: { store_id?: number; quantity?: number }) =>
-    api.get<InventoryRow[]>("/api/inventory", { params }).then((r) => r.data),
+    api.get<InventoryRow[]>("/inventory", { params }).then((r) => r.data),
 
   // Manual stock adjustment — body carries the new absolute quantity
   adjustQuantity: (
@@ -34,16 +34,16 @@ export const inventoryService = {
     body: { quantity: number },
   ) =>
     api
-      .patch(`/api/inventory/${product_id}/${variant_id}/${store_id}`, body)
+      .patch(`/inventory/${product_id}/${variant_id}/${store_id}`, body)
       .then((r) => r.data),
 
   getImportHistory: () =>
     api
-      .get<ImportHistoryRow[]>("/api/inventory/import-history")
+      .get<ImportHistoryRow[]>("/inventory/import-history")
       .then((r) => r.data),
 
   // import_history has no quantity column — it's a record that a shipment
   // arrived, not an authoritative stock count. Composite PK of all 5 columns.
   recordImport: (body: RecordImportBody) =>
-    api.post("/api/inventory/import", body).then((r) => r.data),
+    api.post("/inventory/import", body).then((r) => r.data),
 };

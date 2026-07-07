@@ -5,13 +5,15 @@ import { useStaffAuthStore } from "../store/useStaffAuthStore";
 // STAFF_JWT_SECRET (different from the customer JWT secret) and must never
 // be attached to customer API calls or vice versa.
 const staffApi = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000",
+  baseURL: process.env.NEXT_PUBLIC_BASE_URL,
   withCredentials: true,
 });
 
 staffApi.interceptors.request.use((config) => {
   const token = useStaffAuthStore.getState().accessToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  console.log("useStaffAuthStore.getState():", useStaffAuthStore.getState());
+  console.log("token:", token);
+  if (token) config.headers.authorization = `Bearer ${token}`;
   return config;
 });
 

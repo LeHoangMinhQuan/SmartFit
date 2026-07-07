@@ -221,16 +221,16 @@ export const deleteSupplier = catchAsync(
 export const listUsers = catchAsync(async (req: Request, res: Response) => {
   const { page = 1, limit = 20 } = req.query as any;
   const offset = (Number(page) - 1) * Number(limit);
-  const rows = await db('"USER"')
+  const rows = await db('USER')
     .select("user_id", "username", "email", "phone", "created_at")
     .limit(Number(limit))
     .offset(offset);
-  const total  = await db('"USER"').count("user_id as total");
+  const total  = await db('USER').count("user_id as total");
   res.json({ data: rows, meta: { total: Number(total) } });
 });
 
 export const getUser = catchAsync(async (req: Request, res: Response) => {
-  const user = await db('"USER"')
+  const user = await db('USER')
     .where({ user_id: req.params["user_id"] })
     .select("user_id", "username", "email", "phone", "address", "created_at")
     .first();
@@ -298,14 +298,14 @@ export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
     ordersByStatus,
     topProducts,
   ] = await Promise.all([
-    db('"ORDER"')
+    db('ORDER')
       .whereIn("status", ["paid", "preparing", "shipping", "delivered"])
       .sum("total_amount as total_revenue"),
-    db('"ORDER"').count("order_id as total_orders"),
-    db('"USER"')
+    db('ORDER').count("order_id as total_orders"),
+    db('USER')
       .where("created_at", ">=", db.raw("NOW() - INTERVAL '30 days'"))
       .count("user_id as new_users"),
-    db('"ORDER"').select("status").count("order_id as count").groupBy("status"),
+    db('ORDER').select("status").count("order_id as count").groupBy("status"),
     db("order_item as oi")
       .join("product as p", "oi.product_id", "p.product_id")
       .select(
@@ -318,11 +318,15 @@ export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
       .limit(5),
   ]);
 
+  const revenue = Number(total_revenue[0]?.['total_revenue'] ?? 0);
+  const orders = Number(total_orders[0]?.['total_orders'] ?? 0);
+  const newUsers = Number(new_users[0]?.['new_users'] ?? 0);
+
   res.json({
     data: {
-      total_revenue: Number(total_revenue ?? 0),
-      total_orders: Number(total_orders),
-      new_users_last_30d: Number(new_users),
+      total_revenue: revenue,
+      total_orders: orders,
+      new_users_last_30d: newUsers,
       orders_by_status: ordersByStatus,
       top_products: topProducts,
     },

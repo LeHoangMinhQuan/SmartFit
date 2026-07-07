@@ -11,21 +11,21 @@ interface AddItemBody extends CartItemKey {
 }
 
 export const cartService = {
-  getCart: () => api.get<CartItem[]>("/api/cart").then((r) => r.data),
+  getCart: () => api.get<CartItem[]>("/cart").then((r) => r.data),
 
   addItem: (body: AddItemBody) =>
-    api.post<CartItem>("/api/cart/items", body).then((r) => r.data),
+    api.post<CartItem>("/cart/items", body).then((r) => r.data),
 
   // quantity: new desired quantity (not a delta)
   updateItem: (body: AddItemBody) =>
-    api.patch<CartItem>("/api/cart/items", body).then((r) => r.data),
+    api.patch<CartItem>("/cart/items", body).then((r) => r.data),
 
   // DELETE with a body — Axios requires { data: body } as config
   removeItem: (body: CartItemKey) =>
-    api.delete("/api/cart/items", { data: body }).then((r) => r.data),
+    api.delete("/cart/items", { data: body }).then((r) => r.data),
 
-  clearCart: () => api.delete("/api/cart").then((r) => r.data),
+  clearCart: () => api.delete("/cart").then((r) => r.data),
 
   mergeCart: (items: AddItemBody[]) =>
-    api.post<CartItem[]>("/api/cart/merge", { items }).then((r) => r.data),
+    api.post<CartItem[]>("/cart/merge", { items }).then((r) => r.data),
 };

@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 
-type BadgeVariant = "default" | "success" | "warning" | "error" | "info";
+export type BadgeVariant = "default" | "success" | "warning" | "error" | "info";
 
 interface BadgeProps {
   children: React.ReactNode;

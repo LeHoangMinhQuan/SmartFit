@@ -1,14 +1,14 @@
 interface ReviewCardProps {
-  name: string;
+  username: string;
   rating: number;
-  text: string;
+  comment: string;
   date?: string;
 }
 
 export default function ReviewCard({
-  name,
+  username,
   rating,
-  text,
+  comment,
   date,
 }: ReviewCardProps) {
   return (
@@ -22,7 +22,7 @@ export default function ReviewCard({
 
       {/* Name and Verified Tick */}
       <div className="flex items-center gap-2">
-        <h4 className="font-bold text-lg">{name}</h4>
+        <h4 className="font-bold text-lg">{username}</h4>
         <span className="bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
           ✓
         </span>
@@ -30,7 +30,7 @@ export default function ReviewCard({
 
       {/* Review Text */}
       <p className="text-gray-500 text-sm md:text-base leading-relaxed">
-        `{text}`
+        `{comment}`
       </p>
 
       {/* Optional Date (Used on Product Detail Page) */}

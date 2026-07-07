@@ -3,6 +3,7 @@ import ProductGrid from "@/components/product/ProductGrid";
 import ProductFilters from "@/components/product/ProductFilters";
 import Pagination from "@/components/ui/Pagination";
 import type { Category } from "@/interfaces";
+import { Suspense } from "react";
 
 interface Props {
   params: Promise<{
@@ -71,7 +72,9 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         description: "This is a test product description.",
         image: null,
         price: 19.99,
+        originalPrice: undefined,
         discountActive: false,
+        avg_rating: null, 
       },
     ],
     meta: {
@@ -82,13 +85,14 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     },
   };
 
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <h1 className="mb-8 text-2xl font-bold">{decodeURIComponent(slug)}</h1>
 
       <div className="flex gap-8">
-        <ProductFilters />
+        <Suspense fallback={<div className="w-52 shrink-0" />}>
+          <ProductFilters />
+        </Suspense>
 
         <div className="flex flex-1 flex-col gap-6">
           <ProductGrid products={result.data} />

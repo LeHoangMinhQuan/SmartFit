@@ -7,7 +7,7 @@ import * as WishlistModel from "../models/wishlist.model.js";
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 export async function getProfile(user_id: number) {
-  const user = await db('"USER"')
+  const user = await db("USER")
     .where({ user_id })
     .select(
       "user_id",
@@ -32,7 +32,7 @@ export async function updateProfile(
     avatar_url?: string;
   },
 ) {
-  await db('"USER"').where({ user_id }).update(data);
+  await db("USER").where({ user_id }).update(data);
   return getProfile(user_id);
 }
 
@@ -41,19 +41,19 @@ export async function changePassword(
   old_password: string,
   new_password: string,
 ) {
-  const user = await db('"USER"').where({ user_id }).first();
+  const user = await db("USER").where({ user_id }).first();
   if (!user) throw new ApiError(404, "User not found");
 
   const valid = await bcrypt.compare(old_password, user.password_hash);
   if (!valid) throw new ApiError(401, "Current password is incorrect");
 
   const password_hash = await bcrypt.hash(new_password, 12);
-  await db('"USER"').where({ user_id }).update({ password_hash });
+  await db("USER").where({ user_id }).update({ password_hash });
 }
 
 export async function deleteAccount(user_id: number) {
   // Soft or hard depending on FK constraints — using hard delete; FK cascade handles children
-  await db('"USER"').where({ user_id }).delete();
+  await db("USER").where({ user_id }).delete();
 }
 
 // ─── Addresses ────────────────────────────────────────────────────────────────

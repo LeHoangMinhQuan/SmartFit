@@ -5,5 +5,5 @@ export const voucherService = {
   // Validates code eligibility (dates, usage limit, min amount).
   // Returns the voucher details on success so the UI can display the discount.
   validateVoucher: (code: string) =>
-    api.post<Voucher>("/api/vouchers/validate", { code }).then((r) => r.data),
+    api.post<Voucher>("/vouchers/validate", { code }).then((r) => r.data),
 };

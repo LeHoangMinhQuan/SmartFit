@@ -1,8 +1,8 @@
-import type { Product } from "../../interfaces";
+import type { ProductSummary } from "@/interfaces";
 import ProductCard from "./ProductCard";
 
 interface ProductGridProps {
-  products: Product[];
+  products: ProductSummary[];
   emptyMessage?: string;
 }
 
@@ -25,11 +25,15 @@ export default function ProductGrid({
           key={p.product_id}
           id={p.product_id}
           name={p.name}
-          price={p.price}
+          price={p.price ?? 0}
           originalPrice={p.originalPrice}
-          discount={p.discount}
-          rating={p.rating}
-          imageUrl={p.imageUrl}
+          discount={
+            p.discountActive && p.originalPrice != null && p.price != null
+              ? Math.round((1 - p.price / p.originalPrice) * 100)
+              : undefined
+          }
+          rating={p.avg_rating ?? 0}
+          imageUrl={p.image ?? undefined}
         />
       ))}
     </div>
