@@ -84,15 +84,15 @@ export default function StaffCategoriesPage() {
     return nodes.map((c) => (
       <div key={c.category_id}>
         <div
-          className="flex items-center justify-between border-b py-2.5"
+          className="flex items-center justify-between border-b border-slate-100 py-2.5 last:border-b-0"
           style={{ paddingLeft: `${depth * 20 + 16}px` }}
         >
-          <span className="text-sm">{c.name}</span>
-          <div className="flex gap-3 pr-4 text-xs">
-            <span className="text-gray-400">#{c.category_id}</span>
+          <span className="text-sm text-slate-700">{c.name}</span>
+          <div className="flex items-center gap-3 pr-4">
+            <span className="text-xs text-slate-400">#{c.category_id}</span>
             <button
               onClick={() => handleDelete(c.category_id, c.name)}
-              className="text-red-500 hover:underline"
+              className="rounded-lg bg-red-50 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100 hover:cursor-pointer"
             >
               Delete
             </button>
@@ -112,11 +112,17 @@ export default function StaffCategoriesPage() {
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Categories</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Categories</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Organize products into a category hierarchy.
+          </p>
+        </div>
+
         <button
           onClick={() => setAdding(true)}
-          className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
+          className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:cursor-pointer active:translate-y-0 active:shadow-lg"
         >
           + New Category
         </button>
@@ -125,7 +131,7 @@ export default function StaffCategoriesPage() {
       {adding && (
         <form
           onSubmit={handleCreate}
-          className="flex items-end gap-3 rounded-xl border p-4 max-w-md"
+          className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm max-w-xl"
         >
           <Input
             label="Name"
@@ -136,13 +142,13 @@ export default function StaffCategoriesPage() {
             required
           />
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">
+            <label className="text-sm font-medium text-slate-700">
               Parent (optional)
             </label>
             <select
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
             >
               <option value="">None (top-level)</option>
               {flat.map((c) => (
@@ -156,7 +162,7 @@ export default function StaffCategoriesPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:cursor-pointer active:translate-y-0 active:shadow-lg disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-lg"
             >
               {saving ? "…" : "Save"}
             </button>
@@ -167,7 +173,7 @@ export default function StaffCategoriesPage() {
                 setName("");
                 setParentId("");
               }}
-              className="text-sm text-gray-400 hover:underline"
+              className="rounded-xl border border-slate-400 px-4 py-2.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:cursor-pointer active:bg-slate-200"
             >
               Cancel
             </button>
@@ -175,11 +181,11 @@ export default function StaffCategoriesPage() {
         </form>
       )}
 
-      <div className="rounded-xl border">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {categories.length ? (
           renderTree(categories)
         ) : (
-          <p className="p-6 text-center text-sm text-gray-500">
+          <p className="p-6 text-center text-sm text-slate-500">
             No categories yet.
           </p>
         )}

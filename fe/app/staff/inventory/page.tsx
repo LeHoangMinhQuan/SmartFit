@@ -96,15 +96,20 @@ export default function StaffInventoryPage() {
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Inventory</h1>
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">Inventory</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Track stock levels and review import history across stores.
+        </p>
+      </div>
 
       {/* Store selector */}
       <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-gray-700">Store:</label>
+        <label className="text-sm font-medium text-slate-700">Store:</label>
         <select
           value={selectedStoreId}
           onChange={(e) => setSelectedStoreId(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
         >
           <option value="">Select a store…</option>
           {stores.map((s) => (
@@ -116,16 +121,16 @@ export default function StaffInventoryPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b border-slate-200">
         {(["stock", "history"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={clsx(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition capitalize",
+              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition capitalize hover:cursor-pointer",
               tab === t
-                ? "border-black text-black"
-                : "border-transparent text-gray-500 hover:text-gray-800",
+                ? "border-indigo-500 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800",
             )}
           >
             {t === "stock" ? "Stock" : "Import History"}
@@ -138,79 +143,85 @@ export default function StaffInventoryPage() {
         (loading ? (
           <Spinner className="mx-auto mt-8" />
         ) : !selectedStoreId ? (
-          <p className="text-sm text-gray-500">Select a store to view stock.</p>
+          <p className="text-sm text-slate-500">
+            Select a store to view stock.
+          </p>
         ) : (
-          <DataTable
-            columns={[
-              { key: "product_id", header: "Product ID", className: "w-24" },
-              { key: "variant_id", header: "Variant ID", className: "w-24" },
-              { key: "quantity", header: "Current Stock" },
-              {
-                key: "adjust",
-                header: "Set Quantity",
-                render: (r) => {
-                  const key = `${r.product_id}-${r.variant_id}`;
-                  const busy = adjusting === key;
-                  return (
-                    <div
-                      className="flex items-center gap-2"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="number"
-                        min={0}
-                        value={adjustQty[key] ?? ""}
-                        onChange={(e) =>
-                          setAdjustQty((prev) => ({
-                            ...prev,
-                            [key]: e.target.value,
-                          }))
-                        }
-                        className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
-                        placeholder={String(r.quantity)}
-                      />
-                      <button
-                        disabled={busy || !adjustQty[key]}
-                        onClick={() =>
-                          handleAdjust(
-                            r.product_id as number,
-                            r.variant_id as number,
-                            r.store_id as number,
-                          )
-                        }
-                        className="text-xs text-blue-500 hover:underline disabled:opacity-40"
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <DataTable
+              columns={[
+                { key: "product_id", header: "Product ID", className: "w-24" },
+                { key: "variant_id", header: "Variant ID", className: "w-24" },
+                { key: "quantity", header: "Current Stock" },
+                {
+                  key: "adjust",
+                  header: "Set Quantity",
+                  render: (r) => {
+                    const key = `${r.product_id}-${r.variant_id}`;
+                    const busy = adjusting === key;
+                    return (
+                      <div
+                        className="flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {busy ? "…" : "Update"}
-                      </button>
-                    </div>
-                  );
+                        <input
+                          type="number"
+                          min={0}
+                          value={adjustQty[key] ?? ""}
+                          onChange={(e) =>
+                            setAdjustQty((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                          placeholder={String(r.quantity)}
+                        />
+                        <button
+                          disabled={busy || !adjustQty[key]}
+                          onClick={() =>
+                            handleAdjust(
+                              r.product_id as number,
+                              r.variant_id as number,
+                              r.store_id as number,
+                            )
+                          }
+                          className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-100 hover:cursor-pointer disabled:opacity-40 disabled:hover:bg-blue-50"
+                        >
+                          {busy ? "…" : "Update"}
+                        </button>
+                      </div>
+                    );
+                  },
                 },
-              },
-            ]}
-            rows={stock as unknown as Record<string, unknown>[]}
-            rowKey={(r) => `${r.product_id}-${r.variant_id}`}
-            emptyMessage="No stock records for this store."
-          />
+              ]}
+              rows={stock as unknown as Record<string, unknown>[]}
+              rowKey={(r) => `${r.product_id}-${r.variant_id}`}
+              emptyMessage="No stock records for this store."
+            />
+          </div>
         ))}
 
       {/* Import history tab */}
       {tab === "history" && (
-        <DataTable
-          columns={[
-            { key: "product_id", header: "Product ID" },
-            { key: "variant_id", header: "Variant ID" },
-            { key: "supplier_id", header: "Supplier ID" },
-            { key: "staff_id", header: "Staff ID" },
-            {
-              key: "import_date",
-              header: "Date",
-              render: (r) => String(r.import_date).split("T")[0],
-            },
-          ]}
-          rows={imports as unknown as Record<string, unknown>[]}
-          rowKey={(r) => `${r.product_id}-${r.variant_id}-${r.import_date}`}
-          emptyMessage="No import history."
-        />
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <DataTable
+            columns={[
+              { key: "product_id", header: "Product ID" },
+              { key: "variant_id", header: "Variant ID" },
+              { key: "supplier_id", header: "Supplier ID" },
+              { key: "staff_id", header: "Staff ID" },
+              {
+                key: "import_date",
+                header: "Date",
+                render: (r) => String(r.import_date).split("T")[0],
+              },
+            ]}
+            rows={imports as unknown as Record<string, unknown>[]}
+            rowKey={(r) => `${r.product_id}-${r.variant_id}-${r.import_date}`}
+            emptyMessage="No import history."
+          />
+        </div>
       )}
     </div>
   );

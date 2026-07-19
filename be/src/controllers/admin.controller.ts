@@ -1,5 +1,18 @@
 import { Request, Response } from "express";
+import { ApiError } from "../utils/ApiError.js";
 import { catchAsync } from "../utils/catchAsync.js";
+import {
+  signStaffAccessToken,
+  generateRefreshToken,
+  hashRefreshToken,
+  refreshTokenExpiresAt,
+} from "../utils/jwt.js";
+import {
+  createStaffRefreshToken,
+  findStaffRefreshTokenByHash,
+  deleteStaffRefreshToken,
+} from "../models/staff-refresh-token.model.js";
+import { findStaffById, findStaffRoles } from "../models/staff.model.js";
 import * as StaffService from "../services/staff.service.js";
 import * as InventoryService from "../services/inventory.service.js";
 import * as ReviewModel from "../models/review.model.js";
@@ -7,9 +20,29 @@ import * as OrderService from "../services/order.service.js";
 import * as StoreProductModel from "../models/store_product.model.js";
 import db from "../config/db.js";
 import { env } from "../config/env.js";
+// no more `import jwt from "jsonwebtoken"` — signing now goes through jwt.ts
 
 // ─── Staff Auth ───────────────────────────────────────────────────────────────
-import jwt from "jsonwebtoken";
+const STAFF_REFRESH_COOKIE = "staff_refresh_token";
+const staffRefreshCookieOptions = {
+  httpOnly: true,
+  secure: env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/api/admin/auth",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+async function issueStaffAccessToken(staff: {
+  staff_id: number;
+  name: string;
+}) {
+  const roles = await findStaffRoles(staff.staff_id);
+  const accessToken = signStaffAccessToken({
+    staff_id: staff.staff_id,
+    name: staff.name,
+  });
+  return { accessToken, roles };
+}
 
 export const staffLogin = catchAsync(async (req: Request, res: Response) => {
   const { staff_id, password } = req.body;
@@ -17,26 +50,61 @@ export const staffLogin = catchAsync(async (req: Request, res: Response) => {
     Number(staff_id),
     password,
   );
-  const roles = await (
-    await import("../models/staff.model.js")
-  ).findStaffRoles(staff.staff_id);
+  const { accessToken, roles } = await issueStaffAccessToken(staff);
 
-  const accessToken = jwt.sign(
-    {
-      staff_id: staff.staff_id,
-      name: staff.name,
-      roles: roles.map((r: any) => r.name),
-    },
-    env.STAFF_JWT_SECRET,
-    { expiresIn: "8h" },
+  const rawRefreshToken = generateRefreshToken();
+  await createStaffRefreshToken(
+    staff.staff_id,
+    hashRefreshToken(rawRefreshToken),
+    refreshTokenExpiresAt(),
   );
+  res.cookie(STAFF_REFRESH_COOKIE, rawRefreshToken, staffRefreshCookieOptions);
 
   res.json({
     data: { staff_id: staff.staff_id, name: staff.name, roles, accessToken },
   });
 });
 
-export const staffLogout = catchAsync(async (_req: Request, res: Response) => {
+export const staffRefresh = catchAsync(async (req: Request, res: Response) => {
+  const rawToken = req.cookies?.[STAFF_REFRESH_COOKIE];
+  if (!rawToken) throw new ApiError(401, "Refresh token missing");
+
+  const row = await findStaffRefreshTokenByHash(hashRefreshToken(rawToken));
+  if (!row || new Date(row.expires_at).getTime() < Date.now()) {
+    if (row) await deleteStaffRefreshToken(row.staff_id, row.token_id);
+    res.clearCookie(STAFF_REFRESH_COOKIE, {
+      path: staffRefreshCookieOptions.path,
+    });
+    throw new ApiError(401, "Refresh token invalid or expired");
+  }
+
+  const staff = await findStaffById(row.staff_id);
+  if (!staff) throw new ApiError(401, "Refresh token invalid or expired");
+
+  await deleteStaffRefreshToken(row.staff_id, row.token_id);
+  const newRawToken = generateRefreshToken();
+  await createStaffRefreshToken(
+    staff.staff_id,
+    hashRefreshToken(newRawToken),
+    refreshTokenExpiresAt(),
+  );
+  res.cookie(STAFF_REFRESH_COOKIE, newRawToken, staffRefreshCookieOptions);
+
+  const { accessToken, roles } = await issueStaffAccessToken(staff);
+  res.json({
+    data: { staff_id: staff.staff_id, name: staff.name, roles, accessToken },
+  });
+});
+
+export const staffLogout = catchAsync(async (req: Request, res: Response) => {
+  const rawToken = req.cookies?.[STAFF_REFRESH_COOKIE];
+  if (rawToken) {
+    const row = await findStaffRefreshTokenByHash(hashRefreshToken(rawToken));
+    if (row) await deleteStaffRefreshToken(row.staff_id, row.token_id);
+  }
+  res.clearCookie(STAFF_REFRESH_COOKIE, {
+    path: staffRefreshCookieOptions.path,
+  });
   res.json({ data: { message: "Logged out" } });
 });
 
@@ -64,7 +132,10 @@ export const updateStaff = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const assignRole = catchAsync(async (req: Request, res: Response) => {
-  await StaffService.assignRole(Number(req.params["staff_id"]), req.body.role_id);
+  await StaffService.assignRole(
+    Number(req.params["staff_id"]),
+    req.body.role_id,
+  );
   res.status(201).json({ data: { message: "Role assigned" } });
 });
 
@@ -221,16 +292,16 @@ export const deleteSupplier = catchAsync(
 export const listUsers = catchAsync(async (req: Request, res: Response) => {
   const { page = 1, limit = 20 } = req.query as any;
   const offset = (Number(page) - 1) * Number(limit);
-  const rows = await db('USER')
+  const rows = await db("USER")
     .select("user_id", "username", "email", "phone", "created_at")
     .limit(Number(limit))
     .offset(offset);
-  const total  = await db('USER').count("user_id as total");
+  const total = await db("USER").count("user_id as total");
   res.json({ data: rows, meta: { total: Number(total) } });
 });
 
 export const getUser = catchAsync(async (req: Request, res: Response) => {
-  const user = await db('USER')
+  const user = await db("USER")
     .where({ user_id: req.params["user_id"] })
     .select("user_id", "username", "email", "phone", "address", "created_at")
     .first();
@@ -273,7 +344,7 @@ export const adminListOrders = catchAsync(
 
 export const adminGetOrder = catchAsync(async (req: Request, res: Response) => {
   const result = await OrderService.adminGetOrderDetail(
-    Number(req.params['order_id']),
+    Number(req.params["order_id"]),
   );
   res.json({ data: result });
 });
@@ -281,7 +352,7 @@ export const adminGetOrder = catchAsync(async (req: Request, res: Response) => {
 export const adminUpdateOrderStatus = catchAsync(
   async (req: Request, res: Response) => {
     await OrderService.adminUpdateStatus(
-      Number(req.params['order_id']),
+      Number(req.params["order_id"]),
       req.body.status,
     );
     res.json({ data: { message: "Status updated" } });
@@ -291,36 +362,31 @@ export const adminUpdateOrderStatus = catchAsync(
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
-  const [
-    total_revenue,
-    total_orders,
-    new_users,
-    ordersByStatus,
-    topProducts,
-  ] = await Promise.all([
-    db('ORDER')
-      .whereIn("status", ["paid", "preparing", "shipping", "delivered"])
-      .sum("total_amount as total_revenue"),
-    db('ORDER').count("order_id as total_orders"),
-    db('USER')
-      .where("created_at", ">=", db.raw("NOW() - INTERVAL '30 days'"))
-      .count("user_id as new_users"),
-    db('ORDER').select("status").count("order_id as count").groupBy("status"),
-    db("order_item as oi")
-      .join("product as p", "oi.product_id", "p.product_id")
-      .select(
-        "oi.product_id",
-        "p.name",
-        db.raw("SUM(oi.quantity) as total_sold"),
-      )
-      .groupBy("oi.product_id", "p.name")
-      .orderBy("total_sold", "desc")
-      .limit(5),
-  ]);
+  const [total_revenue, total_orders, new_users, ordersByStatus, topProducts] =
+    await Promise.all([
+      db("ORDER")
+        .whereIn("status", ["paid", "preparing", "shipping", "delivered"])
+        .sum("total_amount as total_revenue"),
+      db("ORDER").count("order_id as total_orders"),
+      db("USER")
+        .where("created_at", ">=", db.raw("NOW() - INTERVAL '30 days'"))
+        .count("user_id as new_users"),
+      db("ORDER").select("status").count("order_id as count").groupBy("status"),
+      db("order_item as oi")
+        .join("product as p", "oi.product_id", "p.product_id")
+        .select(
+          "oi.product_id",
+          "p.name",
+          db.raw("SUM(oi.quantity) as total_sold"),
+        )
+        .groupBy("oi.product_id", "p.name")
+        .orderBy("total_sold", "desc")
+        .limit(5),
+    ]);
 
-  const revenue = Number(total_revenue[0]?.['total_revenue'] ?? 0);
-  const orders = Number(total_orders[0]?.['total_orders'] ?? 0);
-  const newUsers = Number(new_users[0]?.['new_users'] ?? 0);
+  const revenue = Number(total_revenue[0]?.["total_revenue"] ?? 0);
+  const orders = Number(total_orders[0]?.["total_orders"] ?? 0);
+  const newUsers = Number(new_users[0]?.["new_users"] ?? 0);
 
   res.json({
     data: {
@@ -363,7 +429,7 @@ export const adminCreateVoucher = catchAsync(
 export const adminUpdateVoucher = catchAsync(
   async (req: Request, res: Response) => {
     await VoucherService.adminUpdateVoucher(
-      Number(req.params['voucher_id']),
+      Number(req.params["voucher_id"]),
       req.body,
     );
     res.json({ data: { message: "Voucher updated" } });

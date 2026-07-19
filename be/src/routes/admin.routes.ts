@@ -8,6 +8,7 @@ const router = Router();
 
 // ─── Staff Auth (public — no authenticateStaff guard) ────────────────────────
 router.post("/auth/login", Admin.staffLogin);
+router.post("/auth/refresh", Admin.staffRefresh); // public — reads httpOnly cookie, not JWT
 
 // Everything below requires a valid staff JWT
 router.use(authenticateStaff);

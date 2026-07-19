@@ -89,7 +89,7 @@ export default function StaffOrderDetailPage({
           value={order.status}
           disabled={updating}
           onChange={(e) => handleStatusChange(e.target.value as OrderStatus)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>

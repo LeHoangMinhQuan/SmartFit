@@ -36,6 +36,7 @@ export async function createStaff(data: {
   start_time?: string;
   password: string;
 }) {
+  console.log("Creating staff with data:", data);
   const password_hash = await bcrypt.hash(data.password, 12);
   const staff_id = await StaffModel.createStaff({
     name: data.name,
@@ -43,6 +44,7 @@ export async function createStaff(data: {
     start_time: data.start_time,
     password_hash,
   });
+  console.log("Created staff with ID:", staff_id);
   return { staff_id };
 }
 

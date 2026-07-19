@@ -38,10 +38,13 @@ export default function DataTable<T extends Record<string, unknown>>({
     <div className="flex flex-col gap-4">
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
               {columns.map((col) => (
-                <th key={col.key} className={clsx("px-4 py-3", col.className)}>
+                <th
+                  key={col.key}
+                  className={clsx("px-6 py-4 align-middle", col.className)}
+                >
                   {col.header}
                 </th>
               ))}
@@ -56,11 +59,16 @@ export default function DataTable<T extends Record<string, unknown>>({
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td
-                  colSpan={columns.length}
-                  className="py-12 text-center text-gray-500"
-                >
-                  {emptyMessage}
+                <td colSpan={columns.length}>
+                  <div className="flex flex-col items-center py-16">
+                    <div className="mb-3 text-5xl">📦</div>
+
+                    <p className="font-medium text-slate-700">{emptyMessage}</p>
+
+                    <p className="mt-1 text-sm text-slate-400">
+                      There are no items to display.
+                    </p>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -69,14 +77,17 @@ export default function DataTable<T extends Record<string, unknown>>({
                   key={rowKey(row)}
                   onClick={() => onRowClick?.(row)}
                   className={clsx(
-                    "transition",
-                    onRowClick && "cursor-pointer hover:bg-gray-50",
+                    "border-b border-slate-100 transition-colors duration-200 last:border-0",
+                    onRowClick && "cursor-pointer hover:bg-slate-50",
                   )}
                 >
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={clsx("px-4 py-3", col.className)}
+                      className={clsx(
+                        "px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500",
+                        col.className,
+                      )}
                     >
                       {col.render
                         ? col.render(row)

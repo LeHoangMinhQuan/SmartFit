@@ -43,11 +43,17 @@ export default function StaffProductsPage() {
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Products</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Products</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage products, variants and catalog information.
+          </p>
+        </div>
+
         <button
           onClick={() => router.push("/staff/products/new")}
-          className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
+          className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:cursor-pointer active:translate-y-0 active:shadow-lg"
         >
           + New Product
         </button>
@@ -64,14 +70,14 @@ export default function StaffProductsPage() {
               setPage(1);
             }
           }}
-          className="max-w-xs"
+          className="w-full sm:max-w-md"
         />
         <button
           onClick={() => {
             setSearch(q);
             setPage(1);
           }}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700 hover:cursor-pointer active:bg-slate-800"
         >
           Search
         </button>
@@ -82,56 +88,58 @@ export default function StaffProductsPage() {
               setSearch("");
               setPage(1);
             }}
-            className="text-sm text-gray-400 hover:underline"
+            className="rounded-xl border border-slate-400 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100 hover:cursor-pointer active:bg-slate-200"
           >
             Clear
           </button>
         )}
       </div>
 
-      <DataTable
-        columns={[
-          { key: "product_id", header: "ID", className: "w-16" },
-          { key: "name", header: "Name" },
-          { key: "description", header: "Description" },
-          {
-            key: "actions",
-            header: "",
-            className: "w-32",
-            render: (row) => (
-              <div className="flex gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    router.push(`/staff/products/${row.product_id}`);
-                  }}
-                  className="text-xs text-blue-500 hover:underline"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(row.product_id as number);
-                  }}
-                  className="text-xs text-red-500 hover:underline"
-                >
-                  Delete
-                </button>
-              </div>
-            ),
-          },
-        ]}
-        rows={products as unknown as Record<string, unknown>[]}
-        rowKey={(row) => row.product_id as number}
-        loading={loading}
-        meta={meta ?? undefined}
-        onPageChange={setPage}
-        onRowClick={(row) =>
-          router.push(`/staff/products/${row.product_id as number}`)
-        }
-        emptyMessage="No products found."
-      />
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <DataTable
+          columns={[
+            { key: "product_id", header: "ID", className: "w-16" },
+            { key: "name", header: "Name" },
+            { key: "description", header: "Description" },
+            {
+              key: "actions",
+              header: "",
+              className: "w-32",
+              render: (row) => (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/staff/products/${row.product_id}`);
+                    }}
+                    className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-100 hover:cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(row.product_id as number);
+                    }}
+                    className="rounded-lg bg-red-50 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100 hover:cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ),
+            },
+          ]}
+          rows={products as unknown as Record<string, unknown>[]}
+          rowKey={(row) => row.product_id as number}
+          loading={loading}
+          meta={meta ?? undefined}
+          onPageChange={setPage}
+          onRowClick={(row) =>
+            router.push(`/staff/products/${row.product_id as number}`)
+          }
+          emptyMessage="No products found."
+        />
+      </div>
     </div>
   );
 }

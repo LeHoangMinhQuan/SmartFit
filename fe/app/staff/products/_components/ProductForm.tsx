@@ -49,6 +49,7 @@ export default function ProductForm({
   // Tab 4 — Categories
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [savingCategories, setSavingCategories] = useState(false);
 
   useEffect(() => {
     categoryService.getCategories().then(setCategories);
@@ -143,6 +144,20 @@ export default function ProductForm({
     );
   }
 
+  async function handleSaveCategories() {
+    if (!savedProductId) return;
+    setSavingCategories(true);
+    try {
+      await productService.setCategories(savedProductId, selectedCategoryIds);
+      toast.success("Categories saved.");
+      onSaved(savedProductId);
+    } catch {
+      toast.error("Failed to save categories.");
+    } finally {
+      setSavingCategories(false);
+    }
+  }
+
   if (loading)
     return (
       <div className="flex justify-center py-24">
@@ -152,7 +167,7 @@ export default function ProductForm({
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">
+      <h1 className="text-2xl font-bold text-slate-900">
         {mode === "create" ? "New Product" : `Edit Product #${savedProductId}`}
       </h1>
 
@@ -311,17 +326,12 @@ export default function ProductForm({
               </label>
             ))}
           </div>
-          <p className="text-xs text-gray-400">
-            Category assignments are informational — the product_category table
-            is managed via `POST /api/products/:id/categories` on the backend.
-          </p>
           <button
-            onClick={() => {
-              onSaved(savedProductId!);
-            }}
-            className="self-start rounded-lg bg-black px-6 py-2 text-sm text-white hover:bg-gray-800"
+            onClick={handleSaveCategories}
+            disabled={savingCategories}
+            className="self-start rounded-lg bg-black px-6 py-2 text-sm text-white disabled:opacity-50 hover:bg-gray-800"
           >
-            Done
+            {savingCategories ? "Saving…" : "Save & Done"}
           </button>
         </div>
       )}

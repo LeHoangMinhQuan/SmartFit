@@ -40,6 +40,7 @@ export const authLimiter = rateLimit({
  */
 export const tryonLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5,
   limit: 5,
   standardHeaders: "draft-8",
   legacyHeaders: false,

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCartStore } from "@/store/useCartStore";
-import { useState } from "react";
+import { useAuthModalStore } from "@/store/useAuthModalStore";
 import LoginModal from "@/components/auth/LoginModal";
 import RegisterModal from "@/components/auth/RegisterModal";
 import UserMenu from "@/components/UserMenu";
@@ -10,17 +10,14 @@ export default function Header() {
   const cartItems = useCartStore((state) => state.items);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [registerOpen, setRegisterOpen] = useState(false);
-
-  const openLogin = () => {
-    setRegisterOpen(false);
-    setLoginOpen(true);
-  };
-  const openRegister = () => {
-    setLoginOpen(false);
-    setRegisterOpen(true);
-  };
+const {
+  loginOpen,
+  registerOpen,
+  openLogin,
+  openRegister,
+  closeLogin,
+  closeRegister,
+} = useAuthModalStore();
 
   return (
     <>
@@ -83,12 +80,13 @@ export default function Header() {
 
       <LoginModal
         isOpen={loginOpen}
-        onClose={() => setLoginOpen(false)}
+        onClose={closeLogin}
         onSwitchToRegister={openRegister}
       />
+
       <RegisterModal
         isOpen={registerOpen}
-        onClose={() => setRegisterOpen(false)}
+        onClose={closeRegister}
         onSwitchToLogin={openLogin}
       />
     </>

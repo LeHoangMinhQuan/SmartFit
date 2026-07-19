@@ -18,7 +18,8 @@ export interface StaffTokenPayload {
 
 // ─── Token TTLs ───────────────────────────────────────────────────────────────
 
-const ACCESS_TTL = "15m"; // short-lived access token
+const ACCESS_TTL = "15m"; // short-lived access token (user)
+const STAFF_ACCESS_TTL = "8h"; // staff access token — kept at 8h to match existing behavior
 const REFRESH_TTL = "7d"; // refresh token lifetime (also set in refresh_token.expires_at)
 
 // ─── User tokens ─────────────────────────────────────────────────────────────
@@ -54,7 +55,9 @@ export const verifyUserAccessToken = (token: string): UserTokenPayload => {
 export const signStaffAccessToken = (payload: StaffTokenPayload): string => {
   const secret = env.STAFF_JWT_SECRET;
   if (!secret) throw new Error("STAFF_JWT_SECRET is not configured");
-  return jwt.sign(payload, secret, { expiresIn: ACCESS_TTL } as SignOptions);
+  return jwt.sign(payload, secret, {
+    expiresIn: STAFF_ACCESS_TTL,
+  } as SignOptions);
 };
 
 /**

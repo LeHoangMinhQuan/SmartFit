@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
+import { useAuthModalStore } from "@/store/useAuthModalStore";
 
 export default function TopBanner() {
   const [isVisible, setIsVisible] = useState(true);
+  const openRegister = useAuthModalStore((s) => s.openRegister);
 
   if (!isVisible) return null;
 
@@ -11,12 +12,12 @@ export default function TopBanner() {
     <div className="bg-black text-white py-2 px-4 relative flex items-center justify-center text-xs md:text-sm">
       <p>
         Sign up and get 20% off to your first order.{" "}
-        <Link
-          href="/register"
+        <button
+          onClick={openRegister}
           className="font-medium underline hover:text-gray-300 transition-colors"
         >
           Sign Up Now
-        </Link>
+        </button>
       </p>
       <button
         onClick={() => setIsVisible(false)}

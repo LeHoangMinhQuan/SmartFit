@@ -1,4 +1,11 @@
-import api from "../../lib/axios";
+import staffApi from "../../lib/staffAxios";
+
+// Inventory endpoints respond with { data, meta } instead of the
+// payload directly — unwrap r.data.data.
+interface ApiResponse<T> {
+  data: T;
+  meta: { total: number };
+}
 
 interface InventoryRow {
   product_id: number;
@@ -24,26 +31,29 @@ interface RecordImportBody {
 
 export const inventoryService = {
   getInventory: (params?: { store_id?: number; quantity?: number }) =>
-    api.get<InventoryRow[]>("/inventory", { params }).then((r) => r.data),
+    staffApi
+      .get<ApiResponse<InventoryRow[]>>("/admin/inventory", { params })
+      .then((r) => r.data.data),
 
-  // Manual stock adjustment — body carries the new absolute quantity
   adjustQuantity: (
     product_id: number,
     variant_id: number,
     store_id: number,
     body: { quantity: number },
   ) =>
-    api
-      .patch(`/inventory/${product_id}/${variant_id}/${store_id}`, body)
-      .then((r) => r.data),
+    staffApi
+      .patch<
+        ApiResponse<InventoryRow>
+      >(`/admin/inventory/${product_id}/${variant_id}/${store_id}`, body)
+      .then((r) => r.data.data),
 
   getImportHistory: () =>
-    api
-      .get<ImportHistoryRow[]>("/inventory/import-history")
-      .then((r) => r.data),
+    staffApi
+      .get<ApiResponse<ImportHistoryRow[]>>("/admin/inventory/import-history")
+      .then((r) => r.data.data),
 
-  // import_history has no quantity column — it's a record that a shipment
-  // arrived, not an authoritative stock count. Composite PK of all 5 columns.
   recordImport: (body: RecordImportBody) =>
-    api.post("/inventory/import", body).then((r) => r.data),
+    staffApi
+      .post<ApiResponse<unknown>>("/admin/inventory/import", body)
+      .then((r) => r.data.data),
 };

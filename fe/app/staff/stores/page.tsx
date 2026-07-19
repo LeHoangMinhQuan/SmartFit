@@ -112,11 +112,16 @@ export default function StaffStoresPage() {
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Stores</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Stores</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage store locations, inventory and assigned staff.
+          </p>
+        </div>
         <button
           onClick={() => setAdding((v) => !v)}
-          className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
+          className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:cursor-pointer active:translate-y-0 active:shadow-lg"
         >
           {adding ? "Cancel" : "+ New Store"}
         </button>
@@ -125,7 +130,7 @@ export default function StaffStoresPage() {
       {adding && (
         <form
           onSubmit={handleCreate}
-          className="flex gap-4 items-end rounded-xl border p-5 max-w-lg"
+          className="flex flex-wrap gap-4 items-end rounded-2xl border border-slate-200 bg-white p-6 shadow-sm max-w-lg"
         >
           <Input
             label="Name"
@@ -142,7 +147,7 @@ export default function StaffStoresPage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50 shrink-0"
+            className="shrink-0 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:cursor-pointer active:translate-y-0 active:shadow-lg disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-lg"
           >
             {saving ? "…" : "Save"}
           </button>
@@ -157,19 +162,28 @@ export default function StaffStoresPage() {
               key={s.store_id}
               onClick={() => handleSelectStore(s)}
               className={clsx(
-                "rounded-xl border p-4 text-left transition hover:border-gray-400",
+                "rounded-2xl border p-4 text-left transition hover:cursor-pointer",
                 selectedStore?.store_id === s.store_id
-                  ? "border-black bg-black text-white"
-                  : "border-gray-200",
+                  ? "border-transparent bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25"
+                  : "border-slate-200 bg-white shadow-sm hover:border-slate-300",
               )}
             >
-              <p className="font-medium text-sm">{s.name}</p>
+              <p
+                className={clsx(
+                  "text-sm font-medium",
+                  selectedStore?.store_id === s.store_id
+                    ? "text-white"
+                    : "text-slate-900",
+                )}
+              >
+                {s.name}
+              </p>
               <p
                 className={clsx(
                   "text-xs mt-0.5 truncate",
                   selectedStore?.store_id === s.store_id
-                    ? "text-gray-300"
-                    : "text-gray-500",
+                    ? "text-indigo-100"
+                    : "text-slate-500",
                 )}
               >
                 {s.address}
@@ -177,7 +191,7 @@ export default function StaffStoresPage() {
             </button>
           ))}
           {stores.length === 0 && (
-            <p className="text-sm text-gray-500">No stores yet.</p>
+            <p className="text-sm text-slate-500">No stores yet.</p>
           )}
         </div>
 
@@ -185,7 +199,9 @@ export default function StaffStoresPage() {
         {selectedStore && (
           <div className="flex flex-col gap-4 lg:col-span-2">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold">{selectedStore.name}</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                {selectedStore.name}
+              </h2>
               <button
                 onClick={() => {
                   const newName = prompt("New name:", selectedStore.name);
@@ -193,22 +209,22 @@ export default function StaffStoresPage() {
                     handleUpdate(selectedStore.store_id, { name: newName });
                   }
                 }}
-                className="text-xs text-blue-500 hover:underline"
+                className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-100 hover:cursor-pointer"
               >
                 Rename
               </button>
             </div>
 
-            <div className="flex gap-1 border-b">
+            <div className="flex gap-1 border-b border-slate-200">
               {(["inventory", "staff"] as DetailTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setDetailTab(t)}
                   className={clsx(
-                    "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition capitalize",
+                    "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition capitalize hover:cursor-pointer",
                     detailTab === t
-                      ? "border-black text-black"
-                      : "border-transparent text-gray-500 hover:text-gray-800",
+                      ? "border-indigo-500 text-indigo-600"
+                      : "border-transparent text-slate-500 hover:text-slate-800",
                   )}
                 >
                   {t}
@@ -218,27 +234,33 @@ export default function StaffStoresPage() {
 
             {detailLoading ? (
               <Spinner className="mx-auto" />
-            ) : detailTab === "inventory" ? (
-              <DataTable
-                columns={[
-                  { key: "product_id", header: "Product ID" },
-                  { key: "variant_id", header: "Variant ID" },
-                  { key: "quantity", header: "Quantity" },
-                ]}
-                rows={storeInventory as unknown as Record<string, unknown>[]}
-                rowKey={(r) => `${r.product_id}-${r.variant_id}`}
-                emptyMessage="No stock records for this store."
-              />
             ) : (
-              <DataTable
-                columns={[
-                  { key: "staff_id", header: "ID", className: "w-16" },
-                  { key: "name", header: "Name" },
-                ]}
-                rows={storeStaff as unknown as Record<string, unknown>[]}
-                rowKey={(r) => r.staff_id as number}
-                emptyMessage="No staff currently assigned to this store."
-              />
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                {detailTab === "inventory" ? (
+                  <DataTable
+                    columns={[
+                      { key: "product_id", header: "Product ID" },
+                      { key: "variant_id", header: "Variant ID" },
+                      { key: "quantity", header: "Quantity" },
+                    ]}
+                    rows={
+                      storeInventory as unknown as Record<string, unknown>[]
+                    }
+                    rowKey={(r) => `${r.product_id}-${r.variant_id}`}
+                    emptyMessage="No stock records for this store."
+                  />
+                ) : (
+                  <DataTable
+                    columns={[
+                      { key: "staff_id", header: "ID", className: "w-16" },
+                      { key: "name", header: "Name" },
+                    ]}
+                    rows={storeStaff as unknown as Record<string, unknown>[]}
+                    rowKey={(r) => r.staff_id as number}
+                    emptyMessage="No staff currently assigned to this store."
+                  />
+                )}
+              </div>
             )}
           </div>
         )}

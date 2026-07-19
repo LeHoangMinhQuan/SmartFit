@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import { adminService } from "../../../../services/staff/admin.service";
 import { toast } from "../../../../components/ui/Toast";
@@ -26,13 +26,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "transfer", label: "Transfer" },
 ];
 
-export default function StaffDetailPage({
-  params,
-}: {
-  params: { staff_id: string };
-}) {
-  const staffId = Number(params.staff_id);
+export default function StaffDetailPage() {
   const router = useRouter();
+  const params = useParams<{ staff_id: string }>();
+
+  const staffId = Number(params.staff_id);
+
   const [tab, setTab] = useState<Tab>("info");
 
   const [staff, setStaff] = useState<Staff | null>(null);
@@ -65,14 +64,10 @@ export default function StaffDetailPage({
       .then(([s, allR, hist, storeList]) => {
         setStaff(s);
         setEditName(s.name);
-        // Roles assigned to this staff member — staff detail endpoint
-        // returns the staff object; roles come from getStaffList context.
-        // We derive assigned roles from history or a separate call if needed.
-        // For now derive from the full role list and staff object if roles
-        // are embedded; otherwise leave empty until roles tab is visited.
         setAllRoles(allR);
         setHistory(hist);
         setStores(storeList);
+        console.log("Staff detail loaded:", s, allR, hist, storeList);
       })
       .catch(() => toast.error("Failed to load staff detail."))
       .finally(() => setLoading(false));

@@ -43,7 +43,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Staff JWT from /admin/staff/auth/login
+      description: Staff JWT from /admin/auth/login
 
   schemas:
     Error:
@@ -213,6 +213,7 @@ components:
         status: { type: string, enum: [processing, ready, failed] }
         result_url: { type: string, nullable: true }
         expires_at: { type: string, format: date-time }
+        reason: {type: string, enum: [endpoint_not_registered, endpoint_offline, inference_error, timeout], nullable: true}
 
 # ─── Paths ──────────────────────────────────────────────────────────────────────
 paths:
@@ -1720,7 +1721,7 @@ paths:
         "201": { description: Recorded }
 
   # ── Admin ─────────────────────────────────────────────────────────────────────
-  /admin/staff/auth/login:
+  /admin/auth/login:
     post:
       tags: [Admin]
       summary: Staff login by staff_id + password
@@ -2228,6 +2229,69 @@ paths:
         "204": { description: Deleted }
 
   # ── Try-On ───────────────────────────────────────────────────────────────────
+  /admin/tryon/endpoint:
+    put:
+      tags: [TryOn Admin]
+      summary: Register/rotate the current Kaggle tunnel endpoint (Staff)
+      security: [{ staffAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base_url, shared_secret]
+              properties:
+                base_url: { type: string, format: uri }
+                shared_secret: { type: string, minLength: 16 }
+      responses:
+        "200":
+          {
+            description: Endpoint registered,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            base_url: { type: string, format: uri },
+                            registered: { type: boolean },
+                          },
+                      },
+                  },
+              },
+          }
+        "502": { description: base_url did not respond to /health — not registered }
+    get:
+      tags: [TryOn Admin]
+      summary: Get current registered endpoint + last health-check result (Staff)
+      security: [{ staffAuth: [] }]
+      responses:
+        "200":
+          {
+            description: Current endpoint status (no secret echoed back),
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties:
+                          {
+                            online: { type: boolean },
+                            base_url: { type: string, nullable: true },
+                            last_health_check_at:
+                              { type: string, format: date-time, nullable: true },
+                          },
+                      },
+                  },
+              },
+          }
+
   /tryon/session:
     post:
       tags: [TryOn]
@@ -2283,7 +2347,7 @@ paths:
   /tryon/preview:
     post:
       tags: [TryOn]
-      summary: Submit garment preview job (JWT)
+      summary: Enqueue garment preview job against an existing session (JWT)
       security: [{ userAuth: [] }]
       requestBody:
         required: true
@@ -2291,15 +2355,17 @@ paths:
           application/json:
             schema:
               type: object
-              required: [session_id, product_id, variant_id]
+              required: [session_id]
               properties:
                 session_id: { type: integer }
-                product_id: { type: integer }
-                variant_id: { type: integer }
+                cloth_type:
+                  type: string
+                  enum: [upper, lower, overall]
+                  default: upper
       responses:
-        "200":
+        "202":
           {
-            description: "Job submitted — poll /tryon/preview/{session_id} for result",
+            description: "Job enqueued — poll /tryon/preview/{session_id} for result",
           }
         "403": { description: Session not found or access denied }
         "410": { description: Session expired }

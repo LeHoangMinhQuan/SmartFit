@@ -3,6 +3,7 @@ import {env} from "./config/env.js"; // validates env vars — must be first
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 
 import { setupSwagger } from "./config/swagger.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
@@ -23,6 +24,7 @@ import shippingRoutes from "./routes/shipping.routes.js";
 import voucherRoutes from "./routes/voucher.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import tryonRoutes from "./routes/tryon.routes.js";
+import adminTryonRoutes from "./routes/admin/tryon.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 
@@ -36,6 +38,7 @@ app.use(
     credentials: true,
   }),
 );
+app.use(cookieParser());
 
 // ─── ⚠️  VNPay IPN MUST be registered BEFORE express.json() ──────────────────
 // VNPay sends IPN as application/x-www-form-urlencoded.
@@ -69,6 +72,7 @@ app.use('/api/shipping', shippingRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/tryon', tryonRoutes);
+app.use("/api/admin/tryon", adminTryonRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/admin', adminRoutes);
 

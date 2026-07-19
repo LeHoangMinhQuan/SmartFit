@@ -10,6 +10,15 @@ import type {
   User,
 } from "../../interfaces";
 
+// ─── API envelope ───────────────────────────────────────────────────────────
+// Store, Staff, and Inventory endpoints wrap their payload as
+// { data: T, meta: { total } } instead of returning T directly.
+
+interface ApiResponse<T> {
+  data: T;
+  meta: { total: number };
+}
+
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
 interface DashboardStats {
@@ -55,7 +64,7 @@ interface CreateStaffBody {
   name: string;
   birth_date?: string;
   start_time?: string;
-  password_hash: string;
+  password: string;
 }
 
 interface StaffHistory {
@@ -104,13 +113,9 @@ export const adminService = {
     const form = new FormData();
     files.forEach((f) => form.append("images", f));
     return api
-      .post<{ image_ids: number[] }>(
-        `/products/${product_id}/images`,
-        form,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        },
-      )
+      .post<{ image_ids: number[] }>(`/products/${product_id}/images`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
       .then((r) => r.data);
   },
 
@@ -141,13 +146,10 @@ export const adminService = {
       .then((r) => r.data),
 
   // ── Attributes ──
-  getAttributes: () =>
-    api.get<Attribute[]>("/attributes").then((r) => r.data),
+  getAttributes: () => api.get<Attribute[]>("/attributes").then((r) => r.data),
 
   createAttribute: (body: { name: string }) =>
-    api
-      .post<{ attribute_id: number }>("/attributes", body)
-      .then((r) => r.data),
+    api.post<{ attribute_id: number }>("/attributes", body).then((r) => r.data),
 
   // product_attribute PK is (attribute_id, product_id, variant_id) — a given
   // attribute type can only be attached once per variant. Server returns 409
@@ -158,10 +160,7 @@ export const adminService = {
     body: AttributeAssignBody,
   ) =>
     api
-      .post(
-        `/products/${product_id}/variants/${variant_id}/attributes`,
-        body,
-      )
+      .post(`/products/${product_id}/variants/${variant_id}/attributes`, body)
       .then((r) => r.data),
 
   updateAttributeValue: (
@@ -190,9 +189,7 @@ export const adminService = {
 
   // ── Categories ──
   createCategory: (body: { name: string; parent_id?: number }) =>
-    api
-      .post<{ category_id: number }>("/categories", body)
-      .then((r) => r.data),
+    api.post<{ category_id: number }>("/categories", body).then((r) => r.data),
 
   updateCategory: (
     category_id: number,
@@ -250,69 +247,90 @@ export const adminService = {
     api.post<{ role_id: number }>("/admin/roles", body).then((r) => r.data),
 
   // ── Staff ──
-  getStaffList: () => api.get<Staff[]>("/admin/staff").then((r) => r.data),
+  // NOTE: /admin/staff endpoints respond with { data, meta } — unwrap r.data.data
+  getStaffList: () =>
+    api.get<ApiResponse<Staff[]>>("/admin/staff").then((r) => r.data),
 
   createStaff: (body: CreateStaffBody) =>
     api
-      .post<{ staff_id: number }>("/admin/staff", body)
-      .then((r) => r.data),
+      .post<ApiResponse<{ staff_id: number }>>("/admin/staff", body)
+      .then((r) => r.data.data),
 
   getStaff: (staff_id: number) =>
-    api.get<Staff>(`/admin/staff/${staff_id}`).then((r) => r.data),
+    api
+      .get<ApiResponse<Staff>>(`/admin/staff/${staff_id}`)
+      .then((r) => r.data.data),
 
   updateStaff: (
     staff_id: number,
     body: Pick<CreateStaffBody, "name" | "birth_date" | "start_time">,
-  ) => api.patch(`/admin/staff/${staff_id}`, body).then((r) => r.data),
+  ) =>
+    api
+      .patch<ApiResponse<Staff>>(`/admin/staff/${staff_id}`, body)
+      .then((r) => r.data.data),
 
   assignRole: (staff_id: number, role_id: number) =>
     api
-      .post(`/admin/staff/${staff_id}/roles`, { role_id })
-      .then((r) => r.data),
+      .post<ApiResponse<unknown>>(`/admin/staff/${staff_id}/roles`, {
+        role_id,
+      })
+      .then((r) => r.data.data),
 
   removeRole: (staff_id: number, role_id: number) =>
     api
-      .delete(`/admin/staff/${staff_id}/roles/${role_id}`)
-      .then((r) => r.data),
+      .delete<ApiResponse<unknown>>(`/admin/staff/${staff_id}/roles/${role_id}`)
+      .then((r) => r.data.data),
 
   getStaffHistory: (staff_id: number) =>
     api
-      .get<StaffHistory[]>(`/admin/staff/${staff_id}/history`)
-      .then((r) => r.data),
+      .get<ApiResponse<StaffHistory[]>>(`/admin/staff/${staff_id}/history`)
+      .then((r) => r.data.data),
 
   getStaffCurrentStore: (staff_id: number) =>
     api
-      .get<StaffHistory>(`/admin/staff/${staff_id}/store`)
-      .then((r) => r.data),
+      .get<ApiResponse<StaffHistory>>(`/admin/staff/${staff_id}/store`)
+      .then((r) => r.data.data),
 
   // Closes open history row + inserts new one — server wraps in transaction
   transferStaff: (
     staff_id: number,
     body: { store_id: number; start_date?: string },
   ) =>
-    api.post(`/admin/staff/${staff_id}/transfer`, body).then((r) => r.data),
+    api
+      .post<ApiResponse<unknown>>(`/admin/staff/${staff_id}/transfer`, body)
+      .then((r) => r.data.data),
 
   // ── Stores ──
-  getStores: () => api.get<Store[]>("/admin/stores").then((r) => r.data),
+  // NOTE: /admin/stores endpoints respond with { data, meta } — unwrap r.data.data
+  getStores: () =>
+    api.get<ApiResponse<Store[]>>("/admin/stores").then((r) => r.data.data),
 
   createStore: (body: { name: string; address: string }) =>
     api
-      .post<{ store_id: number }>("/admin/stores", body)
-      .then((r) => r.data),
+      .post<ApiResponse<{ store_id: number }>>("/admin/stores", body)
+      .then((r) => r.data.data),
 
   getStore: (store_id: number) =>
-    api.get<Store>(`/admin/stores/${store_id}`).then((r) => r.data),
+    api
+      .get<ApiResponse<Store>>(`/admin/stores/${store_id}`)
+      .then((r) => r.data.data),
 
   updateStore: (store_id: number, body: { name?: string; address?: string }) =>
-    api.patch(`/admin/stores/${store_id}`, body).then((r) => r.data),
+    api
+      .patch<ApiResponse<Store>>(`/admin/stores/${store_id}`, body)
+      .then((r) => r.data.data),
 
   getStoreInventory: (store_id: number) =>
     api
-      .get<StoreInventoryRow[]>(`/admin/stores/${store_id}/inventory`)
-      .then((r) => r.data),
+      .get<
+        ApiResponse<StoreInventoryRow[]>
+      >(`/admin/stores/${store_id}/inventory`)
+      .then((r) => r.data.data),
 
   getStoreStaff: (store_id: number) =>
-    api.get<Staff[]>(`/admin/stores/${store_id}/staff`).then((r) => r.data),
+    api
+      .get<ApiResponse<Staff[]>>(`/admin/stores/${store_id}/staff`)
+      .then((r) => r.data.data),
 
   // ── Suppliers ──
   getSuppliers: () =>
