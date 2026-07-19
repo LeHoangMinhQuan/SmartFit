@@ -18,6 +18,12 @@ export async function createProduct(
 export async function findProductById(product_id: number) {
   return db("product").where({ product_id }).first();
 }
+export async function findCategoriesByProduct(product_id: number) {
+  return db("category as c")
+    .join("product_category as pc", "c.category_id", "pc.category_id")
+    .where("pc.product_id", product_id)
+    .select("c.category_id", "c.name", "c.parent_id");
+}
 
 export async function findAllProducts(filters: {
   page?: number;

@@ -3,6 +3,10 @@ import { authenticateStaff } from "../middleware/authenticateStaff.js";
 import * as Admin from "../controllers/admin.controller.js";
 import { updateOrderStatusSchema } from "../schemas/order.schema.js";
 import { validate } from "../middleware/validate.js";
+import {
+  recordImportSchema,
+  adjustQuantitySchema,
+} from "../schemas/inventory.schema.js";
 
 const router = Router();
 
@@ -47,9 +51,14 @@ router.get("/stores/:store_id/staff", Admin.getStoreStaff);
 // string "import-history" as the product_id param.
 router.get("/inventory", Admin.listInventory);
 router.get("/inventory/import-history", Admin.getImportHistory);
-router.post("/inventory/import", Admin.recordImport);
+router.post(
+  "/inventory/import",
+  validate(recordImportSchema),
+  Admin.recordImport,
+);
 router.patch(
   "/inventory/:product_id/:variant_id/:store_id",
+  validate(adjustQuantitySchema),
   Admin.adjustQuantity,
 );
 

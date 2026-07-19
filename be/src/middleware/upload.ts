@@ -19,7 +19,7 @@ import { env } from "../config/env.js";
  * Limits: 10 files max, 5 MB each, jpeg/png/webp only.
  */
 
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_FILE_COUNT = 10;
 

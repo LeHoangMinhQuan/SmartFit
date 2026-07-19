@@ -38,6 +38,27 @@ export async function findInventory(filters: {
   return { rows, total: Number(total) };
 }
 
+/**
+ * Receive stock: increments existing quantity, or creates the row starting
+ * at `quantity` if this (product_id, variant_id, store_id) has never had
+ * stock before. Unlike upsertStoreProduct (which sets an absolute value —
+ * used by manual "adjust quantity" corrections), this is always additive.
+ */
+export async function receiveStock(
+  product_id: number,
+  variant_id: number,
+  store_id: number,
+  quantity: number,
+  trx = db,
+) {
+  return trx("store_product")
+    .insert({ product_id, variant_id, store_id, quantity })
+    .onConflict(["product_id", "variant_id", "store_id"])
+    .merge({
+      quantity: trx.raw("store_product.quantity + excluded.quantity"),
+    });
+}
+
 export async function findStoreProduct(
   product_id: number,
   variant_id: number,

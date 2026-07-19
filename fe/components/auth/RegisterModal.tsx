@@ -129,8 +129,11 @@ export default function RegisterModal({
       handleClose();
     } catch (err) {
       if (axios.isAxiosError(err)) {
+        const data = err.response?.data;
+
         setError(
-          err.response?.data?.message ??
+          data?.detail?.message ??
+            data?.message ??
             "Registration failed. Please try again.",
         );
       } else {

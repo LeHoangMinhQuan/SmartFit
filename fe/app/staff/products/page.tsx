@@ -1,41 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  useQuery,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { productService } from "../../../services/product.service";
 import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import Input from "../../../components/ui/Input";
-import type { PaginationMeta, Product, ProductSummary } from "../../../interfaces";
+import type { ProductSummary } from "../../../interfaces";
 
 export default function StaffProductsPage() {
   const router = useRouter();
-  const [products, setProducts] = useState<ProductSummary[]>([]);
-  const [meta, setMeta] = useState<PaginationMeta | null>(null);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
-    productService
-      .getProducts({ page, limit: 20, ...(search ? { q: search } : {}) })
-      .then((res) => {
-        setProducts(res.data);
-        setMeta(res.meta);
-      })
-      .catch(() => toast.error("Failed to load products."))
-      .finally(() => setLoading(false));
-  }, [page, search]);
+  // getProducts has no `q` param at all — searching used to silently call the wrong
+  // endpoint and just return the unfiltered list. Use searchProducts once a term is set.
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["staff-products", { page, search }],
+    queryFn: () =>
+      search
+        ? productService.searchProducts(search, { page, limit: 20 })
+        : productService.getProducts({ page, limit: 20 }),
+    placeholderData: keepPreviousData,
+  });
+
+  const products = data?.data ?? [];
+  const meta = data?.meta;
 
   async function handleDelete(product_id: number) {
     if (!confirm("Delete this product? This cannot be undone.")) return;
     try {
       await adminService.deleteProduct(product_id);
       toast.success("Product deleted.");
-      setProducts((prev) => prev.filter((p) => p.product_id !== product_id));
+      queryClient.setQueriesData<
+        { data: ProductSummary[]; meta: unknown } | undefined
+      >(
+        { queryKey: ["staff-products"] },
+        (old) =>
+          old && {
+            ...old,
+            data: old.data.filter((p) => p.product_id !== product_id),
+          },
+      );
+      queryClient.invalidateQueries({ queryKey: ["staff-products"] });
     } catch {
       toast.error("Failed to delete product.");
     }
@@ -45,7 +60,14 @@ export default function StaffProductsPage() {
     <div className="p-8 flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Products</h1>
+          <h1 className="flex items-center gap-2 text-3xl font-bold text-slate-900">
+            Products
+            {isFetching && !isLoading && (
+              <span className="text-xs font-normal text-slate-400">
+                updating…
+              </span>
+            )}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">
             Manage products, variants and catalog information.
           </p>
@@ -131,8 +153,8 @@ export default function StaffProductsPage() {
           ]}
           rows={products as unknown as Record<string, unknown>[]}
           rowKey={(row) => row.product_id as number}
-          loading={loading}
-          meta={meta ?? undefined}
+          loading={isLoading}
+          meta={meta}
           onPageChange={setPage}
           onRowClick={(row) =>
             router.push(`/staff/products/${row.product_id as number}`)

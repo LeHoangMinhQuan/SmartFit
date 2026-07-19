@@ -1,4 +1,4 @@
-import api from "../../lib/axios";
+import api from "../../lib/staffAxios";
 import type { Voucher } from "../../interfaces";
 
 // Vouchers — user-entered promo codes at checkout
@@ -31,7 +31,7 @@ export const voucherAdminService = {
       .then((r) => r.data),
 
   listVouchers: () =>
-    api.get<Voucher[]>("/admin/vouchers").then((r) => r.data),
+    api.get<{ data: Voucher[] }>("/admin/vouchers").then((r) => r.data.data),
 
   updateVoucher: (voucher_id: number, body: Partial<CreateVoucherBody>) =>
     api
@@ -40,18 +40,13 @@ export const voucherAdminService = {
 
   // ── Discounts (variant markdowns) ──
   createDiscount: (body: CreateDiscountBody) =>
-    api
-      .post<{ discount_id: number }>("/discounts", body)
-      .then((r) => r.data),
+    api.post<{ discount_id: number }>("/discounts", body).then((r) => r.data),
 
   // Links a discount to a specific product variant via product_discount table
   assignDiscount: (
     discount_id: number,
     body: { product_id: number; variant_id: number },
-  ) =>
-    api
-      .post(`/discounts/${discount_id}/products`, body)
-      .then((r) => r.data),
+  ) => api.post(`/discounts/${discount_id}/products`, body).then((r) => r.data),
 
   deleteDiscount: (discount_id: number) =>
     api.delete(`/discounts/${discount_id}`).then((r) => r.data),

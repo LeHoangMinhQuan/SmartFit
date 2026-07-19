@@ -32,18 +32,25 @@ export async function findImportHistory(filters: {
   return { rows, total: Number(total) };
 }
 
-export async function createImportRecord(data: {
-  staff_id: number;
-  supplier_id: number;
-  product_id: number;
-  variant_id: number;
-  import_date?: string;
-}) {
-  return db("import_history").insert({
+export async function createImportRecord(
+  data: {
+    staff_id: number;
+    supplier_id: number;
+    product_id: number;
+    variant_id: number;
+    store_id: number;
+    quantity: number;
+    import_date?: string;
+  },
+  trx = db,
+) {
+  return trx("import_history").insert({
     staff_id: data.staff_id,
     supplier_id: data.supplier_id,
     product_id: data.product_id,
     variant_id: data.variant_id,
+    store_id: data.store_id,
+    quantity: data.quantity,
     ...(data.import_date ? { import_date: data.import_date } : {}),
   });
 }

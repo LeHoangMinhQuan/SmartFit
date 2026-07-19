@@ -97,7 +97,7 @@ router.delete(
 router.post(
   "/:id/images",
   authenticateStaff,
-  uploadSingle,
+  uploadBulk,
   ProductController.uploadProductImage,
 );
 

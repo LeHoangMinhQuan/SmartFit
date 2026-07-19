@@ -11,12 +11,14 @@ import type {
 } from "../../interfaces";
 
 // ─── API envelope ───────────────────────────────────────────────────────────
-// Store, Staff, and Inventory endpoints wrap their payload as
-// { data: T, meta: { total } } instead of returning T directly.
+// Every admin controller responds with { data: T, meta?: { total } } — always
+// unwrap with r.data.data, never r.data alone. (Exception: getAllOrders /
+// getAllUsers use PaginatedResponse<T>, which already models this envelope
+// shape directly, so a single r.data is correct there.)
 
 interface ApiResponse<T> {
   data: T;
-  meta: { total: number };
+  meta?: { total: number };
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
@@ -96,34 +98,50 @@ interface Supplier {
 export const adminService = {
   // Dashboard
   getDashboard: () =>
-    api.get<DashboardStats>("/admin/dashboard").then((r) => r.data),
+    api
+      .get<ApiResponse<DashboardStats>>("/admin/dashboard")
+      .then((r) => r.data.data),
 
   // ── Products ──
   createProduct: (body: CreateProductBody) =>
-    api.post<{ product_id: number }>("/products", body).then((r) => r.data),
+    api
+      .post<ApiResponse<{ product_id: number }>>("/products", body)
+      .then((r) => r.data.data),
 
   updateProduct: (product_id: number, body: Partial<CreateProductBody>) =>
-    api.patch(`/products/${product_id}`, body).then((r) => r.data),
+    api
+      .patch<ApiResponse<unknown>>(`/products/${product_id}`, body)
+      .then((r) => r.data.data),
+
+  setCategories: (product_id: number, category_ids: number[]) =>
+    api
+      .patch<ApiResponse<unknown>>(`/products/${product_id}`, { category_ids })
+      .then((r) => r.data.data),
 
   deleteProduct: (product_id: number) =>
-    api.delete(`/products/${product_id}`).then((r) => r.data),
+    api
+      .delete<ApiResponse<unknown>>(`/products/${product_id}`)
+      .then((r) => r.data.data),
 
   // Images — multipart, up to 10 files, 5 MB each, JPEG/PNG/WEBP
-  uploadImages: (product_id: number, files: File[]) => {
+  uploadImages: (product_id: number, files: File[], variant_id?: number) => {
     const form = new FormData();
     files.forEach((f) => form.append("images", f));
+    if (variant_id != null) form.append("variant_id", String(variant_id));
     return api
-      .post<{ image_ids: number[] }>(`/products/${product_id}/images`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
-      .then((r) => r.data);
+      .post<
+        ApiResponse<{ image_ids: number[] }>
+      >(`/products/${product_id}/images`, form, { headers: { "Content-Type": "multipart/form-data" } })
+      .then((r) => r.data.data);
   },
 
   // ── Variants ──
   createVariant: (product_id: number, body: CreateVariantBody) =>
     api
-      .post<ProductVariant>(`/products/${product_id}/variants`, body)
-      .then((r) => r.data),
+      .post<
+        ApiResponse<ProductVariant>
+      >(`/products/${product_id}/variants`, body)
+      .then((r) => r.data.data),
 
   updateVariant: (
     product_id: number,
@@ -131,25 +149,34 @@ export const adminService = {
     body: Partial<CreateVariantBody>,
   ) =>
     api
-      .put(`/products/${product_id}/variants/${variant_id}`, body)
-      .then((r) => r.data),
+      .put<
+        ApiResponse<unknown>
+      >(`/products/${product_id}/variants/${variant_id}`, body)
+      .then((r) => r.data.data),
 
   deleteVariant: (product_id: number, variant_id: number) =>
     api
-      .delete(`/products/${product_id}/variants/${variant_id}`)
-      .then((r) => r.data),
+      .delete<
+        ApiResponse<unknown>
+      >(`/products/${product_id}/variants/${variant_id}`)
+      .then((r) => r.data.data),
 
   // One active price row per variant at any time
   upsertPrice: (product_id: number, variant_id: number, body: PriceBody) =>
     api
-      .post(`/products/${product_id}/variants/${variant_id}/price`, body)
-      .then((r) => r.data),
+      .post<
+        ApiResponse<unknown>
+      >(`/products/${product_id}/variants/${variant_id}/price`, body)
+      .then((r) => r.data.data),
 
   // ── Attributes ──
-  getAttributes: () => api.get<Attribute[]>("/attributes").then((r) => r.data),
+  getAttributes: () =>
+    api.get<ApiResponse<Attribute[]>>("/attributes").then((r) => r.data.data),
 
   createAttribute: (body: { name: string }) =>
-    api.post<{ attribute_id: number }>("/attributes", body).then((r) => r.data),
+    api
+      .post<ApiResponse<{ attribute_id: number }>>("/attributes", body)
+      .then((r) => r.data.data),
 
   // product_attribute PK is (attribute_id, product_id, variant_id) — a given
   // attribute type can only be attached once per variant. Server returns 409
@@ -160,8 +187,10 @@ export const adminService = {
     body: AttributeAssignBody,
   ) =>
     api
-      .post(`/products/${product_id}/variants/${variant_id}/attributes`, body)
-      .then((r) => r.data),
+      .post<
+        ApiResponse<unknown>
+      >(`/products/${product_id}/variants/${variant_id}/attributes`, body)
+      .then((r) => r.data.data),
 
   updateAttributeValue: (
     product_id: number,
@@ -170,11 +199,10 @@ export const adminService = {
     value: string,
   ) =>
     api
-      .patch(
-        `/products/${product_id}/variants/${variant_id}/attributes/${attribute_id}`,
-        { value },
-      )
-      .then((r) => r.data),
+      .patch<
+        ApiResponse<unknown>
+      >(`/products/${product_id}/variants/${variant_id}/attributes/${attribute_id}`, { value })
+      .then((r) => r.data.data),
 
   removeAttribute: (
     product_id: number,
@@ -182,24 +210,33 @@ export const adminService = {
     attribute_id: number,
   ) =>
     api
-      .delete(
-        `/products/${product_id}/variants/${variant_id}/attributes/${attribute_id}`,
-      )
-      .then((r) => r.data),
+      .delete<
+        ApiResponse<unknown>
+      >(`/products/${product_id}/variants/${variant_id}/attributes/${attribute_id}`)
+      .then((r) => r.data.data),
 
   // ── Categories ──
   createCategory: (body: { name: string; parent_id?: number }) =>
-    api.post<{ category_id: number }>("/categories", body).then((r) => r.data),
+    api
+      .post<ApiResponse<{ category_id: number }>>("/categories", body)
+      .then((r) => r.data.data),
 
   updateCategory: (
     category_id: number,
     body: { name?: string; parent_id?: number | null },
-  ) => api.put(`/categories/${category_id}`, body).then((r) => r.data),
+  ) =>
+    api
+      .put<ApiResponse<unknown>>(`/categories/${category_id}`, body)
+      .then((r) => r.data.data),
 
   deleteCategory: (category_id: number) =>
-    api.delete(`/categories/${category_id}`).then((r) => r.data),
+    api
+      .delete<ApiResponse<unknown>>(`/categories/${category_id}`)
+      .then((r) => r.data.data),
 
   // ── Orders ──
+  // NOTE: PaginatedResponse<T> already models the { data, meta } envelope —
+  // r.data is correct here, do not double-unwrap.
   getAllOrders: (params?: {
     page?: number;
     limit?: number;
@@ -213,20 +250,26 @@ export const adminService = {
 
   updateOrderStatus: (order_id: number, status: OrderStatus) =>
     api
-      .patch(`/admin/orders/${order_id}/status`, { status })
-      .then((r) => r.data),
+      .patch<
+        ApiResponse<unknown>
+      >(`/admin/orders/${order_id}/status`, { status })
+      .then((r) => r.data.data),
 
   // ── Users ──
+  // NOTE: same PaginatedResponse exception as getAllOrders above.
   getAllUsers: (params?: { page?: number; limit?: number }) =>
     api
       .get<PaginatedResponse<User>>("/admin/users", { params })
       .then((r) => r.data),
 
   getUser: (user_id: number) =>
-    api.get<User>(`/admin/users/${user_id}`).then((r) => r.data),
+    api
+      .get<ApiResponse<User>>(`/admin/users/${user_id}`)
+      .then((r) => r.data.data),
 
   // ── Reviews ──
-  getAllReviews: () => api.get("/admin/reviews").then((r) => r.data),
+  getAllReviews: () =>
+    api.get<ApiResponse<unknown[]>>("/admin/reviews").then((r) => r.data.data),
 
   deleteReview: (
     product_id: number,
@@ -235,19 +278,21 @@ export const adminService = {
     review_id: number,
   ) =>
     api
-      .delete(
-        `/admin/reviews/${product_id}/${variant_id}/${user_id}/${review_id}`,
-      )
-      .then((r) => r.data),
+      .delete<
+        ApiResponse<unknown>
+      >(`/admin/reviews/${product_id}/${variant_id}/${user_id}/${review_id}`)
+      .then((r) => r.data.data),
 
   // ── Roles ──
-  getRoles: () => api.get<Role[]>("/admin/roles").then((r) => r.data),
+  getRoles: () =>
+    api.get<ApiResponse<Role[]>>("/admin/roles").then((r) => r.data.data),
 
   createRole: (body: { name: string }) =>
-    api.post<{ role_id: number }>("/admin/roles", body).then((r) => r.data),
+    api
+      .post<ApiResponse<{ role_id: number }>>("/admin/roles", body)
+      .then((r) => r.data.data),
 
   // ── Staff ──
-  // NOTE: /admin/staff endpoints respond with { data, meta } — unwrap r.data.data
   getStaffList: () =>
     api.get<ApiResponse<Staff[]>>("/admin/staff").then((r) => r.data),
 
@@ -271,9 +316,7 @@ export const adminService = {
 
   assignRole: (staff_id: number, role_id: number) =>
     api
-      .post<ApiResponse<unknown>>(`/admin/staff/${staff_id}/roles`, {
-        role_id,
-      })
+      .post<ApiResponse<unknown>>(`/admin/staff/${staff_id}/roles`, { role_id })
       .then((r) => r.data.data),
 
   removeRole: (staff_id: number, role_id: number) =>
@@ -301,7 +344,6 @@ export const adminService = {
       .then((r) => r.data.data),
 
   // ── Stores ──
-  // NOTE: /admin/stores endpoints respond with { data, meta } — unwrap r.data.data
   getStores: () =>
     api.get<ApiResponse<Store[]>>("/admin/stores").then((r) => r.data.data),
 
@@ -334,16 +376,22 @@ export const adminService = {
 
   // ── Suppliers ──
   getSuppliers: () =>
-    api.get<Supplier[]>("/admin/suppliers").then((r) => r.data),
+    api
+      .get<ApiResponse<Supplier[]>>("/admin/suppliers")
+      .then((r) => r.data.data),
 
   createSupplier: (body: { name: string }) =>
     api
-      .post<{ supplier_id: number }>("/admin/suppliers", body)
-      .then((r) => r.data),
+      .post<ApiResponse<{ supplier_id: number }>>("/admin/suppliers", body)
+      .then((r) => r.data.data),
 
   updateSupplier: (supplier_id: number, body: { name: string }) =>
-    api.put(`/admin/suppliers/${supplier_id}`, body).then((r) => r.data),
+    api
+      .put<ApiResponse<unknown>>(`/admin/suppliers/${supplier_id}`, body)
+      .then((r) => r.data.data),
 
   deleteSupplier: (supplier_id: number) =>
-    api.delete(`/admin/suppliers/${supplier_id}`).then((r) => r.data),
+    api
+      .delete<ApiResponse<unknown>>(`/admin/suppliers/${supplier_id}`)
+      .then((r) => r.data.data),
 };

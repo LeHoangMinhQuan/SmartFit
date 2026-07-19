@@ -25,12 +25,13 @@ export async function getProduct(product_id: number) {
   const product = await ProductModel.findProductById(product_id);
   if (!product) throw new ApiError(404, "Product not found");
 
-  const [variants, images] = await Promise.all([
+  const [variants, images, categories] = await Promise.all([
     ProductModel.findVariantsByProduct(product_id),
     ProductModel.findImagesByProduct(product_id),
+    ProductModel.findCategoriesByProduct(product_id),
   ]);
 
-  return { ...product, variants, images };
+  return { ...product, variants, images, categories };
 }
 
 export async function createProduct(data: {

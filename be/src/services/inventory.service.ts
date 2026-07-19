@@ -3,6 +3,8 @@ import * as StoreProductModel from "../models/store_product.model.js";
 import * as ImportModel from "../models/import_history.model.js";
 import * as SupplierModel from "../models/supplier.model.js";
 import * as ProductModel from "../models/product/product.model.js";
+import * as StoreModel from "../models/store.model.js"; // for store existence check — adjust path if different
+import db from "../config/db.js";
 
 export async function listInventory(filters: {
   store_id?: number;
@@ -48,18 +50,31 @@ export async function recordImport(data: {
   supplier_id: number;
   product_id: number;
   variant_id: number;
+  store_id: number;
+  quantity: number;
   import_date?: string;
 }) {
-  const [supplier, product, variant] = await Promise.all([
+  const [supplier, product, variant, store] = await Promise.all([
     SupplierModel.findSupplierById(data.supplier_id),
     ProductModel.findProductById(data.product_id),
     ProductModel.findVariant(data.product_id, data.variant_id),
+    StoreModel.findStoreById(data.store_id), // confirm this function name against store.model.ts
   ]);
   if (!supplier) throw new ApiError(404, "Supplier not found");
   if (!product) throw new ApiError(404, "Product not found");
   if (!variant) throw new ApiError(404, "Product variant not found");
+  if (!store) throw new ApiError(404, "Store not found");
 
-  await ImportModel.createImportRecord(data);
+  await db.transaction(async (trx) => {
+    await ImportModel.createImportRecord(data, trx);
+    await StoreProductModel.receiveStock(
+      data.product_id,
+      data.variant_id,
+      data.store_id,
+      data.quantity,
+      trx,
+    );
+  });
 }
 
 export async function listSuppliers() {

@@ -192,10 +192,14 @@ export default function StaffVouchersPage() {
                       type: e.target.value as "percent" | "fixed",
                     })
                   }
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
                 >
-                  <option value="percent">Percent</option>
-                  <option value="fixed">Fixed</option>
+                  <option value="percent" className="text-slate-900">
+                    Percent
+                  </option>
+                  <option value="fixed" className="text-slate-900">
+                    Fixed
+                  </option>
                 </select>
               </div>
               <Input
@@ -345,10 +349,14 @@ export default function StaffVouchersPage() {
                       voucher_type: e.target.value,
                     })
                   }
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
                 >
-                  <option value="percent">Percent</option>
-                  <option value="fixed">Fixed</option>
+                  <option value="percent" className="text-slate-900">
+                    Percent
+                  </option>
+                  <option value="fixed" className="text-slate-900">
+                    Fixed
+                  </option>
                 </select>
               </div>
               <Input

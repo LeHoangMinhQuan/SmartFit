@@ -80,7 +80,7 @@ export interface ProductVariant {
 export interface ProductImage {
   image_id: number;
   product_id: number;
-  variant_id: number;
+  variant_id: number | null; // null = general/product-level image, not tied to a variant;
   s3_url: string;
 }
 

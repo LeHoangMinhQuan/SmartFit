@@ -131,7 +131,7 @@ export default function StaffCategoriesPage() {
       {adding && (
         <form
           onSubmit={handleCreate}
-          className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm max-w-xl"
+          className="flex flex-wrap items-start gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm max-w-xl"
         >
           <Input
             label="Name"
@@ -140,6 +140,7 @@ export default function StaffCategoriesPage() {
             maxLength={30}
             hint="Max 30 characters"
             required
+            className="text-slate-700"
           />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-slate-700">
@@ -148,7 +149,7 @@ export default function StaffCategoriesPage() {
             <select
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700"
             >
               <option value="">None (top-level)</option>
               {flat.map((c) => (
@@ -158,7 +159,7 @@ export default function StaffCategoriesPage() {
               ))}
             </select>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 self-center">
             <button
               type="submit"
               disabled={saving}

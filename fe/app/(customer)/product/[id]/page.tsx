@@ -14,6 +14,7 @@ import ImageGallery from "../../../../components/product/ImageGallery";
 import VariantSelector from "../../../../components/product/VariantSelector";
 import PriceDisplay from "../../../../components/product/PriceDisplay";
 import ReviewSection from "../../../../components/product/ReviewSection";
+import { Heart } from "lucide-react";
 import type { Product, ProductVariant } from "../../../../interfaces";
 
 export default function ProductPage() {
@@ -135,110 +136,125 @@ export default function ProductPage() {
     : false;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
-        {/* Left — gallery */}
-        <ImageGallery images={displayImages} />
+    <div className="min-h-screen bg-slate-50 py-10">
+      <div className="mx-auto max-w-7xl px-6 py-10 rounded-3xl bg-white p-8 shadow-sm border border-slate-200">
+        <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
+          {/* Left — gallery */}
+          <ImageGallery images={displayImages} />
 
-        {/* Right — details */}
-        <div className="flex flex-col gap-5">
-          <h1 className="text-2xl font-bold text-gray-900">{product.name}</h1>
-          <p className="text-sm text-gray-600">{product.description}</p>
+          {/* Right — details */}
+          <div className="flex flex-col gap-5">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+              {product.name}
+            </h1>
+            <p className="text-base leading-7 text-slate-600">
+              {product.description}
+            </p>
 
-          {selected && (
-            <PriceDisplay
-              basePrice={selected.base_price}
-              discount={selected.discount}
+            {selected && (
+              <PriceDisplay
+                basePrice={selected.base_price}
+                discount={selected.discount}
+              />
+            )}
+
+            <VariantSelector
+              variants={product.variants}
+              selectedId={selected?.variant_id ?? null}
+              onSelect={(v) => {
+                setSelected(v);
+                setQuantity(1);
+              }}
             />
-          )}
 
-          <VariantSelector
-            variants={product.variants}
-            selectedId={selected?.variant_id ?? null}
-            onSelect={(v) => {
-              setSelected(v);
-              setQuantity(1);
-            }}
-          />
-
-          {/* Quantity stepper */}
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-700">Quantity</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 hover:bg-gray-50"
-              >
-                −
-              </button>
-              <span className="w-8 text-center text-sm font-medium">
-                {quantity}
+            {/* Quantity stepper */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-gray-700">
+                Quantity
               </span>
+              <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white shadow-sm">
+                <button
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:bg-slate-100"
+                >
+                  −
+                </button>
+                <span className="w-8 text-center text-sm font-medium">
+                  {quantity}
+                </span>
+                <button
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:bg-slate-100"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
               <button
-                onClick={() => setQuantity((q) => q + 1)}
-                className="flex h-8 w-8 items-center justify-center rounded border border-gray-300 hover:bg-gray-50"
+                onClick={handleAddToCart}
+                disabled={cartBusy || !selected}
+                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-40"
               >
-                +
+                {cartBusy ? "Adding…" : "Add to Cart"}
+              </button>
+
+              <button
+                onClick={handleWishlist}
+                disabled={wishBusy}
+                aria-label={wishlisted ? "Wishlisted" : "Add to wishlist"}
+                className="rounded-xl border border-gray-300 px-4 py-3 text-xl hover:bg-gray-50 disabled:opacity-40"
+              >
+                {wishlisted ? (
+                  <Heart className="bg-rose-500 text-white border-rose-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
+                ) : (
+                  <Heart className="border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
+                )}
               </button>
             </div>
+
+            {/* Virtual try-on — logged-in + variant selected only */}
+            {user && selected && (
+              <button
+                onClick={() =>
+                  router.push(
+                    `/tryon?product_id=${productId}&variant_id=${selected.variant_id}`,
+                  )
+                }
+                className="border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              >
+                Virtual Try-On
+              </button>
+            )}
+
+            {/* Attributes */}
+            {selected?.attributes.length ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                {selected.attributes.map((a) => (
+                  <div
+                    key={a.attribute_id}
+                    className="flex justify-between border-b border-slate-200 py-2 last:border-0"
+                  >
+                    <span className="font-medium capitalize">
+                      {a.attribute_name}:
+                    </span>
+                    <span>{a.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button
-              onClick={handleAddToCart}
-              disabled={cartBusy || !selected}
-              className="flex-1 rounded-xl bg-black py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40"
-            >
-              {cartBusy ? "Adding…" : "Add to Cart"}
-            </button>
-
-            <button
-              onClick={handleWishlist}
-              disabled={wishBusy}
-              aria-label={wishlisted ? "Wishlisted" : "Add to wishlist"}
-              className="rounded-xl border border-gray-300 px-4 py-3 text-xl hover:bg-gray-50 disabled:opacity-40"
-            >
-              {wishlisted ? "♥" : "♡"}
-            </button>
-          </div>
-
-          {/* Virtual try-on — logged-in + variant selected only */}
-          {user && selected && (
-            <button
-              onClick={() =>
-                router.push(
-                  `/tryon?product_id=${productId}&variant_id=${selected.variant_id}`,
-                )
-              }
-              className="rounded-xl border border-black py-3 text-sm font-medium hover:bg-gray-50"
-            >
-              Virtual Try-On
-            </button>
-          )}
-
-          {/* Attributes */}
-          {selected?.attributes.length ? (
-            <div className="rounded-xl bg-gray-50 p-4 text-sm">
-              {selected.attributes.map((a) => (
-                <div key={a.attribute_id} className="flex gap-2 text-gray-700">
-                  <span className="font-medium capitalize">
-                    {a.attribute_name}:
-                  </span>
-                  <span>{a.value}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
-      </div>
 
-      {/* Reviews */}
-      <div className="mt-16 border-t pt-10">
-        <ReviewSection
-          product_id={productId}
-          variant_id={selected?.variant_id ?? null}
-        />
+        {/* Reviews */}
+        <div className="mt-16 rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <ReviewSection
+            product_id={productId}
+            variant_id={selected?.variant_id ?? null}
+          />
+        </div>
       </div>
     </div>
   );

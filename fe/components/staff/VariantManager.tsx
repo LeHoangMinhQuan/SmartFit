@@ -83,8 +83,8 @@ export default function VariantManager({
       if (form.base_price && form.start_date && form.end_date) {
         await adminService.upsertPrice(productId, variant_id, {
           base_price: Number(form.base_price),
-          start_date: form.start_date,
-          end_date: form.end_date,
+          start_date: new Date(form.start_date).toISOString(),
+          end_date: new Date(form.end_date).toISOString(),
         });
       }
 
@@ -249,7 +249,9 @@ function VariantRow({
   // product_attribute PK is (attribute_id, product_id, variant_id) — an
   // attribute already attached to this variant can't be attached again.
   // Filter it out of the "add" dropdown to avoid a guaranteed 409.
-  const attachedIds = new Set(variant.attributes.map((a) => a.attribute_id));
+  const attachedIds = new Set(
+    (variant.attributes ?? []).map((a) => a.attribute_id),
+  );
   const availableCatalog = catalog.filter(
     (a) => !attachedIds.has(a.attribute_id),
   );
@@ -356,7 +358,7 @@ function VariantRow({
 
       {/* Attributes — now fully editable via /api/products/:id/variants/:variant_id/attributes */}
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-        {variant.attributes.map((a) =>
+        {(variant.attributes ?? []).map((a) =>
           editingAttrId === a.attribute_id ? (
             <span key={a.attribute_id} className="flex items-center gap-1">
               <span className="text-xs text-gray-500">{a.attribute_name}:</span>
@@ -409,13 +411,13 @@ function VariantRow({
         {addingAttr ? (
           <form
             onSubmit={handleAddAttribute}
-            className="flex items-center gap-1"
+            className="flex items-center gap-2"
           >
             <select
               value={selectedAttrId}
               onChange={(e) => setSelectedAttrId(e.target.value)}
               disabled={catalogLoading}
-              className="rounded border border-gray-300 px-1.5 py-1 text-xs"
+              className="rounded border border-gray-300 px-1.5 py-1 text-xs text-slate-900"
             >
               <option value="">
                 {catalogLoading ? "Loading…" : "Choose attribute…"}
@@ -431,7 +433,7 @@ function VariantRow({
               onChange={(e) => setAttrValue(e.target.value)}
               placeholder="Value"
               maxLength={20}
-              className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+              className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs text-slate-900"
             />
             <button
               type="submit"

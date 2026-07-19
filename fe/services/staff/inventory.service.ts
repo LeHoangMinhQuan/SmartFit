@@ -7,6 +7,25 @@ interface ApiResponse<T> {
   meta: { total: number };
 }
 
+interface ImportHistoryRow {
+  staff_id: number;
+  supplier_id: number;
+  product_id: number;
+  variant_id: number;
+  store_id: number; // added
+  quantity: number; // added
+  import_date: string;
+}
+
+interface RecordImportBody {
+  supplier_id: number;
+  product_id: number;
+  variant_id: number;
+  store_id: number; // added
+  quantity: number; // added
+  import_date?: string;
+}
+
 interface InventoryRow {
   product_id: number;
   variant_id: number;

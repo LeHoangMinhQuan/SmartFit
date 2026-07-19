@@ -103,14 +103,6 @@ export const productService = {
     return data.data;
   },
 
-  /**
-   * Replace a product's category assignments wholesale.
-   * Backend route: POST /products/:id/categories, body { category_ids }.
-   */
-  async setCategories(id: number, category_ids: number[]): Promise<void> {
-    await api.post(`/products/${id}/categories`, { category_ids });
-  },
-
   async getReviews(
     id: number,
     params: { page?: number; limit?: number } = {},

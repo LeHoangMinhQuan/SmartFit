@@ -55,7 +55,7 @@ const NAV_ITEMS = [
   },
   {
     href: "/staff/staff",
-    label: "Staff",
+    label: "Staffs",
     icon: UserCog,
   },
   {
