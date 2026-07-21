@@ -4,7 +4,7 @@
   "description": "E-Commerce REST API — Node.js · Express 5 · PostgreSQL · TypeScript",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "seed": "npx tsx node_modules/knex/bin/cli.js seed:run",
