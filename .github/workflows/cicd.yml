@@ -55,7 +55,7 @@ jobs:
       - name: Build, Tag, and Push Docker Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets[matrix.ecr_repo_secret] }}
+          ECR_REPOSITORY: ${{ vars[matrix.ecr_repo_secret] }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ${{ matrix.dockerfile }} ${{ matrix.context }}
