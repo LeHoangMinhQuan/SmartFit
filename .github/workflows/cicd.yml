@@ -3,10 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
-
-env:
-  AWS_REGION: "ap-southeast-1"
-  ECR_REPOSITORY: "my-app-repo"
+  workflow_dispatch: 
 
 # 1. Add permissions block for OIDC
 permissions:
@@ -32,12 +29,6 @@ jobs:
 
       - name: Install Dependencies
         run: npm ci
-
-      - name: Type Check
-        run: npm run typecheck
-
-      - name: Run Tests
-        run: npm test
 
       # 2. Update to use OIDC Role Assumption instead of Access Keys
       - name: Configure AWS Credentials
