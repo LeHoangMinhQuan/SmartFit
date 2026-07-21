@@ -1,26 +1,4 @@
 services:
-  backend:
-    build:
-      context: ./be
-    container_name: backend
-    restart: unless-stopped
-    env_file:
-      - ./be/.env
-    expose:
-      - "3000"
-
-  frontend:
-    build:
-      context: ./fe
-    container_name: frontend
-    restart: unless-stopped
-    env_file:
-      - ./fe/.env
-    expose:
-      - "3000"
-    depends_on:
-      - backend
-
   postgres:
     image: postgres:17-alpine
     container_name: postgresql
@@ -31,3 +9,35 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    image: 976071095505.dkr.ecr.us-east-1.amazonaws.com/smartfit/be:latest
+    container_name: backend
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+
+
+  frontend:
+    image: 976071095505.dkr.ecr.us-east-1.amazonaws.com/smartfit/fe:latest
+    container_name: frontend
+    restart: unless-stopped
+    env_file:
+      - ./fe/.env
+    expose:
+      - "3001"
+    ports:
+      - "3001:3001"
+
+    depends_on:
+      - backend
+      - postgres
+

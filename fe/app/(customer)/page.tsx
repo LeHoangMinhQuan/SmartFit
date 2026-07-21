@@ -1,6 +1,7 @@
 import Carousel from "@/components/Carousel";
 import Image from "next/image";
 import { ProductCardProps } from "@/interfaces";
+import Link from "next/link";
 
 // Add this dummy data at the top of your file or in a separate constants file
 const NEW_ARRIVALS: ProductCardProps[] = [
@@ -121,9 +122,12 @@ export default function Home() {
               designed to bring out your individuality and cater to your sense
               of style.
             </p>
-            <button className="bg-black text-white px-10 py-4 rounded-full font-medium hover:bg-gray-800 transition-colors w-full md:w-auto">
+            <Link
+              href="/categories/all"
+              className="inline-block w-full rounded-full bg-black px-10 py-4 text-center font-medium text-white transition-colors hover:bg-gray-800 md:w-auto"
+            >
               Shop Now
-            </button>
+            </Link>
 
             {/* Stats */}
             <div className="flex flex-wrap gap-8 mt-12">
