@@ -62,12 +62,6 @@ router.patch(
   Admin.adjustQuantity,
 );
 
-// ─── Suppliers ────────────────────────────────────────────────────────────────
-router.get("/suppliers", Admin.listSuppliers);
-router.post("/suppliers", Admin.createSupplier);
-router.put("/suppliers/:supplier_id", Admin.updateSupplier);
-router.delete("/suppliers/:supplier_id", Admin.deleteSupplier);
-
 // ─── Users ────────────────────────────────────────────────────────────────────
 router.get("/users", Admin.listUsers);
 router.get("/users/:user_id", Admin.getUser);

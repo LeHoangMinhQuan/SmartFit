@@ -193,6 +193,12 @@ export interface PaymentTransaction {
   created_at: string;
 }
 
+// Suppliers
+export interface Supplier {
+  supplier_id: number;
+  name: string;
+}
+
 // Shipping
 export interface ShippingOrder {
   shipping_order_id: number;

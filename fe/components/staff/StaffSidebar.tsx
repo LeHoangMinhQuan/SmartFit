@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clsx } from "clsx";
@@ -10,13 +9,13 @@ import {
   FolderTree,
   ShoppingBag,
   Boxes,
+  Truck,
   TicketPercent,
   Users,
   UserCog,
   Store,
   LogOut,
 } from "lucide-react";
-
 const NAV_ITEMS = [
   {
     href: "/staff",
@@ -44,6 +43,11 @@ const NAV_ITEMS = [
     icon: Boxes,
   },
   {
+    href: "/staff/suppliers",
+    label: "Suppliers",
+    icon: Truck,
+  },
+  {
     href: "/staff/vouchers",
     label: "Vouchers",
     icon: TicketPercent,
@@ -64,17 +68,14 @@ const NAV_ITEMS = [
     icon: Store,
   },
 ];
-
 export default function StaffSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { name, logout } = useStaffAuthStore();
-
   function handleLogout() {
     logout();
     router.push("/staff/login");
   }
-
   return (
     <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-slate-200 bg-white/80 backdrop-blur-xl shadow-sm">
       <div className="border-b border-slate-200 p-6">
@@ -82,23 +83,19 @@ export default function StaffSidebar() {
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-blue-500 font-bold text-white shadow-lg">
             SF
           </div>
-
           <div>
             <h2 className="font-semibold text-slate-900">SmartFit Admin</h2>
             <p className="text-sm text-slate-500">{name ?? "Administrator"}</p>
           </div>
         </div>
       </div>
-
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {NAV_ITEMS.map((item) => {
           const active =
             item.href === "/staff"
               ? pathname === "/staff"
               : pathname.startsWith(item.href);
-
           const Icon = item.icon;
-
           return (
             <Link
               key={item.href}
@@ -119,13 +116,11 @@ export default function StaffSidebar() {
                     : "text-slate-500 group-hover:text-slate-700",
                 )}
               />
-
               <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
-
       <div className="border-t px-2 py-4">
         <button
           onClick={handleLogout}

@@ -245,8 +245,18 @@ export const adjustQuantity = catchAsync(
 
 export const getImportHistory = catchAsync(
   async (req: Request, res: Response) => {
+    const { page, limit } = req.query as any;
     const result = await InventoryService.getImportHistory(req.query as any);
-    res.json({ data: result.rows, meta: { total: result.total } });
+    const limitNum = Number(limit ?? 50);
+    res.json({
+      data: result.rows,
+      meta: {
+        page: Number(page ?? 1),
+        limit: limitNum,
+        total: result.total,
+        totalPages: Math.ceil(result.total / limitNum),
+      },
+    });
   },
 );
 
@@ -255,37 +265,6 @@ export const recordImport = catchAsync(async (req: Request, res: Response) => {
   await InventoryService.recordImport({ ...req.body, staff_id });
   res.status(201).json({ data: { message: "Import recorded" } });
 });
-
-export const listSuppliers = catchAsync(
-  async (_req: Request, res: Response) => {
-    const suppliers = await InventoryService.listSuppliers();
-    res.json({ data: suppliers });
-  },
-);
-
-export const createSupplier = catchAsync(
-  async (req: Request, res: Response) => {
-    const result = await InventoryService.createSupplier(req.body.name);
-    res.status(201).json({ data: result });
-  },
-);
-
-export const updateSupplier = catchAsync(
-  async (req: Request, res: Response) => {
-    await InventoryService.updateSupplier(
-      Number(req.params["supplier_id"]),
-      req.body.name,
-    );
-    res.json({ data: { message: "Supplier updated" } });
-  },
-);
-
-export const deleteSupplier = catchAsync(
-  async (req: Request, res: Response) => {
-    await InventoryService.deleteSupplier(Number(req.params["supplier_id"]));
-    res.status(204).send();
-  },
-);
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
