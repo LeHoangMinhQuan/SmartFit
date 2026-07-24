@@ -3,15 +3,29 @@
 import { useState } from "react";
 import { ProductCardProps } from "@/interfaces";
 import ProductCard from "./product/ProductCard";
+import clsx from "clsx";
 
 
-export default function Carousel({ title, data }: { title: string; data: ProductCardProps[] }) {
+interface CarouselProps {
+  title: string;
+  data: ProductCardProps[];
+  isFirst?: boolean;
+  isLast?: boolean;
+}
+
+export default function Carousel({ title, data, isFirst, isLast }: CarouselProps) {
   const [showAll, setShowAll] = useState(false);
 
   const visibleProducts = showAll ? data : data.slice(0, 4); // always slice 4, grid will handle layout
 
   return (
-    <section className="mx-auto md:px-8 md:py-16 lg:px-16 lg:py-24 bg-[#F2F0F1]">
+    <section
+      className={clsx(
+        "mx-auto bg-[#F2F0F1] md:px-8 lg:px-16",
+        isLast ? "pt-0" : "md:pt-16 lg:pt-24",
+        isFirst ? "pb-0" : "md:pb-16 lg:pb-24",
+      )}
+    >
       <h2 className="text-3xl text-black md:text-5xl font-black text-center uppercase mb-10">
         {title}
       </h2>

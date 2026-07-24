@@ -12,31 +12,25 @@ const API_BASE = process.env.NEXT_PUBLIC_BASE_URL;
  */
 export const logoutService = async (): Promise<void> => {
   const { accessToken, clearAuth } = useAuthStore.getState();
-
-  // Retrieve the raw refresh token — stored separately in localStorage
-  // (not in Zustand, since it's a one-time-use credential).
   const refreshToken = localStorage.getItem("refreshToken");
 
   try {
-    const response = await axios.post(
+    await axios.post(
       `${API_BASE}/logout`,
       { refreshToken },
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
-        // Don't throw on non-2xx so we can still clear state on network errors
+        // We don't care if the server returns 401/500, we just want to attempt to tell it.
         validateStatus: () => true,
       },
     );
-
-    if (response.status === 204) {
-      // Server confirmed the token row is deleted — clear everything client-side
-      clearAuth();
-      localStorage.removeItem("refreshToken");
-    }
-  } catch {
-    // Network failure — clear client state anyway so the user isn't stuck
+  } catch (error) {
+    // Optional: Log network errors if needed, but no action required here
+    console.error("Logout request failed:", error);
+  } finally {
+    // ALWAYS clear the local state, no matter what the server responded
     clearAuth();
     localStorage.removeItem("refreshToken");
   }

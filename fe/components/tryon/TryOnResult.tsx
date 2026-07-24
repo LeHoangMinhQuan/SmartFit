@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { tryonService } from "../../services/tryon.service";
 import Spinner from "../ui/Spinner";
-import type { TryOnSession } from "../../interfaces";
+import type { TryOnPollResult, TryOnFailureReason } from "../../interfaces";
 
 interface TryOnResultProps {
   sessionId: number;
@@ -12,30 +12,41 @@ interface TryOnResultProps {
 
 const POLL_MS = 3000;
 
+// User-facing copy per backend failure reason (tryon.config.ts
+// TryonFailureReason). Falls back to a generic message for any reason not
+// listed here so a backend addition can't blank the UI.
+const FAILURE_MESSAGES: Record<TryOnFailureReason, string> = {
+  endpoint_not_registered:
+    "The try-on service isn't connected right now. Please try again shortly.",
+  endpoint_offline:
+    "The try-on service is temporarily offline. Please try again shortly.",
+  inference_error:
+    "Something went wrong generating your preview. Please try again.",
+  timeout: "Generation took too long and timed out. Please try again.",
+};
+
 export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
-  const [status, setStatus] = useState<TryOnSession["status"]>("processing");
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [poll, setPoll] = useState<TryOnPollResult>({ status: "processing" });
   const [rateLimited, setRateLimited] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    function poll() {
+    function doPoll() {
       tryonService
         .getPreviewStatus(sessionId)
-        .then((session) => {
-          setStatus(session.status);
-          if (session.status === "ready") {
-            setResultUrl(session.result_url ?? null);
-            clearInterval(timerRef.current!);
-          } else if (session.status === "failed") {
+        .then((result) => {
+          setPoll(result);
+          if (result.status === "ready" || result.status === "failed") {
             clearInterval(timerRef.current!);
           }
         })
         .catch((err) => {
           if (err?.response?.status === 429) {
-            // Rate limited — 5 requests per 10 minutes
+            // NOTE: a 429 while polling comes from the global 200/15min
+            // limiter, NOT the 5/10min limiter on session creation — the
+            // two are different limits on different endpoints.
             clearInterval(timerRef.current!);
             setRateLimited(true);
             setCountdown(60); // show 60s countdown before allowing retry
@@ -54,8 +65,8 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
         });
     }
 
-    poll();
-    timerRef.current = setInterval(poll, POLL_MS);
+    doPoll();
+    timerRef.current = setInterval(doPoll, POLL_MS);
     return () => {
       clearInterval(timerRef.current!);
       clearInterval(countdownRef.current!);
@@ -66,7 +77,7 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
     return (
       <div className="flex flex-col items-center gap-3 py-8 text-center">
         <p className="text-sm text-orange-600 font-medium">
-          Rate limit reached (5 try-ons per 10 minutes).
+          Too many requests — please slow down a moment.
         </p>
         <p className="text-xs text-gray-500">
           Please wait {countdown}s before trying again.
@@ -81,7 +92,7 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
     );
   }
 
-  if (status === "processing") {
+  if (poll.status === "processing") {
     return (
       <div className="flex flex-col items-center gap-4 py-12">
         <Spinner size="lg" />
@@ -90,12 +101,13 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
     );
   }
 
-  if (status === "failed" || !resultUrl) {
+  if (poll.status === "failed") {
+    const message =
+      FAILURE_MESSAGES[poll.reason] ??
+      "Preview generation failed. Please try again.";
     return (
       <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <p className="text-sm text-red-600">
-          Preview generation failed. Please try again.
-        </p>
+        <p className="text-sm text-red-600">{message}</p>
         <button
           onClick={onReset}
           className="rounded-lg border border-gray-300 px-5 py-2 text-sm hover:bg-gray-50"
@@ -106,16 +118,17 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
     );
   }
 
+  // poll.status === "ready"
   return (
     <div className="flex flex-col items-center gap-4">
       <img
-        src={resultUrl}
+        src={poll.result_url}
         alt="Try-on result"
         className="max-h-[500px] rounded-xl object-contain shadow-md"
       />
       <div className="flex gap-3">
         <a
-          href={resultUrl}
+          href={poll.result_url}
           download="tryon-result.jpg"
           className="rounded-lg bg-black px-5 py-2 text-sm text-white hover:bg-gray-800"
         >

@@ -290,6 +290,19 @@ export interface WishlistItem {
 // Try-On
 export type TryOnStatus = "processing" | "ready" | "failed";
 
+// Cloth-type mirrors the backend's clothTypeEnum (tryon.schema.ts), which
+// maps 1:1 to Leffa's garment-type labels on the Kaggle side: 'upper' ->
+// 'upper_body', 'lower' -> 'lower_body', 'overall' -> 'dresses'.
+export type ClothType = "upper" | "lower" | "overall";
+
+export type TryOnFailureReason =
+  | "endpoint_not_registered"
+  | "endpoint_offline"
+  | "inference_error"
+  | "timeout";
+
+// DB row shape (tryon_session table). NOT what GET /tryon/preview/:id
+// returns — see TryOnPollResult below for that.
 export interface TryOnSession {
   session_id: number;
   user_id: number;
@@ -301,6 +314,16 @@ export interface TryOnSession {
   created_at: string;
   expires_at: string;
 }
+
+// What GET /tryon/preview/:session_id actually returns — a discriminated
+// union, per swagger's TryonPollResult schema. 'processing' has no other
+// fields; 'ready' adds result_url/expires_at; 'failed' adds reason. Do NOT
+// reuse TryOnSession here — that's the DB row shape and doesn't match
+// (no session_id/user_id/etc. come back from this endpoint).
+export type TryOnPollResult =
+  | { status: "processing" }
+  | { status: "ready"; result_url: string; expires_at: string }
+  | { status: "failed"; reason: TryOnFailureReason };
 
 // Staff
 export interface Staff {

@@ -7,17 +7,17 @@ import RegisterModal from "@/components/auth/RegisterModal";
 import UserMenu from "@/components/UserMenu";
 
 export default function Header() {
-  const cartItems = useCartStore((state) => state.items);
+  const cartItems = useCartStore((state) => state.items ?? []);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-
-const {
-  loginOpen,
-  registerOpen,
-  openLogin,
-  openRegister,
-  closeLogin,
-  closeRegister,
-} = useAuthModalStore();
+  
+  const {
+    loginOpen,
+    registerOpen,
+    openLogin,
+    openRegister,
+    closeLogin,
+    closeRegister,
+  } = useAuthModalStore();
 
   return (
     <>

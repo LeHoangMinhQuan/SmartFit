@@ -206,14 +206,28 @@ components:
         usage_count: { type: integer }
         description: { type: string, maxLength: 30 }
 
-    TryonSession:
+    TryonSessionCreated:
       type: object
+      description: Response of POST /tryon/session. Returned directly, no `data` envelope.
       properties:
         session_id: { type: integer }
-        status: { type: string, enum: [processing, ready, failed] }
-        result_url: { type: string, nullable: true }
         expires_at: { type: string, format: date-time }
-        reason: {type: string, enum: [endpoint_not_registered, endpoint_offline, inference_error, timeout], nullable: true}
+
+    TryonPollResult:
+      type: object
+      description: >
+        Response of GET /tryon/preview/{session_id}. Returned directly, no `data`
+        envelope. Fields present depend on `status` (discriminated union) — `result_url`/
+        `expires_at` only appear when status=ready, `reason` only when status=failed.
+      properties:
+        status: { type: string, enum: [processing, ready, failed] }
+        result_url: { type: string, nullable: true, description: "Present only when status=ready" }
+        expires_at: { type: string, format: date-time, description: "Present only when status=ready" }
+        reason:
+          type: string
+          nullable: true
+          description: "Present only when status=failed"
+          enum: [endpoint_not_registered, endpoint_offline, inference_error, timeout]
 
 # ─── Paths ──────────────────────────────────────────────────────────────────────
 paths:
@@ -1189,12 +1203,20 @@ paths:
           application/x-www-form-urlencoded:
             schema:
               type: object
+              description: >-
+                Field names below (vnp_ prefix) are VNPay's own IPN parameter
+                names, fixed by VNPay's API — distinct from this app's
+                internal payment_transaction column naming, which is
+                confirmed as vnpay_* (verified against the live DB and
+                codebase). Don't confuse the two: VNPay sends vnp_TxnRef
+                over the wire; the app then stores it internally as
+                vnpay_txn_ref.
               properties:
-                vnpay_TxnRef: { type: string }
-                vnpay_Amount: { type: string }
-                vnpay_ResponseCode: { type: string }
-                vnpay_TransactionStatus: { type: string }
-                vnpay_SecureHash: { type: string }
+                vnp_TxnRef: { type: string }
+                vnp_Amount: { type: string }
+                vnp_ResponseCode: { type: string }
+                vnp_TransactionStatus: { type: string }
+                vnp_SecureHash: { type: string }
       responses:
         "200":
           description: Always 200 — check RspCode in body
@@ -2311,22 +2333,15 @@ paths:
       responses:
         "201":
           {
-            description: Session created,
+            description: "Session created — response body is TryonSessionCreated directly, no `data` envelope",
             content:
               {
                 application/json:
-                  {
-                    schema:
-                      {
-                        type: object,
-                        properties:
-                          {
-                            data: { $ref: "#/components/schemas/TryonSession" },
-                          },
-                      },
-                  },
+                  { schema: { $ref: "#/components/schemas/TryonSessionCreated" } },
               },
           }
+        "400": { description: photo missing, or not jpeg/png/webp, or over 10MB }
+        "422": { description: Validation failed — product_id/variant_id missing or invalid }
         "429": { description: Rate limit — 5 per 10 minutes }
 
   /tryon/session/{session_id}:
@@ -2343,6 +2358,8 @@ paths:
           }
       responses:
         "204": { description: Deleted }
+        "403": { description: Not your try-on session }
+        "404": { description: Try-on session not found }
 
   /tryon/preview:
     post:
@@ -2367,8 +2384,10 @@ paths:
           {
             description: "Job enqueued — poll /tryon/preview/{session_id} for result",
           }
-        "403": { description: Session not found or access denied }
+        "404": { description: "Try-on session not found, or no product image found for the session's variant" }
+        "403": { description: Not your try-on session }
         "410": { description: Session expired }
+        "422": { description: Validation failed — session_id missing or invalid }
 
   /tryon/preview/{session_id}:
     get:
@@ -2384,14 +2403,13 @@ paths:
           }
       responses:
         "200":
-          description: Current status
+          description: "Current status — response body is TryonPollResult directly, no `data` envelope"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: "#/components/schemas/TryonSession"
+                $ref: "#/components/schemas/TryonPollResult"
+        "403": { description: Not your try-on session }
+        "404": { description: Try-on session not found }
 
   # ── Uploads ──────────────────────────────────────────────────────────────────
   /uploads/images:

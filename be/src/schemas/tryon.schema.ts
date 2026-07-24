@@ -1,6 +1,12 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-export const clothTypeEnum = z.enum(['upper', 'lower', 'overall']);
+/**
+ * Maps 1:1 to Leffa's garment-type labels on the Kaggle side (GARMENT_TYPE_MAP
+ * in the notebook): 'upper' -> 'upper_body', 'lower' -> 'lower_body',
+ * 'overall' -> 'dresses'. If Leffa's label set ever changes, update the
+ * Python map — this enum does not need to change to match.
+ */
+export const clothTypeEnum = z.enum(["upper", "lower", "overall"]);
 export type ClothType = z.infer<typeof clothTypeEnum>;
 
 /**
@@ -28,7 +34,7 @@ export const tryonSessionUploadSchema = z.object({
 export const tryonPreviewSchema = z.object({
   body: z.object({
     session_id: z.coerce.number().int().positive(),
-    cloth_type: clothTypeEnum.optional().default('upper'),
+    cloth_type: clothTypeEnum.optional().default("upper"),
   }),
 });
 
@@ -42,7 +48,9 @@ export const tryonSessionIdParamSchema = z.object({
 /** PUT /api/admin/tryon/endpoint */
 export const adminTryonEndpointSchema = z.object({
   body: z.object({
-    base_url: z.string().url(),
-    shared_secret: z.string().min(16, 'shared_secret should be a long random value'),
+    base_url: z.url(),
+    shared_secret: z
+      .string()
+      .min(16, "shared_secret should be a long random value"),
   }),
 });

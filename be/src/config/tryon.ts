@@ -1,7 +1,7 @@
 /**
  * config/tryon.ts
  *
- * Holds the CURRENT Kaggle/CatVTON inference endpoint. This is deliberately
+ * Holds the CURRENT Kaggle/Leffa inference endpoint. This is deliberately
  * an in-memory singleton, not an .env var and not a DB row — the ngrok/
  * cloudflared URL changes every time the Kaggle notebook (re)starts, so
  * baking it into a static config would go stale within hours.
@@ -16,10 +16,10 @@
  */
 
 export type TryonFailureReason =
-  | 'endpoint_not_registered'
-  | 'endpoint_offline'
-  | 'inference_error'
-  | 'timeout';
+  | "endpoint_not_registered"
+  | "endpoint_offline"
+  | "inference_error"
+  | "timeout";
 
 export interface TryonEndpointConfig {
   base_url: string | null;
@@ -38,7 +38,7 @@ let current: TryonEndpointConfig = {
 /** Register (or rotate) the current Kaggle tunnel URL + shared secret. */
 export function setEndpoint(base_url: string, shared_secret: string): void {
   current = {
-    base_url: base_url.replace(/\/+$/, ''), // strip trailing slash
+    base_url: base_url.replace(/\/+$/, ""), // strip trailing slash
     shared_secret,
     last_health_check_at: null,
     last_health_check_ok: false,
@@ -51,13 +51,22 @@ export function getEndpoint(): TryonEndpointConfig {
 
 /** Called after every /health probe (registration-time or inference-time). */
 export function recordHealthCheck(ok: boolean): void {
-  current = { ...current, last_health_check_at: new Date(), last_health_check_ok: ok };
+  current = {
+    ...current,
+    last_health_check_at: new Date(),
+    last_health_check_ok: ok,
+  };
 }
 
 export const tryonConstants = {
-  S3_PREFIX: 'tryon-sessions',
+  S3_PREFIX: "tryon-sessions",
   MAX_PHOTO_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB
-  ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/webp'] as const,
+  ALLOWED_MIME_TYPES: ["image/jpeg", "image/png", "image/webp"] as const,
   HEALTH_CHECK_TIMEOUT_MS: 5000,
-  INFERENCE_TIMEOUT_MS: 90_000, // CatVTON diffusion inference + queue wait
+  // Leffa/VITON-HD single-image inference on Kaggle's free-tier GPU runs
+  // ~75s at 30 steps (see the Kaggle notebook's num_inference_steps comment).
+  // This timeout only bounds the /infer HTTP call itself — the job has
+  // already left tryonQueue by the time this timer starts — so 90s leaves
+  // a ~15s margin for GPU variance, not queue wait.
+  INFERENCE_TIMEOUT_MS: 90_000,
 };

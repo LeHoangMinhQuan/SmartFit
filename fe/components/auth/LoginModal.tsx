@@ -9,6 +9,8 @@ import { useCartStore } from "@/store/useCartStore";
 import api from "@/lib/axios";
 import { cartService } from "@/services/cart.service";
 import { toast } from "@/components/ui/Toast";
+import { Eye, EyeOff } from "lucide-react";
+import { signIn } from "next-auth/react";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -33,6 +35,7 @@ export default function LoginModal({
   const [password, setPassword] = useState(initialState.password);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const resetForm = useCallback(() => {
     setEmail(initialState.email);
@@ -85,7 +88,7 @@ export default function LoginModal({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -165,18 +168,31 @@ export default function LoginModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">
                 Password
               </label>
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#F0F0F0] rounded-xl px-4 py-3 outline-none text-black"
-                required
-                disabled={loading}
-              />
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-xl bg-[#F0F0F0] px-4 py-3 pr-12 outline-none text-black transition focus:ring-2 focus:ring-black/10"
+                  required
+                  disabled={loading}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  disabled={loading}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-3 flex items-center text-gray-400 transition hover:text-gray-700 disabled:cursor-not-allowed"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -217,25 +233,15 @@ export default function LoginModal({
               </span>
             </div>
           </div>
-          <div className="mt-6 grid grid-cols-2 gap-4">
+          <div className="mt-6 grid grid-cols-1">
             <button
               type="button"
+              onClick={() => signIn("google")}
               className="border border-gray-200 py-3 rounded-xl flex justify-center hover:bg-gray-50 transition"
             >
               <Image
                 src="/images/google.svg"
                 alt="Google"
-                width={32}
-                height={32}
-              />
-            </button>
-            <button
-              type="button"
-              className="border border-gray-200 py-3 rounded-xl flex justify-center hover:bg-gray-50 transition"
-            >
-              <Image
-                src="/images/facebook.svg"
-                alt="Facebook"
                 width={32}
                 height={32}
               />

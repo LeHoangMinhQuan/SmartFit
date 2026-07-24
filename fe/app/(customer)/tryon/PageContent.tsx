@@ -9,7 +9,7 @@ import { toast } from "../../../components/ui/Toast";
 import Spinner from "../../../components/ui/Spinner";
 import PhotoUpload from "../../../components/tryon/PhotoUpload";
 import TryOnResult from "../../../components/tryon/TryOnResult";
-import type { Product, ProductVariant } from "../../../interfaces";
+import type { Product, ProductVariant, ClothType } from "../../../interfaces";
 
 type Stage = "upload" | "result";
 
@@ -18,6 +18,11 @@ interface Props {
   variantId: number;
 }
 
+const CLOTH_TYPE_OPTIONS: { value: ClothType; label: string }[] = [
+  { value: "upper", label: "Top" },
+  { value: "lower", label: "Bottom" },
+  { value: "overall", label: "Dress" },
+];
 
 export default function TryOnPage({ productId, variantId }: Props) {
   const router = useRouter();
@@ -29,6 +34,7 @@ export default function TryOnPage({ productId, variantId }: Props) {
   const [stage, setStage] = useState<Stage>("upload");
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [clothType, setClothType] = useState<ClothType>("upper");
 
   useEffect(() => {
     if (!user) router.replace("/");
@@ -53,11 +59,19 @@ export default function TryOnPage({ productId, variantId }: Props) {
   async function handlePhoto(file: File) {
     setSubmitting(true);
     try {
-      const { session_id } = await tryonService.uploadPhoto(file);
+      // product_id/variant_id pin the session at upload time — they are
+      // required by the backend here, not at preview time (see
+      // tryon.service.ts).
+      const { session_id } = await tryonService.uploadPhoto(
+        file,
+        productId,
+        variantId,
+      );
+      // Only session_id + cloth_type go to /preview; product_id/variant_id
+      // are already pinned to the session.
       await tryonService.requestPreview({
         session_id,
-        product_id: productId,
-        variant_id: variantId,
+        cloth_type: clothType,
       });
       setSessionId(session_id);
       setStage("result");
@@ -126,7 +140,32 @@ export default function TryOnPage({ productId, variantId }: Props) {
           </p>
 
           {stage === "upload" ? (
-            <PhotoUpload onFile={handlePhoto} disabled={submitting} />
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="mb-2 text-xs font-medium text-gray-500">
+                  Garment type
+                </p>
+                <div className="flex gap-2">
+                  {CLOTH_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => setClothType(opt.value)}
+                      className={
+                        "rounded-full border px-4 py-1.5 text-sm transition disabled:opacity-50 " +
+                        (clothType === opt.value
+                          ? "border-black bg-black text-white"
+                          : "border-gray-300 text-gray-600 hover:border-gray-500")
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <PhotoUpload onFile={handlePhoto} disabled={submitting} />
+            </div>
           ) : (
             sessionId && (
               <TryOnResult sessionId={sessionId} onReset={handleReset} />
