@@ -58,6 +58,13 @@ export const categoryService = {
     };
   },
 
+  async getFeaturedCategories(): Promise<Category[]> {
+    const { data } = await api.get<{ data: Category[] }>(
+      "/categories/featured",
+    );
+    return data.data;
+  },
+
   async createCategory(body: {
     name: string;
     parent_id?: number | null;

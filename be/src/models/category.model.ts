@@ -4,6 +4,9 @@ export interface Category {
   category_id?: number;
   name: string;
   parent_id?: number | null;
+  is_featured?: boolean;
+  display_order?: number | null;
+  image_url?: string | null;
 }
 
 export async function findAllCategories() {
@@ -30,6 +33,17 @@ export async function updateCategory(
 
 export async function deleteCategory(category_id: number) {
   return db("category").where({ category_id }).delete();
+}
+
+export async function findFeaturedCategories() {
+  return db("category")
+    .where({ is_featured: true })
+    .orderBy("display_order", "asc")
+    .select("*");
+}
+
+export async function setCategoryImage(category_id: number, image_url: string) {
+  return db("category").where({ category_id }).update({ image_url });
 }
 
 /**

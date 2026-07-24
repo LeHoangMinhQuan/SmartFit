@@ -218,6 +218,25 @@ export const deleteCategory = catchAsync(
   },
 );
 
+export const getFeaturedCategories = catchAsync(
+  async (_req: Request, res: Response) => {
+    const categories = await ProductService.getFeaturedCategories();
+    res.json({ data: categories });
+  },
+);
+
+export const uploadCategoryImage = catchAsync(
+  async (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image file provided" });
+    }
+    const s3Url = (req.file as Express.MulterS3.File).location;
+    const category_id = Number(req.params["category_id"]);
+    const result = await ProductService.setCategoryImage(category_id, s3Url);
+    res.json({ data: result });
+  },
+);
+
 // ─── Reviews ─────────────────────────────────────────────────────────────────
 
 export const getProductReviews = catchAsync(

@@ -99,9 +99,12 @@ export interface VariantSelectorProps {
 // Category
 export interface Category {
   category_id: number;
-  name: string; // VARCHAR(30)
+  name: string;
   parent_id: number | null;
   children?: Category[];
+  is_featured?: boolean;
+  display_order?: number | null;
+  image_url?: string | null;
 }
 
 // Discount (variant-level markdown)

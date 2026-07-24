@@ -2,6 +2,8 @@ import Carousel from "@/components/Carousel";
 import Image from "next/image";
 import { ProductCardProps } from "@/interfaces";
 import Link from "next/link";
+import { categoryService } from "@/services/category.service";
+
 
 // Add this dummy data at the top of your file or in a separate constants file
 const NEW_ARRIVALS: ProductCardProps[] = [
@@ -102,7 +104,9 @@ const STYLES = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const featuredCategories = await categoryService.getFeaturedCategories();
+
   return (
     <div className="w-full">
       {/* HERO SECTION */}
@@ -181,35 +185,50 @@ export default function Home() {
       {/* TOP SELLINGS */}
       <Carousel title="Top Selling" data={NEW_ARRIVALS} />
 
-      {/* BROWSE BY DRESS STYLE */}
+      {/* BROWSE BY CATEGORY (was "Browse By dress style") */}
       <section className="max-w-7xl mx-auto px-4 py-16">
         <div className="bg-[#F0F0F0] rounded-[40px] p-8 md:p-16">
           <h2 className="text-3xl text-black md:text-5xl font-black text-center uppercase mb-12">
-            Browse By dress style
+            Browse By Category
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 h-auto md:h-[600px]">
-            {STYLES.map((style) => (
-              <div
-                key={style.name}
-                className={`relative bg-white rounded-3xl overflow-hidden group cursor-pointer ${style.colSpan}`}
-              >
-                <div className="absolute top-6 left-8 z-10">
-                  <h3 className="text-2xl text-black font-bold">
-                    {style.name}
-                  </h3>
-                </div>
-                <Image
-                  src={style.imageUrl}
-                  alt={style.name}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover object-right-top transition-transform group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gray-200"></div>{" "}
-                {/* Placeholder */}
-              </div>
-            ))}
-          </div>
+
+          {featuredCategories.length ===
+          0 ? // No categories marked featured yet — section simply doesn't
+          // render rather than showing broken/placeholder tiles.
+          null : (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 h-auto md:h-[600px]">
+              {featuredCategories.map((category, i) => (
+                <Link
+                  key={category.category_id}
+                  href={`/category/${encodeURIComponent(category.name)}`}
+                  className={`relative bg-white rounded-3xl overflow-hidden group cursor-pointer ${
+                    i % 3 === 2
+                      ? "col-span-1 md:col-span-8"
+                      : "col-span-1 md:col-span-4"
+                  }`}
+                >
+                  <div className="absolute top-6 left-8 z-10">
+                    <h3 className="text-2xl text-black font-bold">
+                      {category.name}
+                    </h3>
+                  </div>
+                  {category.image_url && (
+                    <Image
+                      src={category.image_url}
+                      alt={category.name}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-cover object-right-top transition-transform group-hover:scale-105"
+                    />
+                  )}
+                  {/* bg-gray-200 placeholder overlay removed — it was
+                      stacking on top of the image, not behind it, and is
+                      no longer needed now that image_url is always a real
+                      uploaded S3 asset for any category that reaches here. */}
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </section>
       {/* REST OF PAGE (Top Selling, etc.) */}

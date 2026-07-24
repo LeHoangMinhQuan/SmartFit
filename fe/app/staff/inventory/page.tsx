@@ -218,10 +218,6 @@ export default function StaffInventoryPage() {
     }
   }
 
-  // Hidden while actively filling the Record Import form — that form has
-  // its own Store field, and showing two "Store" selects on screen at once
-  // (this one scoped to browsing Stock, the form's scoped to the import)
-  // was confusing about which one actually mattered.
   const showTopStoreSelector = !(tab === "history" && showImportForm);
 
   return (

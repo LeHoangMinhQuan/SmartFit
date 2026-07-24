@@ -1,9 +1,7 @@
 import { Knex } from "knex";
 
 export async function seed(knex: Knex): Promise<void> {
-  const existing = await knex("delivery_provider")
-    .whereRaw("LOWER(code::text) = '2'")
-    .first();
+  const existing = await knex("delivery_provider").where({ code: 2 }).first();
 
   let provider_id: number;
 

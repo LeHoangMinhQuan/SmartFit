@@ -2,95 +2,210 @@ import { Knex } from "knex";
 
 /**
  * Optional demo seed for local development.
- * Creates a sample category, product, variant, and price so the
- * cart/order flows can be tested without manual setup.
+ * Creates 3 top-level categories (2 featured, for the landing page's
+ * "Browse By Category" section) plus 1 nested category, and 8 demo products
+ * spread across them with variants, attributes, prices, and inventory — so
+ * cart/order/category-browsing/homepage flows can all be exercised without
+ * manual setup.
+ *
+ * Safe to re-run: guards on both the demo product name and (since
+ * category.name is now case-insensitively unique — category_name_unique_ci)
+ * on each category/attribute name individually, rather than bailing out
+ * entirely on a single check.
+ *
+ * NOTE: store_product inserts are skipped if no store row exists yet.
+ * None of the seed files 01–06 create a store — if you need inventory
+ * populated, seed a store first (not included here since it wasn't part
+ * of the provided seed set).
  */
 export async function seed(knex: Knex): Promise<void> {
   const existing = await knex("product")
     .whereRaw("LOWER(name) = 'demo shirt'")
     .first();
   if (existing) {
-    console.log("Demo products already seeded — skipping.");
+    console.log("Demo data already seeded — skipping.");
     return;
   }
 
-  // Category
-  const [catRow] = await knex("category")
-    .insert({ name: "Shirts", parent_id: null })
-    .returning("category_id");
-  const category_id: number = catRow.category_id;
+  async function getOrCreateCategory(
+    name: string,
+    parent_id: number | null,
+    opts: {
+      is_featured?: boolean;
+      display_order?: number;
+      image_url?: string;
+    } = {},
+  ): Promise<number> {
+    const found = await knex("category")
+      .whereRaw("LOWER(name) = LOWER(?)", [name])
+      .first();
+    if (found) return found.category_id;
 
-  // Product (name ≤ 20, description ≤ 100)
-  const [prodRow] = await knex("product")
-    .insert({
-      name: "Demo Shirt",
-      description: "A sample product for testing.",
-    })
-    .returning("product_id");
-  const product_id: number = prodRow.product_id;
+    const [row] = await knex("category")
+      .insert({ name, parent_id, ...opts })
+      .returning("category_id");
+    return row.category_id;
+  }
 
-  // product_category
-  await knex("product_category").insert({ product_id, category_id });
+  async function getOrCreateAttribute(name: string): Promise<number> {
+    const found = await knex("attribute")
+      .whereRaw("LOWER(name) = LOWER(?)", [name])
+      .first();
+    if (found) return found.attribute_id;
+    const [row] = await knex("attribute")
+      .insert({ name })
+      .returning("attribute_id");
+    return row.attribute_id;
+  }
 
-  // Variant (variant_id app-supplied, starting at 1)
-  await knex("product_variant").insert({
-    product_id,
-    variant_id: 1,
-    name: "Blue / M",
+  // ── Categories ──────────────────────────────────────────────────────────
+  const shirtsId = await getOrCreateCategory("Shirts", null, {
+    is_featured: true,
+    display_order: 1,
+    image_url:
+      "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=800",
   });
+  const pantsId = await getOrCreateCategory("Pants", null, {
+    is_featured: true,
+    display_order: 2,
+    image_url:
+      "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800",
+  });
+  const jacketsId = await getOrCreateCategory("Jackets", null); // not featured — exercises the "unfeatured category" path
+  await getOrCreateCategory("Formal", shirtsId); // nested under Shirts — exercises tree depth, no products assigned
 
-  // Attribute catalog entry
-  const [colorAttr] = await knex("attribute")
-    .insert({ name: "Color" })
-    .returning("attribute_id");
-  const [sizeAttr] = await knex("attribute")
-    .insert({ name: "Size" })
-    .returning("attribute_id");
+  // ── Attributes ──────────────────────────────────────────────────────────
+  const colorAttr = await getOrCreateAttribute("Color");
+  const sizeAttr = await getOrCreateAttribute("Size");
 
-  // Attach attributes to variant
-  await knex("product_attribute").insert([
-    {
-      attribute_id: colorAttr.attribute_id,
-      product_id,
-      variant_id: 1,
-      value: "Blue",
-    },
-    {
-      attribute_id: sizeAttr.attribute_id,
-      product_id,
-      variant_id: 1,
-      value: "M",
-    },
-  ]);
-
-  // Price: one row per variant (upsert not needed here, it's fresh)
+  // ── Products (name ≤ 20 chars, description ≤ 100 chars) ───────────────────
   const start_date = new Date("2025-01-01").toISOString();
   const end_date = new Date("2027-12-31").toISOString();
   await knex("price_history")
     .insert({ start_date, end_date })
     .onConflict(["start_date", "end_date"])
     .ignore();
-  await knex("product_price").insert({
-    product_id,
-    variant_id: 1,
-    base_price: 299000,
-    start_date,
-    end_date,
-  });
 
-  // Inventory: assign to store 1 if it exists
+  const products = [
+    {
+      name: "Demo Shirt",
+      description: "A sample product for testing.",
+      category_id: shirtsId,
+      color: "Blue",
+      size: "M",
+      price: 299000,
+    },
+    {
+      name: "Striped Shirt",
+      description: "Classic striped cotton shirt.",
+      category_id: shirtsId,
+      color: "White",
+      size: "L",
+      price: 349000,
+    },
+    {
+      name: "Formal White Shirt",
+      description: "Slim-fit formal shirt.",
+      category_id: shirtsId,
+      color: "White",
+      size: "M",
+      price: 399000,
+    },
+    {
+      name: "Slim Fit Jeans",
+      description: "Stretch denim, slim cut.",
+      category_id: pantsId,
+      color: "Indigo",
+      size: "32",
+      price: 459000,
+    },
+    {
+      name: "Chino Pants",
+      description: "Everyday chino trousers.",
+      category_id: pantsId,
+      color: "Khaki",
+      size: "32",
+      price: 379000,
+    },
+    {
+      name: "Denim Jacket",
+      description: "Classic denim jacket.",
+      category_id: jacketsId,
+      color: "Blue",
+      size: "L",
+      price: 599000,
+    },
+    {
+      name: "Bomber Jacket",
+      description: "Lightweight bomber jacket.",
+      category_id: jacketsId,
+      color: "Black",
+      size: "M",
+      price: 649000,
+    },
+    {
+      name: "Windbreaker",
+      description: "Water-resistant windbreaker.",
+      category_id: jacketsId,
+      color: "Green",
+      size: "L",
+      price: 529000,
+    },
+  ];
+
   const store = await knex("store").first();
-  if (store) {
-    await knex("store_product")
-      .insert({
-        product_id,
-        variant_id: 1,
-        store_id: store.store_id,
-        quantity: 100,
-      })
-      .onConflict(["product_id", "variant_id", "store_id"])
-      .ignore();
+
+  for (const p of products) {
+    const [prodRow] = await knex("product")
+      .insert({ name: p.name, description: p.description })
+      .returning("product_id");
+    const product_id: number = prodRow.product_id;
+
+    await knex("product_category").insert({
+      product_id,
+      category_id: p.category_id,
+    });
+
+    await knex("product_variant").insert({
+      product_id,
+      variant_id: 1,
+      is_primary: true, // only variant for this demo product — schema audit found this column was previously undocumented/unset
+      name: `${p.color} / ${p.size}`,
+    });
+
+    await knex("product_attribute").insert([
+      { attribute_id: colorAttr, product_id, variant_id: 1, value: p.color },
+      { attribute_id: sizeAttr, product_id, variant_id: 1, value: p.size },
+    ]);
+
+    await knex("product_price").insert({
+      product_id,
+      variant_id: 1,
+      base_price: p.price,
+      start_date,
+      end_date,
+    });
+
+    if (store) {
+      await knex("store_product")
+        .insert({
+          product_id,
+          variant_id: 1,
+          store_id: store.store_id,
+          quantity: 100,
+        })
+        .onConflict(["product_id", "variant_id", "store_id"])
+        .ignore();
+    }
   }
 
-  console.log(`Demo product seeded: "Demo Shirt" (product_id=${product_id})`);
+  if (!store) {
+    console.warn(
+      "No store found — skipped store_product inventory rows. Seed a store first if you need stock data.",
+    );
+  }
+
+  console.log(
+    `Seeded 3 categories (2 featured) + 1 nested category, and ${products.length} demo products.`,
+  );
 }

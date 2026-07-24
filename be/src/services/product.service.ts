@@ -4,6 +4,8 @@ import * as PriceModel from "../models/product/product_price.model.js";
 import * as AttributeModel from "../models/attribute.model.js";
 import * as CategoryModel from "../models/category.model.js";
 import * as ReviewModel from "../models/review.model.js";
+import { Category } from "../models/category.model.js";
+
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 
@@ -228,25 +230,38 @@ export async function getProductsByCategory(
   return ProductModel.findProductsByCategory(category_id, page, limit);
 }
 
-export async function createCategory(data: {
-  name: string;
-  parent_id?: number | null;
-}) {
-  if (data.parent_id) {
-    const parent = await CategoryModel.findCategoryById(data.parent_id);
-    if (!parent) throw new ApiError(404, "Parent category not found");
+export async function createCategory(data: Category) {
+  try {
+    const category_id = await CategoryModel.createCategory(data);
+    return { category_id };
+  } catch (err: any) {
+    if (err.code === "23505") {
+      throw new ApiError(409, "A category with this name already exists");
+    }
+    throw err;
   }
-  const category_id = await CategoryModel.createCategory(data);
-  return { category_id };
 }
 
 export async function updateCategory(
   category_id: number,
-  data: { name?: string; parent_id?: number | null },
+  data: Partial<Category>,
 ) {
-  const cat = await CategoryModel.findCategoryById(category_id);
-  if (!cat) throw new ApiError(404, "Category not found");
-  await CategoryModel.updateCategory(category_id, data);
+  try {
+    return await CategoryModel.updateCategory(category_id, data);
+  } catch (err: any) {
+    if (err.code === "23505") {
+      throw new ApiError(409, "A category with this name already exists");
+    }
+    throw err;
+  }
+}
+
+export async function getFeaturedCategories() {
+  return CategoryModel.findFeaturedCategories();
+}
+
+export async function setCategoryImage(category_id: number, image_url: string) {
+  return CategoryModel.setCategoryImage(category_id, image_url);
 }
 
 export async function deleteCategory(category_id: number) {

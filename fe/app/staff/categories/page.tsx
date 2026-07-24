@@ -14,7 +14,17 @@ export default function StaffCategoriesPage() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string>("");
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [displayOrder, setDisplayOrder] = useState<string>("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Inline "manage featured" state for existing rows
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editFeatured, setEditFeatured] = useState(false);
+  const [editOrder, setEditOrder] = useState<string>("");
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   function flattenCategories(nodes: Category[]): Category[] {
     const out: Category[] = [];
@@ -41,24 +51,86 @@ export default function StaffCategoriesPage() {
     refresh();
   }, []);
 
+  function isDuplicateNameError(err: unknown): boolean {
+    // axios error shape
+    const status = (err as { response?: { status?: number } })?.response
+      ?.status;
+    return status === 409;
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await adminService.createCategory({
+      const { category_id } = await adminService.createCategory({
         name: name.trim(),
         ...(parentId ? { parent_id: Number(parentId) } : {}),
+        ...(isFeatured ? { is_featured: true } : {}),
+        ...(isFeatured && displayOrder
+          ? { display_order: Number(displayOrder) }
+          : {}),
       });
+
+      if (isFeatured && imageFile) {
+        try {
+          await adminService.uploadCategoryImage(category_id, imageFile);
+        } catch {
+          toast.error(
+            "Category created, but the image failed to upload. You can add it from the row below.",
+          );
+        }
+      }
+
       toast.success("Category created.");
       setName("");
       setParentId("");
+      setIsFeatured(false);
+      setDisplayOrder("");
+      setImageFile(null);
       setAdding(false);
       refresh();
-    } catch {
-      toast.error("Failed to create category.");
+    } catch (err) {
+      if (isDuplicateNameError(err)) {
+        toast.error("A category with this name already exists.");
+      } else {
+        toast.error("Failed to create category.");
+      }
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEditing(c: Category) {
+    setEditingId(c.category_id);
+    setEditFeatured(!!c.is_featured);
+    setEditOrder(c.display_order != null ? String(c.display_order) : "");
+    setEditImageFile(null);
+  }
+
+  async function handleSaveFeatured(c: Category) {
+    setEditSaving(true);
+    try {
+      await adminService.updateCategory(c.category_id, {
+        is_featured: editFeatured,
+        display_order: editFeatured && editOrder ? Number(editOrder) : null,
+      });
+
+      if (editFeatured && editImageFile) {
+        await adminService.uploadCategoryImage(c.category_id, editImageFile);
+      }
+
+      toast.success("Category updated.");
+      setEditingId(null);
+      refresh();
+    } catch (err) {
+      if (isDuplicateNameError(err)) {
+        toast.error("A category with this name already exists.");
+      } else {
+        toast.error("Failed to update category.");
+      }
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -84,12 +156,33 @@ export default function StaffCategoriesPage() {
     return nodes.map((c) => (
       <div key={c.category_id}>
         <div
-          className="flex items-center justify-between border-b border-slate-100 py-2.5 last:border-b-0"
+          className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-2.5 last:border-b-0"
           style={{ paddingLeft: `${depth * 20 + 16}px` }}
         >
-          <span className="text-sm text-slate-700">{c.name}</span>
+          <div className="flex items-center gap-2">
+            {c.is_featured && c.image_url ? (
+              <img
+                src={c.image_url}
+                alt={c.name}
+                className="h-8 w-8 rounded-md object-cover"
+              />
+            ) : null}
+            <span className="text-sm text-slate-700">{c.name}</span>
+            {c.is_featured && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
+                ★ Featured
+                {c.display_order != null ? ` #${c.display_order}` : ""}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 pr-4">
             <span className="text-xs text-slate-400">#{c.category_id}</span>
+            <button
+              onClick={() => startEditing(c)}
+              className="rounded-lg bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100 hover:cursor-pointer"
+            >
+              {c.is_featured ? "Manage" : "Feature"}
+            </button>
             <button
               onClick={() => handleDelete(c.category_id, c.name)}
               className="rounded-lg bg-red-50 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100 hover:cursor-pointer"
@@ -98,6 +191,68 @@ export default function StaffCategoriesPage() {
             </button>
           </div>
         </div>
+
+        {editingId === c.category_id && (
+          <div
+            className="flex flex-wrap items-start gap-4 border-b border-slate-100 bg-slate-50 p-4"
+            style={{ paddingLeft: `${depth * 20 + 16}px` }}
+          >
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={editFeatured}
+                onChange={(e) => setEditFeatured(e.target.checked)}
+              />
+              Show on homepage
+            </label>
+
+            {editFeatured && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">
+                    Display order
+                  </label>
+                  <input
+                    type="number"
+                    value={editOrder}
+                    onChange={(e) => setEditOrder(e.target.value)}
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">
+                    {c.image_url ? "Replace image" : "Homepage image"}
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) =>
+                      setEditImageFile(e.target.files?.[0] ?? null)
+                    }
+                    className="text-xs"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-2 self-center">
+              <button
+                onClick={() => handleSaveFeatured(c)}
+                disabled={editSaving}
+                className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+              >
+                {editSaving ? "…" : "Save"}
+              </button>
+              <button
+                onClick={() => setEditingId(null)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {c.children?.length ? renderTree(c.children, depth + 1) : null}
       </div>
     ));
@@ -116,7 +271,8 @@ export default function StaffCategoriesPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Categories</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Organize products into a category hierarchy.
+            Organize products into a category hierarchy. Mark a category as
+            featured to show it on the homepage.
           </p>
         </div>
 
@@ -131,7 +287,7 @@ export default function StaffCategoriesPage() {
       {adding && (
         <form
           onSubmit={handleCreate}
-          className="flex flex-wrap items-start gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm max-w-xl"
+          className="flex flex-wrap items-start gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm max-w-2xl"
         >
           <Input
             label="Name"
@@ -159,6 +315,45 @@ export default function StaffCategoriesPage() {
               ))}
             </select>
           </div>
+
+          <div className="flex w-full flex-col gap-2 border-t border-slate-100 pt-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(e) => setIsFeatured(e.target.checked)}
+              />
+              Show on homepage
+            </label>
+
+            {isFeatured && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">
+                    Display order
+                  </label>
+                  <input
+                    type="number"
+                    value={displayOrder}
+                    onChange={(e) => setDisplayOrder(e.target.value)}
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">
+                    Homepage image
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2 self-center">
             <button
               type="submit"
@@ -173,6 +368,9 @@ export default function StaffCategoriesPage() {
                 setAdding(false);
                 setName("");
                 setParentId("");
+                setIsFeatured(false);
+                setDisplayOrder("");
+                setImageFile(null);
               }}
               className="rounded-xl border border-slate-400 px-4 py-2.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:cursor-pointer active:bg-slate-200"
             >

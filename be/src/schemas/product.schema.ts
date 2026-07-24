@@ -96,6 +96,8 @@ export const categorySchema = z.object({
   body: z.object({
     name: z.string().min(1).max(30),
     parent_id: z.number().int().positive().nullable().optional(),
+    is_featured: z.boolean().optional(),
+    display_order: z.number().int().nullable().optional(),
   }),
 });
 

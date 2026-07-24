@@ -216,18 +216,38 @@ export const adminService = {
       .then((r) => r.data.data),
 
   // ── Categories ──
-  createCategory: (body: { name: string; parent_id?: number }) =>
+  createCategory: (body: {
+    name: string;
+    parent_id?: number;
+    is_featured?: boolean;
+    display_order?: number | null;
+  }) =>
     api
       .post<ApiResponse<{ category_id: number }>>("/categories", body)
       .then((r) => r.data.data),
 
   updateCategory: (
     category_id: number,
-    body: { name?: string; parent_id?: number | null },
+    body: {
+      name?: string;
+      parent_id?: number | null;
+      is_featured?: boolean;
+      display_order?: number | null;
+    },
   ) =>
     api
       .put<ApiResponse<unknown>>(`/categories/${category_id}`, body)
       .then((r) => r.data.data),
+
+  uploadCategoryImage: (category_id: number, file: File) => {
+    const form = new FormData();
+    form.append("image", file);
+    return api
+      .post<
+        ApiResponse<{ image_url: string }>
+      >(`/categories/${category_id}/image`, form, { headers: { "Content-Type": "multipart/form-data" } })
+      .then((r) => r.data.data);
+  },
 
   deleteCategory: (category_id: number) =>
     api

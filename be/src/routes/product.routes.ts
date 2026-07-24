@@ -43,6 +43,16 @@ categoryRouter.post(
   validate(categorySchema),
   ProductController.createCategory,
 );
+
+categoryRouter.get("/featured", ProductController.getFeaturedCategories);
+
+categoryRouter.post(
+  "/:category_id/image",
+  authenticateStaff,
+  uploadSingle, // reuses your existing single-file S3 upload middleware, field name "image"
+  ProductController.uploadCategoryImage,
+);
+
 categoryRouter.put(
   "/:category_id",
   authenticateStaff,
