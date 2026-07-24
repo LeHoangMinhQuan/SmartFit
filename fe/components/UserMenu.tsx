@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuthStore } from "@/store/useAuthStore";
 import { logoutService } from "@/services/auth.client.service";
+import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
 
 interface UserMenuProps {
   onLoginClick: () => void;
@@ -15,14 +16,40 @@ export default function UserMenu({
   onLoginClick,
   onRegisterClick,
 }: UserMenuProps) {
-  const user = useAuthStore((state) => state.user);
+  const storeUser = useAuthStore((state) => state.user);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+
+  // Fetch the Auth.js Google session
+  const { data: session } = useSession();
 
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Combine data: Prefer Zustand (custom backend), fallback to Auth.js (Google)
+  const user =
+    storeUser ||
+    (session?.user
+      ? {
+          username: session.user.name || "User",
+          email: session.user.email || "",
+          avatar_url: session.user.image || "",
+        }
+      : null);
+
   const handleLogout = async () => {
     setOpen(false);
-    await logoutService();
+
+    // 1. Clear custom backend session
+    if (storeUser) {
+      await logoutService();
+    } else {
+      clearAuth();
+    }
+
+    // 2. Clear Auth.js Google session
+    if (session) {
+      await nextAuthSignOut({ redirect: false });
+    }
   };
 
   // Close when clicking outside
@@ -32,27 +59,17 @@ export default function UserMenu({
         setOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Close on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-      }
+      if (e.key === "Escape") setOpen(false);
     };
-
     document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   return (
@@ -98,16 +115,6 @@ export default function UserMenu({
                   {user.email}
                 </p>
               </div>
-
-              <Link
-                href="/staff/login"
-                onClick={() => setOpen(false)}
-                className="block px-4 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 hover:text-black"
-              >
-                🛡️ Staff Login
-              </Link>
-
-              <div className="my-1 border-t border-gray-100" />
 
               <button
                 onClick={handleLogout}
