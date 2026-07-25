@@ -8,7 +8,7 @@ import {
   tryonPreviewSchema,
   tryonSessionIdParamSchema,
 } from "../schemas/tryon.schema.js";
-import * as tryonController from "../controllers/admin/tryon.controller.js";
+import * as tryonController from "../controllers/tryon.controller.js";
 
 const router = Router();
 
