@@ -1,6 +1,6 @@
 import Carousel from "@/components/Carousel";
 import Image from "next/image";
-import { ProductCardProps } from "@/interfaces";
+import { ProductCardProps, Category } from "@/interfaces";
 import Link from "next/link";
 import { categoryService } from "@/services/category.service";
 
@@ -105,7 +105,16 @@ const STYLES = [
 ];
 
 export default async function Home() {
-  const featuredCategories = await categoryService.getFeaturedCategories();
+  let featuredCategories: Category[] = [];
+
+  try {
+    featuredCategories = await categoryService.getFeaturedCategories();
+  } catch (error) {
+    // Silently fall back to empty array if backend is offline during 'npm run build'
+    console.warn(
+      "Backend unavailable during build time, skipping featured categories.",
+    );
+  }
 
   return (
     <div className="w-full">
