@@ -16,7 +16,8 @@ import AddressForm, {
 } from "../../../components/checkout/AddressForm";
 import ShippingSelector from "../../../components/checkout/ShippingSelector";
 import VoucherInput from "../../../components/checkout/VoucherInput";
-import type { CartItem, UserAddress, Voucher } from "../../../interfaces";
+import type { CartItem, UserAddress } from "../../../interfaces";
+import type { VoucherValidationResult } from "../../../services/voucher.service";
 
 type Step = "address" | "shipping" | "payment";
 
@@ -53,7 +54,7 @@ export default function CheckoutPage() {
   const [shippingFee, setShippingFee] = useState(0);
 
   // Payment step state
-  const [voucher, setVoucher] = useState<Voucher | null>(null);
+  const [voucher, setVoucher] = useState<VoucherValidationResult | null>(null);
 
   // Redirect guests away
   useEffect(() => {
@@ -69,8 +70,12 @@ export default function CheckoutPage() {
     Promise.all([cartService.getCart(), userService.getAddresses()])
       .then(([cart, addrs]) => {
         setCartItems(cart);
-        setAddresses(addrs);
-        const def = addrs.find((a) => a.is_default);
+        // Defensive: if the API ever returns something other than an array
+        // here (e.g. an unwrapped envelope), fall back to [] instead of
+        // crashing the whole page on addresses.map further down.
+        const addressList = Array.isArray(addrs) ? addrs : [];
+        setAddresses(addressList);
+        const def = addressList.find((a) => a.is_default);
         if (def) setSelectedAddressId(def.address_id);
       })
       .catch(() => toast.error("Failed to load checkout data."))
@@ -85,15 +90,10 @@ export default function CheckoutPage() {
 
   const subtotal = cartItems.reduce((s, i) => s + i.subtotal, 0);
 
-  function calcDiscount(): number {
-    if (!voucher) return 0;
-    if (voucher.type === "percent") {
-      return Math.min((subtotal * voucher.value) / 100, voucher.max_discount);
-    }
-    return voucher.value;
-  }
-
-  const discount = calcDiscount();
+  // The backend already computes the discount for this order_amount —
+  // recomputing it client-side from voucher.value/max_discount was the
+  // bug, since the validate endpoint never returns those fields.
+  const discount = voucher?.discount_amount ?? 0;
   const total = Math.max(0, subtotal + shippingFee - discount);
 
   async function handlePlaceOrder() {
@@ -155,7 +155,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="mb-8 text-2xl font-bold text-gray-900">Checkout</h1>
+      <h1 className="mb-8 text-2xl font-bold">Checkout</h1>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Left — steps */}
@@ -301,6 +301,7 @@ export default function CheckoutPage() {
               <h2 className="font-semibold">3. Voucher & Payment</h2>
 
               <VoucherInput
+                orderAmount={subtotal}
                 applied={voucher}
                 onApply={setVoucher}
                 onRemove={() => setVoucher(null)}

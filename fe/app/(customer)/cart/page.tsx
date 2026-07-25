@@ -16,7 +16,7 @@ import type { CartItem } from "@/interfaces";
 
 export default function CartPage() {
   const router = useRouter();
-  const { user, accessToken } = useAuthStore();
+  const { user } = useAuthStore();
   const openLogin = useAuthModalStore((s) => s.openLogin);
   const { items, setItems, updateItem, removeItem, clearItems, totalCount } =
     useCartStore();
@@ -26,7 +26,7 @@ export default function CartPage() {
 
   // On mount: if logged in, sync server cart → local store
   useEffect(() => {
-    if (!accessToken) return;
+    if (!user) return;
 
     setLoading(true);
     cartService
@@ -34,7 +34,7 @@ export default function CartPage() {
       .then((cartItems) => setItems(cartItems)) // getCart() returns CartItem[] directly
       .catch(() => toast.error("Failed to load cart"))
       .finally(() => setLoading(false));
-  }, [accessToken, setItems]);
+  }, [user, setItems]);
 
   const itemKey = (item: CartItem) => `${item.product_id}-${item.variant_id}`;
 
@@ -46,7 +46,7 @@ export default function CartPage() {
     setUpdatingKey(key);
 
     try {
-      if (accessToken) {
+      if (user) {
         await cartService.updateItem({
           product_id: item.product_id,
           variant_id: item.variant_id,
@@ -70,7 +70,7 @@ export default function CartPage() {
     setUpdatingKey(key);
 
     try {
-      if (accessToken) {
+      if (user) {
         await cartService.removeItem({
           product_id: item.product_id,
           variant_id: item.variant_id,
@@ -89,7 +89,7 @@ export default function CartPage() {
 
   const handleClear = async () => {
     try {
-      if (accessToken) {
+      if (user) {
         await cartService.clearCart();
       }
       clearItems();
@@ -99,7 +99,7 @@ export default function CartPage() {
   };
 
   const handleCheckout = () => {
-    if (!accessToken) {
+    if (!user) {
       // LoginModal is mounted globally in Header — just open it here.
       // handleCheckout intentionally does NOT auto-continue to /checkout
       // once signed in, matching the pattern used on the product page's
@@ -158,7 +158,7 @@ export default function CartPage() {
           </h1>
           <button
             onClick={handleClear}
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-red-500 shadow-sm transition-all duration-200 hover:cursor-pointer hover:border-red-400 hover:bg-red-50 hover:shadow-md active:scale-[0.98]"
+            className="text-sm font-medium text-red-500 hover:text-red-600"
           >
             Clear all
           </button>
@@ -291,7 +291,7 @@ export default function CartPage() {
 
               <button
                 onClick={handleCheckout}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 hover:cursor-pointer"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30"
               >
                 {user ? (
                   "Proceed to Checkout"
@@ -305,7 +305,7 @@ export default function CartPage() {
 
               <Link
                 href="/"
-                className="mt-3 flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white py-3 text-sm font-medium text-slate-600 shadow-sm transition-all duration-200 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:shadow-md active:scale-[0.98]"
+                className="mt-3 block text-center text-xs text-slate-500 hover:text-slate-700"
               >
                 Continue shopping
               </Link>

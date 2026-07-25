@@ -43,18 +43,15 @@ export default function ProfilePage() {
         phone,
         address,
       });
-      // Keep the access token, just refresh the cached user object
+      // Keep the session, just refresh the cached user object
       if (user) {
-        setAuth(
-          {
-            ...user,
-            ...updated,
-            phone: updated.phone ?? "",
-            address: updated.address ?? "",
-            avatar_url: updated.avatar_url ?? "",
-          },
-          useAuthStore.getState().accessToken!,
-        );
+        setAuth({
+          ...user,
+          ...updated,
+          phone: updated.phone ?? "",
+          address: updated.address ?? "",
+          avatar_url: updated.avatar_url ?? "",
+        });
       }
       toast.success("Profile updated.");
     } catch {
@@ -97,7 +94,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="mb-8 text-2xl font-bold text-gray-900">Profile</h1>
+      <h1 className="mb-8 text-2xl font-bold">Profile</h1>
 
       {/* Tabs */}
       <div className="mb-8 flex gap-1 border-b">

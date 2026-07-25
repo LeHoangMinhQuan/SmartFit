@@ -22,28 +22,37 @@ interface AddAddressBody {
   is_default?: boolean;
 }
 
+// Every endpoint below wraps its payload in { data: ... } on the backend
+// (see controllers/user.controller.ts — res.json({ data: ... })). These
+// calls were previously resolving with `r.data` (the whole { data: ... }
+// envelope object) instead of `r.data.data` (the actual payload), so e.g.
+// getAddresses() resolved to { data: [...] } rather than [...] — an object,
+// not an array — which crashed any caller doing `addresses.map(...)`.
 export const userService = {
-  getProfile: () => api.get<User>("/users/me").then((r) => r.data),
+  getProfile: () =>
+    api.get<{ data: User }>("/users/me").then((r) => r.data.data),
 
   updateProfile: (body: UpdateProfileBody) =>
-    api.patch<User>("/users/me", body).then((r) => r.data),
+    api.patch<{ data: User }>("/users/me", body).then((r) => r.data.data),
 
   changePassword: (body: ChangePasswordBody) =>
-    api.patch("/users/me/password", body).then((r) => r.data),
+    api.patch("/users/me/password", body).then((r) => r.data.data),
 
   deleteAccount: () => api.delete("/users/me").then((r) => r.data),
 
   // Addresses
   getAddresses: () =>
-    api.get<UserAddress[]>("/users/me/addresses").then((r) => r.data),
+    api
+      .get<{ data: UserAddress[] }>("/users/me/addresses")
+      .then((r) => r.data.data),
 
   addAddress: (body: AddAddressBody) =>
     api
-      .post<{ address_id: number }>("/users/me/addresses", body)
-      .then((r) => r.data),
+      .post<{ data: { address_id: number } }>("/users/me/addresses", body)
+      .then((r) => r.data.data),
 
   updateAddress: (address_id: number, body: Partial<AddAddressBody>) =>
-    api.put(`/users/me/addresses/${address_id}`, body).then((r) => r.data),
+    api.put(`/users/me/addresses/${address_id}`, body).then((r) => r.data.data),
 
   deleteAddress: (address_id: number) =>
     api.delete(`/users/me/addresses/${address_id}`).then((r) => r.data),
@@ -51,5 +60,5 @@ export const userService = {
   setDefaultAddress: (address_id: number) =>
     api
       .patch(`/users/me/addresses/${address_id}/default`)
-      .then((r) => r.data),
+      .then((r) => r.data.data),
 };

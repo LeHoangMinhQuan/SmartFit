@@ -24,13 +24,13 @@ export interface RefreshTokenRow {
 // ─── USER queries ───────────────────────────────────────────────────────────
 
 export const findUserByEmail = (email: string): Promise<UserRow | undefined> =>
-  db<UserRow>('USER').where({ email }).first();
+  db<UserRow>("USER").where({ email }).first();
 
 export const findUserById = (user_id: number): Promise<UserRow | undefined> =>
-  db<UserRow>('USER').where({ user_id }).first();
+  db<UserRow>("USER").where({ user_id }).first();
 
 export const emailExists = async (email: string): Promise<boolean> => {
-  const row = await db<UserRow>('USER')
+  const row = await db<UserRow>("USER")
     .where({ email })
     .select("user_id")
     .first();
@@ -46,7 +46,7 @@ export const insertUser = (user: {
   password_hash: string;
   phone: string; // CHAR(10) NOT NULL
   address: string; // VARCHAR(70) NOT NULL
-}): Promise<UserRow[]> => db<UserRow>('USER').insert(user).returning("*");
+}): Promise<UserRow[]> => db<UserRow>("USER").insert(user).returning("*");
 
 // ─── refresh_token queries ────────────────────────────────────────────────────
 
@@ -65,6 +65,20 @@ export const findRefreshToken = (
 ): Promise<RefreshTokenRow | undefined> =>
   db<RefreshTokenRow>("refresh_token")
     .where({ user_id, token_hash })
+    .where("expires_at", ">", new Date())
+    .first();
+
+// Looked up by hash alone — used by POST /auth/refresh, which by design
+// can't require a still-valid access token (the whole point of the call
+// is to renew an access token that has already expired). The raw token is
+// a 320-bit crypto-random value (see generateRefreshToken), so its SHA-256
+// hash is already unguessable; no additional user_id scoping is needed for
+// security.
+export const findRefreshTokenByHash = (
+  token_hash: string,
+): Promise<RefreshTokenRow | undefined> =>
+  db<RefreshTokenRow>("refresh_token")
+    .where({ token_hash })
     .where("expires_at", ">", new Date())
     .first();
 

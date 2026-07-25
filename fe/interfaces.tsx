@@ -40,8 +40,7 @@ export interface AuthUser {
 
 export interface AuthState {
   user: AuthUser | null;
-  accessToken: string | null;
-  setAuth: (user: AuthUser, accessToken: string) => void;
+  setAuth: (user: AuthUser) => void;
   clearAuth: () => void;
 }
 
@@ -281,10 +280,17 @@ export interface Review {
 
 // Wishlist
 export interface WishlistItem {
-  user_id: number;
+  user_id?: number;
   product_id: number;
   variant_id: number;
   created_at: string;
+  // Present on GET /users/me/wishlist (joined with product/variant/price/image).
+  // Not present on the POST /users/me/wishlist response, which only
+  // returns a confirmation message — see wishlist.service.ts.
+  product_name?: string;
+  variant_name?: string;
+  base_price?: string | null;
+  image_url?: string | null;
 }
 
 // Try-On

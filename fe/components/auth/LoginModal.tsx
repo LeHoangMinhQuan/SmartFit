@@ -66,8 +66,9 @@ export default function LoginModal({
   }, [isOpen]);
 
   // Merge guest cart into the server cart, then replace local state with the
-  // authoritative server copy. Must run AFTER setAuth() so lib/axios.ts picks
-  // up the new access token on these requests — otherwise they 401.
+  // authoritative server copy. Must run AFTER the login call so the
+  // accessToken cookie the server just set is present on these requests —
+  // otherwise they 401.
   async function mergeCartOnLogin() {
     const localItems = useCartStore.getState().items;
     try {
@@ -101,8 +102,9 @@ export default function LoginModal({
       // through `api` means the base URL is never duplicated or drifted.
       const { data } = await api.post("/auth/login", { email, password });
 
-      setAuth(data.user, data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
+      // Tokens arrive as httpOnly Set-Cookie headers — the response body
+      // only contains the (non-sensitive) user object.
+      setAuth(data.user);
 
       await mergeCartOnLogin();
 

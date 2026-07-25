@@ -14,10 +14,14 @@ export interface WishlistItemWithProduct {
   created_at: Date;
   product_name: string;
   variant_name: string;
+  base_price: string | null;
+  image_url: string | null;
 }
 
 /**
- * Active wishlist items for a user (deleted_at IS NULL), joined with product info.
+ * Active wishlist items for a user (deleted_at IS NULL), joined with product
+ * info, current price, and a preview image (variant-specific image
+ * preferred, falling back to the general product-level image).
  */
 export async function findActiveWishlist(
   user_id: number,
@@ -30,6 +34,12 @@ export async function findActiveWishlist(
         "pv.variant_id",
       );
     })
+    .leftJoin("product_price as pp", function () {
+      this.on("w.product_id", "pp.product_id").andOn(
+        "w.variant_id",
+        "pp.variant_id",
+      );
+    })
     .where("w.user_id", user_id)
     .whereNull("w.deleted_at")
     .select(
@@ -38,7 +48,16 @@ export async function findActiveWishlist(
       "w.created_at",
       "p.name as product_name",
       "pv.name as variant_name",
-    );
+      "pp.base_price",
+      db.raw(`(
+        select pim.s3_url from product_image pim
+        where pim.product_id = w.product_id
+          and (pim.variant_id = w.variant_id or pim.variant_id is null)
+        order by pim.variant_id nulls last
+        limit 1
+      ) as image_url`),
+    )
+    .orderBy("w.created_at", "desc");
 }
 
 export async function findWishlistItem(

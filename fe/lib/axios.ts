@@ -1,20 +1,21 @@
 import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
-import { refreshAccessToken } from "../services/auth.client.service";
 
+/**
+ * lib/axios.ts
+ *
+ * `withCredentials: true` is what makes the browser attach the httpOnly
+ * accessToken/refreshToken cookies automatically on every request — there
+ * is no Authorization header to set manually anymore, since the token
+ * lives outside of JS-readable state entirely (see BE utils/cookies.ts).
+ */
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_BASE_URL,
   withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().accessToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
 let isRefreshing = false;
-let queue: Array<(token: string) => void> = [];
+let queue: Array<() => void> = [];
 
 api.interceptors.response.use(
   (res) => res,
@@ -25,26 +26,25 @@ api.interceptors.response.use(
     }
     if (isRefreshing) {
       return new Promise((resolve) => {
-        queue.push((token) => {
-          original.headers.Authorization = `Bearer ${token}`;
-          resolve(api(original));
-        });
+        queue.push(() => resolve(api(original)));
       });
     }
     original._retry = true;
     isRefreshing = true;
     try {
-      const accessToken = await refreshAccessToken();
-      // setAuth requires a user — read the current one from the store
-      const user = useAuthStore.getState().user!;
-      useAuthStore.getState().setAuth(user, accessToken);
-      queue.forEach((cb) => cb(accessToken));
+      // The refreshToken cookie (path-scoped to /api/auth) is sent
+      // automatically. On success the server rotates the accessToken
+      // cookie in its response — nothing to read or store here.
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/auth/refresh`,
+        {},
+        { withCredentials: true },
+      );
+      queue.forEach((cb) => cb());
       queue = [];
-      original.headers.Authorization = `Bearer ${accessToken}`;
       return api(original);
-    } catch {
-      useAuthStore.getState().clearAuth(); // was logout()
-      localStorage.removeItem("refreshToken");
+    } catch (refreshError) {
+      useAuthStore.getState().clearAuth();
       queue = [];
       return Promise.reject(error);
     } finally {

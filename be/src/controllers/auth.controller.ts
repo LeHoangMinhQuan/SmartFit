@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync.js";
+import { ApiError } from "../utils/ApiError.js";
 import { register, login, refresh, logout } from "../services/auth.service.js";
-import type {
-  RegisterBody,
-  LoginBody,
-  RefreshBody,
-  LogoutBody,
-} from "../schemas/auth.schema.js";
+import {
+  setAuthCookies,
+  setAccessTokenCookie,
+  clearAuthCookies,
+} from "../utils/cookies.js";
+import type { RegisterBody, LoginBody } from "../schemas/auth.schema.js";
 
 /**
  * controllers/auth.controller.ts
@@ -14,6 +15,12 @@ import type {
  * Thin layer: parse validated req.body → call service → send response.
  * All business logic lives in auth.service.ts.
  * All error handling flows through errorHandler.ts via catchAsync.
+ *
+ * Tokens are never returned in the JSON body — both accessToken and
+ * refreshToken are set as httpOnly cookies (see utils/cookies.ts) so
+ * they're inaccessible to JS on the frontend (XSS-hardening). Only the
+ * non-sensitive `user` object is returned in the body for the frontend
+ * to cache (e.g. in Zustand + localStorage) for UI purposes.
  */
 
 /**
@@ -23,14 +30,16 @@ import type {
  *   { username, email, password, phone, address }
  *
  * Response 201:
- *   { user: { user_id, username, email, phone, address }, accessToken, refreshToken }
+ *   { user: { user_id, username, email, phone, address } }
+ *   + Set-Cookie: accessToken, refreshToken (httpOnly)
  */
 export const registerController = catchAsync(
   async (req: Request, res: Response) => {
     const body = req.body as RegisterBody;
     const result = await register(body);
 
-    res.status(201).json(result);
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    res.status(201).json({ user: result.user });
   },
 );
 
@@ -41,60 +50,69 @@ export const registerController = catchAsync(
  *   { email, password }
  *
  * Response 200:
- *   { user: { user_id, username, email, phone, address }, accessToken, refreshToken }
+ *   { user: { user_id, username, email, phone, address } }
+ *   + Set-Cookie: accessToken, refreshToken (httpOnly)
  */
 export const loginController = catchAsync(
   async (req: Request, res: Response) => {
     const body = req.body as LoginBody;
     const result = await login(body);
 
-    res.status(200).json(result);
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    res.status(200).json({ user: result.user });
   },
 );
 
 /**
  * POST /api/auth/refresh
  *
- * Requires: Authorization: Bearer <accessToken>  (via authenticate middleware)
- * Body (validated by refreshSchema):
- *   { refreshToken }
+ * Public (no access token required — see routes/auth.routes.ts and
+ * services/auth.service.ts for why).
  *
- * Verifies the refresh token hash against the DB row for this user.
- * The refresh_token row is left untouched — only a new access token is issued.
+ * Reads the refresh token from the httpOnly `refreshToken` cookie
+ * (path-scoped to /api/auth, so it's only ever sent to these four
+ * routes) rather than the request body — nothing sensitive travels
+ * through JS-readable state anymore.
  *
- * Response 200:
- *   { accessToken }
+ * Response 200: { success: true } + Set-Cookie: accessToken (httpOnly)
  */
 export const refreshController = catchAsync(
   async (req: Request, res: Response) => {
-    const { refreshToken } = req.body as RefreshBody;
-    const user_id = req.user!.user_id;
+    const refreshToken = req.cookies?.["refreshToken"] as string | undefined;
 
-    const result = await refresh(user_id, refreshToken);
+    if (!refreshToken) {
+      throw new ApiError(401, "Refresh token required");
+    }
 
-    res.status(200).json(result);
+    const result = await refresh(refreshToken);
+
+    setAccessTokenCookie(res, result.accessToken);
+    res.status(200).json({ success: true });
   },
 );
 
 /**
  * POST /api/auth/logout
  *
- * Requires: Authorization: Bearer <accessToken>  (via authenticate middleware)
- * Body (validated by logoutSchema):
- *   { refreshToken }
+ * Requires: the httpOnly `accessToken` cookie (via authenticate middleware).
+ * Reads the refresh token from the httpOnly `refreshToken` cookie.
  *
- * Deletes the specific refresh_token row for (user_id, token_hash).
- * Idempotent — silently succeeds even if the token is already gone.
+ * Deletes the specific refresh_token row for (user_id, token_hash), then
+ * clears both cookies. Idempotent — silently succeeds even if the token
+ * is already gone or missing.
  *
  * Response 204: No Content
  */
 export const logoutController = catchAsync(
   async (req: Request, res: Response) => {
-    const { refreshToken } = req.body as LogoutBody;
+    const refreshToken = req.cookies?.["refreshToken"] as string | undefined;
     const user_id = req.user!.user_id;
 
-    await logout(user_id, refreshToken);
+    if (refreshToken) {
+      await logout(user_id, refreshToken);
+    }
 
+    clearAuthCookies(res);
     res.status(204).send();
   },
 );

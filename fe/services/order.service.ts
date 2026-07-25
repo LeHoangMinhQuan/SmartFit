@@ -9,16 +9,23 @@ interface CreateOrderBody {
 }
 
 export const orderService = {
+  // Backend wraps this in { data: { order_id } } — unwrap fully, or
+  // `order_id` destructures as undefined (as it did before this fix).
   createOrder: (body: CreateOrderBody) =>
-    api.post<{ order_id: number }>("/orders", body).then((r) => r.data),
+    api
+      .post<{ data: { order_id: number } }>("/orders", body)
+      .then((r) => r.data.data),
 
+  // getOrders already returns { data, meta } matching PaginatedResponse
+  // at the top level — do not add an extra .data unwrap here.
   getOrders: (params?: { page?: number; limit?: number }) =>
     api
       .get<PaginatedResponse<Order>>("/orders", { params })
       .then((r) => r.data),
 
+  // Backend wraps this in { data: result } too — same fix as createOrder.
   getOrder: (order_id: number) =>
-    api.get<Order>(`/orders/${order_id}`).then((r) => r.data),
+    api.get<{ data: Order }>(`/orders/${order_id}`).then((r) => r.data.data),
 
   // Only allowed when status is 'paid' or 'preparing'
   cancelOrder: (order_id: number) =>

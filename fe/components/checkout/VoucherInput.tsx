@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { voucherService } from "../../services/voucher.service";
+import {
+  voucherService,
+  type VoucherValidationResult,
+} from "../../services/voucher.service";
 import { formatPrice } from "../../lib/utils";
 import Input from "../ui/Input";
-import type { Voucher } from "../../interfaces";
 
 interface VoucherInputProps {
-  applied: Voucher | null;
-  onApply: (voucher: Voucher) => void;
+  // Current cart subtotal — required by the backend to check the
+  // minimum-order-amount rule and to compute the discount.
+  orderAmount: number;
+  applied: VoucherValidationResult | null;
+  onApply: (voucher: VoucherValidationResult) => void;
   onRemove: () => void;
 }
 
 export default function VoucherInput({
+  orderAmount,
   applied,
   onApply,
   onRemove,
@@ -27,7 +33,10 @@ export default function VoucherInput({
     setLoading(true);
     setError("");
     try {
-      const voucher = await voucherService.validateVoucher(trimmed);
+      const voucher = await voucherService.validateVoucher(
+        trimmed,
+        orderAmount,
+      );
       onApply(voucher);
       setCode("");
     } catch (e: unknown) {
@@ -41,16 +50,17 @@ export default function VoucherInput({
   }
 
   if (applied) {
-    const saving =
-      applied.type === "percent"
-        ? `${applied.value}% off (max ${formatPrice(applied.max_discount)})`
-        : `${formatPrice(applied.value)} off`;
-
+    // The validate endpoint returns the discount already computed
+    // server-side (discount_amount) — it doesn't send back value/
+    // max_discount, so there's nothing to recompute here.
     return (
       <div className="flex items-center justify-between rounded-lg border border-green-300 bg-green-50 p-3">
         <div>
           <p className="text-sm font-medium text-green-700">{applied.code}</p>
-          <p className="text-xs text-green-600">{saving}</p>
+          <p className="text-xs text-green-600">
+            {applied.description ||
+              `Save ${formatPrice(applied.discount_amount)}`}
+          </p>
         </div>
         <button
           onClick={onRemove}

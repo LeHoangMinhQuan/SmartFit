@@ -120,9 +120,9 @@ export default function RegisterModal({
         address: form.address,
       });
 
-      // Auto-login: store auth state exactly like the login flow
-      setAuth(data.user, data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
+      // Auto-login: tokens arrive as httpOnly Set-Cookie headers — the
+      // response body only contains the (non-sensitive) user object.
+      setAuth(data.user);
 
       await mergeCartOnLogin();
 

@@ -1,22 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { userService } from "../../services/user.service";
+import Link from "next/link";
+import Image from "next/image";
+import { wishlistService } from "../../services/wishlist.service";
+import { useWishlistStore } from "../../store/useWishlistStore";
 import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
-import AddressForm, { type AddressFormValues } from "../checkout/AddressForm";
-import type { UserAddress } from "../../interfaces";
+import { formatPrice } from "../../lib/utils";
+import { Heart } from "lucide-react";
+import type { WishlistItem } from "../../interfaces";
 
-export default function AddressBook() {
-  const [addresses, setAddresses] = useState<UserAddress[]>([]);
+export default function WishlistGrid() {
+  const setStoreItems = useWishlistStore((s) => s.setItems);
+  const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<Partial<AddressFormValues>>({});
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+
+  const itemKey = (item: WishlistItem) =>
+    `${item.product_id}-${item.variant_id}`;
 
   async function refresh() {
     try {
-      setAddresses(await userService.getAddresses());
+      const data = await wishlistService.getWishlist();
+      setItems(data);
+      // Keep the global store (used for the heart icon on product pages)
+      // in sync with what's actually on the server.
+      setStoreItems(data);
+    } catch {
+      toast.error("Failed to load wishlist.");
     } finally {
       setLoading(false);
     }
@@ -24,124 +36,107 @@ export default function AddressBook() {
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    const { address_line, province_id, district_id, ward_id } = form;
-    if (!address_line || !province_id || !district_id || !ward_id) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
-    setSaving(true);
+  async function handleRemove(item: WishlistItem) {
+    const key = itemKey(item);
+    setRemovingKey(key);
     try {
-      await userService.addAddress(form as AddressFormValues);
-      toast.success("Address added.");
-      setAdding(false);
-      setForm({});
-      setLoading(true);
-      refresh();
-    } catch {
-      toast.error("Failed to add address.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(address_id: number) {
-    try {
-      await userService.deleteAddress(address_id);
-      toast.success("Address removed.");
-      setAddresses((prev) => prev.filter((a) => a.address_id !== address_id));
-    } catch {
-      toast.error("Failed to remove address.");
-    }
-  }
-
-  async function handleSetDefault(address_id: number) {
-    try {
-      await userService.setDefaultAddress(address_id);
-      toast.success("Default address updated.");
-      setAddresses((prev) =>
-        prev.map((a) => ({ ...a, is_default: a.address_id === address_id })),
+      await wishlistService.removeFromWishlist(
+        item.product_id,
+        item.variant_id,
       );
+      setItems((prev) => prev.filter((i) => itemKey(i) !== key));
+      useWishlistStore.getState().removeItem(item.product_id, item.variant_id);
+      toast.success("Removed from wishlist.");
     } catch {
-      toast.error("Failed to update default.");
+      toast.error("Failed to remove item.");
+    } finally {
+      setRemovingKey(null);
     }
   }
 
   if (loading) return <Spinner />;
 
-  return (
-    <div className="flex flex-col gap-4">
-      {addresses.map((a) => (
-        <div
-          key={a.address_id}
-          className="flex items-start justify-between rounded-xl border p-4"
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-300 py-16 text-center">
+        <Heart className="h-8 w-8 text-gray-300" />
+        <p className="text-sm text-gray-500">Your wishlist is empty.</p>
+        <Link
+          href="/"
+          className="text-sm font-medium text-blue-500 hover:underline"
         >
-          <div className="text-sm">
-            {a.label && <p className="font-medium text-gray-800">{a.label}</p>}
-            <p className="text-gray-600">{a.address_line}</p>
-            {a.is_default && (
-              <span className="mt-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                Default
-              </span>
-            )}
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            {!a.is_default && (
-              <button
-                onClick={() => handleSetDefault(a.address_id)}
-                className="text-xs text-blue-500 hover:underline"
-              >
-                Set default
-              </button>
-            )}
-            <button
-              onClick={() => handleDelete(a.address_id)}
-              className="text-xs text-red-500 hover:underline"
-            >
-              Remove
-            </button>
-          </div>
-        </div>
-      ))}
+          Browse products
+        </Link>
+      </div>
+    );
+  }
 
-      {adding ? (
-        <form
-          onSubmit={handleAdd}
-          className="flex flex-col gap-4 rounded-xl border p-4"
-        >
-          <p className="font-medium">New Address</p>
-          <AddressForm value={form} onChange={setForm} />
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-black px-5 py-2 text-sm text-white disabled:opacity-50"
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {items.map((item) => {
+        const key = itemKey(item);
+        const busy = removingKey === key;
+        const price =
+          item.base_price != null ? formatPrice(Number(item.base_price)) : null;
+
+        return (
+          <div
+            key={key}
+            className={`flex gap-4 rounded-xl border p-4 transition-opacity ${
+              busy ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            <Link
+              href={`/product/${item.product_id}`}
+              className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-100"
             >
-              {saving ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setAdding(false);
-                setForm({});
-              }}
-              className="text-sm text-gray-500 hover:underline"
-            >
-              Cancel
-            </button>
+              {item.image_url ? (
+                <Image
+                  src={item.image_url}
+                  alt={item.product_name ?? "Product image"}
+                  fill
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                  No image
+                </div>
+              )}
+            </Link>
+
+            <div className="flex flex-1 flex-col justify-between">
+              <div>
+                <Link
+                  href={`/product/${item.product_id}`}
+                  className="font-medium text-gray-800 hover:underline"
+                >
+                  {item.product_name ?? `Product #${item.product_id}`}
+                </Link>
+                {item.variant_name && (
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    {item.variant_name}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-900">
+                  {price ?? "—"}
+                </span>
+                <button
+                  onClick={() => handleRemove(item)}
+                  className="text-xs text-red-500 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
           </div>
-        </form>
-      ) : (
-        <button
-          onClick={() => setAdding(true)}
-          className="rounded-xl border border-dashed border-gray-300 py-4 text-sm text-gray-500 hover:border-gray-500"
-        >
-          + Add new address
-        </button>
-      )}
+        );
+      })}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { CartItem } from "../interfaces";
 
 interface CartStore {
@@ -21,47 +22,63 @@ interface CartStore {
   totalCount: () => number;
 }
 
-export const useCartStore = create<CartStore>((set, get) => ({
-  items: [],
+/**
+ * Wrapped in `persist` (matching useAuthStore's pattern) so a hard reload
+ * no longer wipes cart items outright — the cart page instead re-syncs
+ * from the server as soon as it sees a logged-in `user`, and guest carts
+ * now survive a refresh too.
+ */
+export const useCartStore = create<CartStore>()(
+  persist(
+    (set, get) => ({
+      items: [],
 
-  setItems: (items) => set({ items }),
+      setItems: (items) => set({ items }),
 
-  addItem: (item) =>
-    set((s) => {
-      const exists = s.items.find(
-        (i) =>
-          i.product_id === item.product_id && i.variant_id === item.variant_id,
-      );
-      if (exists) {
-        // Increment quantity in guest cart; server will reconcile on merge
-        return {
+      addItem: (item) =>
+        set((s) => {
+          const exists = s.items.find(
+            (i) =>
+              i.product_id === item.product_id &&
+              i.variant_id === item.variant_id,
+          );
+          if (exists) {
+            // Increment quantity in guest cart; server will reconcile on merge
+            return {
+              items: s.items.map((i) =>
+                i.product_id === item.product_id &&
+                i.variant_id === item.variant_id
+                  ? { ...i, quantity: i.quantity + item.quantity }
+                  : i,
+              ),
+            };
+          }
+          return { items: [...s.items, item] };
+        }),
+
+      updateItem: (product_id, variant_id, quantity) =>
+        set((s) => ({
           items: s.items.map((i) =>
-            i.product_id === item.product_id && i.variant_id === item.variant_id
-              ? { ...i, quantity: i.quantity + item.quantity }
+            i.product_id === product_id && i.variant_id === variant_id
+              ? { ...i, quantity }
               : i,
           ),
-        };
-      }
-      return { items: [...s.items, item] };
+        })),
+
+      removeItem: (product_id, variant_id) =>
+        set((s) => ({
+          items: s.items.filter(
+            (i) => !(i.product_id === product_id && i.variant_id === variant_id),
+          ),
+        })),
+
+      clearItems: () => set({ items: [] }),
+
+      totalCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),
-
-  updateItem: (product_id, variant_id, quantity) =>
-    set((s) => ({
-      items: s.items.map((i) =>
-        i.product_id === product_id && i.variant_id === variant_id
-          ? { ...i, quantity }
-          : i,
-      ),
-    })),
-
-  removeItem: (product_id, variant_id) =>
-    set((s) => ({
-      items: s.items.filter(
-        (i) => !(i.product_id === product_id && i.variant_id === variant_id),
-      ),
-    })),
-
-  clearItems: () => set({ items: [] }),
-
-  totalCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
-}));
+    {
+      name: "cart", // localStorage key
+      partialize: (state) => ({ items: state.items }),
+    },
+  ),
+);

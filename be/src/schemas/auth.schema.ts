@@ -32,16 +32,10 @@ export const loginSchema = z.object({
   }),
 });
 
-export const refreshSchema = z.object({
-  body: z.object({
-    refreshToken: z.string().min(1),
-  }),
-});
-
-export const logoutSchema = refreshSchema;
+// /refresh and /logout no longer take a body — the refresh token travels
+// as an httpOnly cookie (see controllers/auth.controller.ts), so there's
+// nothing left to validate here.
 
 // Update types
 export type RegisterBody = z.infer<typeof registerSchema>["body"];
 export type LoginBody = z.infer<typeof loginSchema>["body"];
-export type RefreshBody = z.infer<typeof refreshSchema>["body"];
-export type LogoutBody = z.infer<typeof logoutSchema>["body"];

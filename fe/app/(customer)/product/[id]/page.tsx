@@ -111,11 +111,19 @@ export default function ProductPage() {
     }
     setWishBusy(true);
     try {
-      const item = await wishlistService.addToWishlist({
+      await wishlistService.addToWishlist({
         product_id: productId,
         variant_id: selected.variant_id,
       });
-      addWishlistItem(item);
+      addWishlistItem({
+        product_id: productId,
+        variant_id: selected.variant_id,
+        created_at: new Date().toISOString(),
+        product_name: product?.name,
+        variant_name: selected.name,
+        base_price: String(selected.base_price),
+        image_url: displayImages[0]?.s3_url ?? null,
+      });
       toast.success("Saved to wishlist!");
     } catch {
       toast.error("Failed to update wishlist.");
@@ -202,7 +210,7 @@ export default function ProductPage() {
                 >
                   −
                 </button>
-                <span className="w-8 text-center text-sm font-medium text-gray-700">
+                <span className="w-8 text-center text-sm font-medium">
                   {quantity}
                 </span>
                 <button
@@ -219,32 +227,23 @@ export default function ProductPage() {
               <button
                 onClick={handleAddToCart}
                 disabled={cartBusy || !selected}
-                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-40 hover:cursor-pointer"
+                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-40"
               >
                 {cartBusy ? "Adding…" : "Add to Cart"}
               </button>
 
-              <div className="relative group">
-                <button
-                  onClick={handleWishlist}
-                  disabled={wishBusy}
-                  aria-label={wishlisted ? "Wishlisted" : "Add to Wishlist"}
-                  className="cursor-pointer rounded-xl border border-slate-300 bg-white p-3 transition-all duration-200 hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Heart
-                    className={`h-6 w-6 transition-colors duration-200 ${
-                      wishlisted
-                        ? "fill-rose-500 text-rose-500"
-                        : "text-slate-500 group-hover:text-rose-500"
-                    }`}
-                  />
-                </button>
-
-                {/* Tooltip */}
-                <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white opacity-0 shadow-lg transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
-                  {wishlisted ? "Wishlisted" : "Add to Wishlist"}
-                </div>
-              </div>
+              <button
+                onClick={handleWishlist}
+                disabled={wishBusy}
+                aria-label={wishlisted ? "Wishlisted" : "Add to wishlist"}
+                className="rounded-xl border border-gray-300 px-4 py-3 text-xl hover:bg-gray-50 disabled:opacity-40"
+              >
+                {wishlisted ? (
+                  <Heart className="bg-rose-500 text-white border-rose-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
+                ) : (
+                  <Heart className="border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
+                )}
+              </button>
             </div>
 
             {/* Virtual try-on — needs a variant selected either way */}
@@ -257,7 +256,7 @@ export default function ProductPage() {
                       )
                     : openLogin()
                 }
-                className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100 hover:cursor-pointer"
+                className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
               >
                 {user ? (
                   "Virtual Try-On"

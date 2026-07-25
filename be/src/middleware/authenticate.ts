@@ -13,23 +13,29 @@ declare module "express-serve-static-core" {
 }
 
 /**
- * Verifies the Bearer JWT issued to a "USER"-table user.
+ * Verifies the JWT issued to a "USER"-table user.
  * Attaches { user_id, email } to req.user — no role field ("USER" has no role column).
  * Uses verifyUserAccessToken() from utils/jwt.ts (JWT_SECRET).
+ *
+ * The token is read from the httpOnly `accessToken` cookie (see
+ * utils/cookies.ts) rather than an Authorization header — the frontend
+ * never holds the raw token in JS, so there's nothing for it to attach
+ * as a header. The cookie rides along automatically on same-site requests
+ * made with `withCredentials: true`.
  */
 export const authenticate = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  const authHeader = req.headers.authorization;
+  const token = req.cookies?.["accessToken"] as string | undefined;
 
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (!token) {
     return next(new ApiError(401, "Authentication token required"));
   }
 
   try {
-    const payload = verifyUserAccessToken(authHeader.slice(7));
+    const payload = verifyUserAccessToken(token);
     req.user = {
       user_id: payload.user_id,
       email: payload.email,

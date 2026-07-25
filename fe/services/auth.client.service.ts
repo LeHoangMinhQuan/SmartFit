@@ -1,30 +1,25 @@
-import axios from "axios";
+import api from "@/lib/axios";
 import { useAuthStore } from "@/store/useAuthStore";
 
-const API_BASE = process.env.NEXT_PUBLIC_BASE_URL;
-
 /**
+ * services/auth.client.service.ts
+ *
  * POST /api/auth/logout
  *
- * Sends the stored refresh token (from localStorage) alongside the access
- * token in the Authorization header. On 204 the server has deleted the
- * refresh_token row; we then wipe all client-side auth state.
+ * Uses the shared `api` instance (lib/axios.ts) — same baseURL as every
+ * other call, and `withCredentials: true` sends the httpOnly accessToken/
+ * refreshToken cookies automatically. Nothing to read from localStorage
+ * or attach as a header anymore.
  */
 export const logoutService = async (): Promise<void> => {
-  const { accessToken, clearAuth } = useAuthStore.getState();
-  const refreshToken = localStorage.getItem("refreshToken");
+  const { clearAuth } = useAuthStore.getState();
 
   try {
-    await axios.post(
-      `${API_BASE}/logout`,
-      { refreshToken },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        // We don't care if the server returns 401/500, we just want to attempt to tell it.
-        validateStatus: () => true,
-      },
+    await api.post(
+      "/auth/logout",
+      null,
+      // We don't care if the server returns 401/500, we just want to attempt to tell it.
+      { validateStatus: () => true },
     );
   } catch (error) {
     // Optional: Log network errors if needed, but no action required here
@@ -32,22 +27,5 @@ export const logoutService = async (): Promise<void> => {
   } finally {
     // ALWAYS clear the local state, no matter what the server responded
     clearAuth();
-    localStorage.removeItem("refreshToken");
   }
-};
-
-// --- new export ---
-/**
- * POST /api/auth/refresh
- * Sends the refresh token from localStorage, returns the new access token.
- * Called by the Axios interceptor in lib/axios.ts — must NOT use the api
- * instance (would cause an infinite loop on 401).
- */
-export const refreshAccessToken = async (): Promise<string> => {
-  const refreshToken = localStorage.getItem("refreshToken");
-  const response = await axios.post<{ accessToken: string }>(
-    `${API_BASE}/refresh`,
-    { refreshToken },
-  );
-  return response.data.accessToken;
 };

@@ -28,33 +28,46 @@ interface FeeEstimate {
   service_fee: number;
 }
 
+// Every endpoint below wraps its payload in { data: result } on the
+// backend (see controllers/shipping.controller.ts). These calls were
+// previously resolving with `r.data` (the whole { data: ... } envelope
+// object) instead of `r.data.data` (the actual payload) — e.g.
+// getProvinces() resolved to { data: [...] } rather than [...], which
+// crashed AddressForm.tsx's provinces.map() the same way cartItems.reduce
+// is not a function did before cart.service.ts was fixed.
 export const shippingService = {
   // Province/district/ward data comes from local DB (seeded from GHN).
   // Filter out districts where supporttype = 0 or status != 1 in the UI.
   getProvinces: () =>
-    api.get<Province[]>("/shipping/provinces").then((r) => r.data),
+    api
+      .get<{ data: Province[] }>("/shipping/provinces")
+      .then((r) => r.data.data),
 
   getDistricts: (province_id: number) =>
     api
-      .get<District[]>(`/shipping/districts/${province_id}`)
-      .then((r) => r.data),
+      .get<{ data: District[] }>(`/shipping/districts/${province_id}`)
+      .then((r) => r.data.data),
 
   getWards: (district_id: number) =>
-    api.get<Ward[]>(`/shipping/wards/${district_id}`).then((r) => r.data),
+    api
+      .get<{ data: Ward[] }>(`/shipping/wards/${district_id}`)
+      .then((r) => r.data.data),
 
   // Available GHN service tiers for the given route
   getServices: (body: ServicesBody) =>
     api
-      .post<ShippingService[]>("/shipping/services", body)
-      .then((r) => r.data),
+      .post<{ data: ShippingService[] }>("/shipping/services", body)
+      .then((r) => r.data.data),
 
   // Estimated fee for a specific service + parcel dimensions
   estimateFee: (body: FeeBody) =>
-    api.post<FeeEstimate>("/shipping/fee", body).then((r) => r.data),
+    api
+      .post<{ data: FeeEstimate }>("/shipping/fee", body)
+      .then((r) => r.data.data),
 
   // Latest row from shipping_logs for a given tracking code
   trackOrder: (tracking_code: string) =>
     api
-      .get<ShippingLog[]>(`/shipping/track/${tracking_code}`)
-      .then((r) => r.data),
+      .get<{ data: ShippingLog[] }>(`/shipping/track/${tracking_code}`)
+      .then((r) => r.data.data),
 };

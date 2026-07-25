@@ -11,7 +11,7 @@ import {
   findUserById,
   insertUser,
   insertRefreshToken,
-  findRefreshToken,
+  findRefreshTokenByHash,
   deleteRefreshToken,
   emailExists,
 } from "../models/user.model.js";
@@ -163,34 +163,37 @@ export interface RefreshResult {
  * Verifies the refresh token hash against the DB row for this user,
  * then issues a new access token. The refresh_token row is left untouched.
  *
- * user_id comes from req.user (authenticate middleware) — the client must
- * send a valid access token alongside the refresh token. This prevents one
- * user from using another user's refresh token hash.
+ * The refresh token itself (a 320-bit crypto-random value, see
+ * generateRefreshToken) is looked up by its hash alone — it doesn't need a
+ * still-valid access token to scope the lookup, since the whole point of
+ * this call is to renew an access token that has already expired.
  *
  * findUserById is needed to include the real email in the new access token
  * payload, since the refresh_token row doesn't store it.
  */
 export const refresh = async (
-  user_id: number,
   rawRefreshToken: string,
 ): Promise<RefreshResult> => {
   const token_hash = hashRefreshToken(rawRefreshToken);
 
   // Validates hash match AND expires_at > NOW()
-  const tokenRow = await findRefreshToken(user_id, token_hash);
+  const tokenRow = await findRefreshTokenByHash(token_hash);
 
   if (!tokenRow) {
     throw new ApiError(401, "Invalid or expired refresh token");
   }
 
   // Look up email for the access token payload
-  const user = await findUserById(user_id);
+  const user = await findUserById(tokenRow.user_id);
 
   if (!user) {
     throw new ApiError(401, "User not found");
   }
 
-  const accessToken = signUserAccessToken({ user_id, email: user.email });
+  const accessToken = signUserAccessToken({
+    user_id: tokenRow.user_id,
+    email: user.email,
+  });
 
   return { accessToken };
 };

@@ -2,12 +2,7 @@ import { Router } from "express";
 import { validate } from "../middleware/validate.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
-import {
-  registerSchema,
-  loginSchema,
-  refreshSchema,
-  logoutSchema,
-} from "../schemas/auth.schema.js";
+import { registerSchema, loginSchema } from "../schemas/auth.schema.js";
 import {
   registerController,
   loginController,
@@ -22,20 +17,25 @@ import {
  *
  * Middleware chain per route:
  *   Public:      authLimiter → validate(schema) → controller
- *   Protected:   authenticate → validate(schema) → controller
+ *   Protected:   authenticate → controller
  *
  * authLimiter:  10 req / 15 min per IP — guards against brute-force and enumeration.
- * authenticate: verifies Bearer access token, attaches req.user = { user_id, email }.
+ * authenticate: verifies the accessToken httpOnly cookie, attaches
+ *               req.user = { user_id, email }.
  * validate:     Zod parse + coerce; passes ApiError(422) to errorHandler on failure.
  *
- * Note — /refresh and /logout require a valid access token (authenticate).
- * This means the client must send both tokens:
- *   Authorization: Bearer <accessToken>
- *   Body: { refreshToken: "<rawRefreshToken>" }
+ * Note — /refresh is public (authLimiter only), not authenticate-gated.
+ * Requiring a still-valid access token to call /refresh was a catch-22:
+ * the whole point of /refresh is to mint a new access token once the old
+ * one has expired, so demanding a non-expired one to reach it meant the
+ * endpoint could never actually be used for its intended purpose.
+ * The refresh token itself (a 320-bit crypto-random value, hashed before
+ * storage — see findRefreshTokenByHash) arrives via an httpOnly cookie
+ * that's path-scoped to /api/auth, so no extra access-token-derived
+ * user_id scoping is needed for security.
  *
- * Rationale: the refresh_token table is keyed by (user_id, token_hash).
- * Without user_id from the access token we cannot scope the lookup,
- * allowing one user to probe another user's token hashes.
+ * /refresh and /logout no longer validate a body — both tokens now travel
+ * as httpOnly cookies (see controllers/auth.controller.js), not JSON.
  */
 const router = Router();
 
@@ -51,16 +51,11 @@ router.post(
 router.post("/login", authLimiter, validate(loginSchema), loginController);
 
 // POST /api/auth/refresh
-// authenticate first — user_id needed to scope the token lookup in the DB.
-router.post(
-  "/refresh",
-  authenticate,
-  validate(refreshSchema),
-  refreshController,
-);
+// Public — see note above. authLimiter guards against brute-forcing tokens.
+router.post("/refresh", authLimiter, refreshController);
 
 // POST /api/auth/logout
 // authenticate first — user_id needed to delete the correct token row.
-router.post("/logout", authenticate, validate(logoutSchema), logoutController);
+router.post("/logout", authenticate, logoutController);
 
 export default router;
