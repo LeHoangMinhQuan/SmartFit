@@ -1,3 +1,4 @@
+// fe/app/(customer)/layout.tsx
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import TopBanner from "../../components/layout/TopBanner";

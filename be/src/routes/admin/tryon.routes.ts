@@ -1,24 +1,24 @@
-import { Router } from 'express';
-import { authenticateStaff } from '../../middleware/authenticateStaff.js';
-import { authorize } from '../../middleware/authorize.js';
-import { validate } from '../../middleware/validate.js';
-import { adminTryonEndpointSchema } from '../../schemas/tryon.schema.js';
-import * as adminTryonController from '../../controllers/admin/tryon.controller.js';
+import { Router } from "express";
+import { authenticateStaff } from "../../middleware/authenticateStaff.js";
+import { authorize } from "../../middleware/authorize.js";
+import { validate } from "../../middleware/validate.js";
+import { adminTryonEndpointSchema } from "../../schemas/tryon.schema.js";
+import * as adminTryonController from "../../controllers/admin/tryon.controller.js";
 
 const router = Router();
 
 router.put(
-  '/endpoint',
+  "/endpoint",
   authenticateStaff,
-  authorize('admin'),
+  authorize("admin"),
   validate(adminTryonEndpointSchema),
   adminTryonController.setTryonEndpoint,
 );
 
 router.get(
-  '/endpoint',
+  "/endpoint",
   authenticateStaff,
-  authorize('admin'),
+  authorize("admin"),
   adminTryonController.getTryonEndpoint,
 );
 

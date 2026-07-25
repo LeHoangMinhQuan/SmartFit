@@ -1,4 +1,4 @@
-// services/tryon.service.ts
+// be/src/services/tryon.service.ts
 import axios from "axios";
 import {
   PutObjectCommand,

@@ -1,21 +1,21 @@
-import { Router } from 'express';
-import { authenticate } from '../middleware/authenticate.js';
-import { validate } from '../middleware/validate.js';
-import { tryonLimiter } from '../middleware/rateLimiter.js';
-import { tryonUpload } from '../middleware/tryonUpload.js';
+import { Router } from "express";
+import { authenticate } from "../middleware/authenticate.js";
+import { validate } from "../middleware/validate.js";
+import { tryonLimiter } from "../middleware/rateLimiter.js";
+import { tryonUpload } from "../middleware/tryonUpload.js";
 import {
   tryonSessionUploadSchema,
   tryonPreviewSchema,
   tryonSessionIdParamSchema,
-} from '../schemas/tryon.schema.js';
-import * as tryonController from '../controllers/tryon.controller.js';
+} from "../schemas/tryon.schema.js";
+import * as tryonController from "../controllers/admin/tryon.controller.js";
 
 const router = Router();
 
 // tryonUpload (multer-s3) MUST run before validate() — it's what populates
 // req.body from the multipart fields and req.file from the photo field.
 router.post(
-  '/session',
+  "/session",
   authenticate,
   tryonLimiter,
   tryonUpload,
@@ -24,21 +24,21 @@ router.post(
 );
 
 router.post(
-  '/preview',
+  "/preview",
   authenticate,
   validate(tryonPreviewSchema),
   tryonController.requestPreview,
 );
 
 router.get(
-  '/preview/:session_id',
+  "/preview/:session_id",
   authenticate,
   validate(tryonSessionIdParamSchema),
   tryonController.getPreview,
 );
 
 router.delete(
-  '/session/:session_id',
+  "/session/:session_id",
   authenticate,
   validate(tryonSessionIdParamSchema),
   tryonController.deleteSession,
