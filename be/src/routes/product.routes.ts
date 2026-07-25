@@ -49,7 +49,7 @@ categoryRouter.get("/featured", ProductController.getFeaturedCategories);
 categoryRouter.post(
   "/:category_id/image",
   authenticateStaff,
-  uploadSingle, // reuses your existing single-file S3 upload middleware, field name "image"
+  uploadSingle, // category has a single image_url column — single-file upload, field name "image"
   ProductController.uploadCategoryImage,
 );
 

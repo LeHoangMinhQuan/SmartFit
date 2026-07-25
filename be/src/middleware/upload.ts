@@ -19,7 +19,12 @@ import { env } from "../config/env.js";
  * Limits: 10 files max, 5 MB each, jpeg/png/webp only.
  */
 
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_FILE_COUNT = 10;
 
@@ -63,8 +68,14 @@ const uploader = multer({
   },
 });
 
-/** POST /api/uploads/images — single image, field name: "image" */
+/**
+ * POST /api/categories/:category_id/image — single image, field name: "image"
+ * Categories store a single `image_url` column, so this stays single-file.
+ */
 export const uploadSingle = uploader.single("image");
 
-/** POST /api/uploads/images/bulk + POST /api/products/:id/images — field name: "images" */
+/**
+ * POST /api/products/:id/images — 1 to 10 images, field name: "images"
+ * Used for both product images and variant images (variant_id passed in body).
+ */
 export const uploadBulk = uploader.array("images", MAX_FILE_COUNT);

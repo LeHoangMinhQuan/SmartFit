@@ -489,7 +489,7 @@ paths:
   /products/{id}/images:
     post:
       tags: [Products]
-      summary: Upload product image (Staff)
+      summary: Upload product or variant images, 1-10 files, max 5MB each, jpeg/png/webp (Staff)
       security: [{ staffAuth: [] }]
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -499,9 +499,14 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [image]
+              required: [images]
               properties:
-                image: { type: string, format: binary }
+                images:
+                  {
+                    type: array,
+                    items: { type: string, format: binary },
+                    maxItems: 10,
+                  }
                 variant_id: { type: integer }
       responses:
         "201":
@@ -519,7 +524,14 @@ paths:
                             data:
                               {
                                 type: object,
-                                properties: { image_id: { type: integer } },
+                                properties:
+                                  {
+                                    image_ids:
+                                      {
+                                        type: array,
+                                        items: { type: integer },
+                                      },
+                                  },
                               },
                           },
                       },
@@ -2410,50 +2422,6 @@ paths:
                 $ref: "#/components/schemas/TryonPollResult"
         "403": { description: Not your try-on session }
         "404": { description: Try-on session not found }
-
-  # ── Uploads ──────────────────────────────────────────────────────────────────
-  /uploads/images:
-    post:
-      tags: [Uploads]
-      summary: Single image upload → insert product_image → returns image_id (Staff)
-      security: [{ staffAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [image, product_id]
-              properties:
-                image: { type: string, format: binary }
-                product_id: { type: integer }
-                variant_id: { type: integer }
-      responses:
-        "201": { description: Uploaded }
-
-  /uploads/images/bulk:
-    post:
-      tags: [Uploads]
-      summary: Bulk image upload (max 10, 5MB each, jpeg/png/webp) — returns image_id[] (Staff)
-      security: [{ staffAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [images, product_id]
-              properties:
-                images:
-                  {
-                    type: array,
-                    items: { type: string, format: binary },
-                    maxItems: 10,
-                  }
-                product_id: { type: integer }
-                variant_id: { type: integer }
-      responses:
-        "201": { description: Uploaded }
 
   # ── Health ───────────────────────────────────────────────────────────────────
   /health:
