@@ -10,7 +10,7 @@ import { toast } from "../../../../components/ui/Toast";
 import Input from "../../../../components/ui/Input";
 import Spinner from "../../../../components/ui/Spinner";
 import VariantManager from "../../../../components/staff/VariantManager";
-import { Category } from "@/interfaces"
+import { Category } from "@/interfaces";
 
 type Tab = "info" | "variants" | "images" | "categories";
 const TABS: { key: Tab; label: string }[] = [
@@ -186,8 +186,6 @@ export default function ProductForm({
     }
   }
 
-
-
   function toggleCategory(category_id: number) {
     setSelectedCategoryIds((prev) =>
       prev.includes(category_id)
@@ -222,7 +220,7 @@ export default function ProductForm({
 
   return (
     <div className="p-8 flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-slate-900">
+      <h1 className="text-2xl font-bold text-gray-900 text-slate-900">
         {mode === "create" ? "New Product" : `Edit Product #${savedProductId}`}
       </h1>
 
@@ -537,5 +535,3 @@ export default function ProductForm({
     );
   }
 }
-
-

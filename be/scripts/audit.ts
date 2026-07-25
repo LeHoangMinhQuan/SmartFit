@@ -65,7 +65,7 @@ const files = readAll();
 // {
 //   // Find any unquoted db('ORDER') calls
 //   const bad = grep(files, /db\(['"`]ORDER['"`]\)(?![^)]*['"`]ORDER['"`])/);
-//   const unquoted = bad.filter((h) => !h.text.includes('"ORDER"'));
+//   const unquoted = bad.filter((h) => !h.text.includes("ORDER"));
 //   check(
 //     '"ORDER" table always quoted in Knex calls',
 //     unquoted.length === 0,

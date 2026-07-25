@@ -121,7 +121,7 @@ export async function handleIpn(
 
     const order_id = existing.order_id;
     const orderStatus = isSuccess ? "paid" : "payment_failed";
-    await trx('"ORDER"')
+    await trx("ORDER")
       .where({ order_id })
       .update({ status: orderStatus, updated_at: db.fn.now() });
   });

@@ -1,4 +1,5 @@
 import db from "../../config/db.js";
+import { DEFAULT_STORE_ID } from "../../config/store.js";
 
 // ─── Product ────────────────────────────────────────────────────────────────
 
@@ -131,14 +132,33 @@ export async function findVariantsByProduct(product_id: number) {
       db.raw(
         "json_agg(json_build_object('attribute_id', pa.attribute_id, 'value', pa.value)) filter (where pa.attribute_id is not null) as attributes",
       ),
+      // Variant-specific images. Was previously not joined at all, so
+      // `variant.images` was always undefined on the API response (rather
+      // than an empty array), which crashed the storefront when it did
+      // `selected.images.length`. COALESCE with '[]' so the frontend
+      // always gets an array, even with zero images uploaded.
+      db.raw(
+        "COALESCE(json_agg(json_build_object('image_id', pim.image_id, 'product_id', pim.product_id, 'variant_id', pim.variant_id, 's3_url', pim.s3_url)) filter (where pim.image_id is not null), '[]') as images",
+      ),
       "pp.base_price",
       "pp.start_date",
       "pp.end_date",
+      // Single-store scope (see config/store.ts + plan §12): the customer
+      // only ever sees the one seeded store's quantity as 'stock'. Was
+      // previously missing entirely, so every variant showed as out of
+      // stock in the UI regardless of actual store_product rows.
+      db.raw("COALESCE(sp.quantity, 0) as stock"),
     )
     .leftJoin("product_attribute as pa", function () {
       this.on("pv.product_id", "pa.product_id").andOn(
         "pv.variant_id",
         "pa.variant_id",
+      );
+    })
+    .leftJoin("product_image as pim", function () {
+      this.on("pv.product_id", "pim.product_id").andOn(
+        "pv.variant_id",
+        "pim.variant_id",
       );
     })
     .leftJoin("product_price as pp", function () {
@@ -147,6 +167,11 @@ export async function findVariantsByProduct(product_id: number) {
         "pp.variant_id",
       );
     })
+    .leftJoin("store_product as sp", function () {
+      this.on("pv.product_id", "sp.product_id")
+        .andOn("pv.variant_id", "sp.variant_id")
+        .andOnVal("sp.store_id", DEFAULT_STORE_ID);
+    })
     .where("pv.product_id", product_id)
     .groupBy(
       "pv.product_id",
@@ -154,6 +179,7 @@ export async function findVariantsByProduct(product_id: number) {
       "pp.base_price",
       "pp.start_date",
       "pp.end_date",
+      "sp.quantity",
     );
 }
 
@@ -243,7 +269,10 @@ export async function insertProductImages(
 }
 
 export async function findImagesByProduct(product_id: number) {
-  return db("product_image").where({ product_id });
+  // Only general/product-level images (variant_id IS NULL). Variant-specific
+  // images are attached per-variant in findVariantsByProduct instead, so
+  // they don't need to be returned here too.
+  return db("product_image").where({ product_id }).whereNull("variant_id");
 }
 
 export async function deleteProductImage(image_id: number) {

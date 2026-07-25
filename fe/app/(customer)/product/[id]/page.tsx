@@ -6,6 +6,7 @@ import { productService } from "../../../../services/product.service";
 import { cartService } from "../../../../services/cart.service";
 import { wishlistService } from "../../../../services/wishlist.service";
 import { useAuthStore } from "../../../../store/useAuthStore";
+import { useAuthModalStore } from "../../../../store/useAuthModalStore";
 import { useCartStore } from "../../../../store/useCartStore";
 import { useWishlistStore } from "../../../../store/useWishlistStore";
 import { toast } from "../../../../components/ui/Toast";
@@ -14,7 +15,7 @@ import ImageGallery from "../../../../components/product/ImageGallery";
 import VariantSelector from "../../../../components/product/VariantSelector";
 import PriceDisplay from "../../../../components/product/PriceDisplay";
 import ReviewSection from "../../../../components/product/ReviewSection";
-import { Heart } from "lucide-react";
+import { Heart, LogIn } from "lucide-react";
 import type { Product, ProductVariant } from "../../../../interfaces";
 
 export default function ProductPage() {
@@ -22,6 +23,7 @@ export default function ProductPage() {
   const productId = Number(params.id);
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const openLogin = useAuthModalStore((s) => s.openLogin);
   const { addItem: addLocalItem } = useCartStore();
   const { addItem: addWishlistItem, isWishlisted } = useWishlistStore();
 
@@ -46,10 +48,14 @@ export default function ProductPage() {
       .finally(() => setLoading(false));
   }, [productId]);
 
-  // Gallery shows selected variant images, falling back to product-level images
-  const displayImages = selected?.images.length
-    ? selected.images
-    : (product?.images ?? []);
+  // Gallery shows selected variant images, falling back to product-level images.
+  // Both selected.images and product.images can come back missing/undefined
+  // (e.g. locally where the upload middleware isn't wired up yet, so no
+  // product_image rows exist) — default to [] rather than crashing on
+  // `.length` of undefined.
+  const selectedImages = selected?.images ?? [];
+  const productImages = product?.images ?? [];
+  const displayImages = selectedImages.length ? selectedImages : productImages;
 
   async function handleAddToCart() {
     if (!selected) {
@@ -78,7 +84,8 @@ export default function ProductPage() {
           cart_id: 0,
           product_name: product?.name,
           variant_name: selected.name,
-          image_url: selected.images[0]?.s3_url ?? product?.images[0]?.s3_url,
+          image_url:
+            selected.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url,
         });
       }
       toast.success("Added to cart!");
@@ -151,6 +158,22 @@ export default function ProductPage() {
               {product.description}
             </p>
 
+            {!user && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                <span>
+                  Sign in to save items, checkout faster, and try this on
+                  virtually.
+                </span>
+                <button
+                  onClick={openLogin}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 font-medium text-white transition hover:bg-indigo-700"
+                >
+                  <LogIn className="h-4 w-4" />
+                  Sign In
+                </button>
+              </div>
+            )}
+
             {selected && (
               <PriceDisplay
                 basePrice={selected.base_price}
@@ -179,7 +202,7 @@ export default function ProductPage() {
                 >
                   −
                 </button>
-                <span className="w-8 text-center text-sm font-medium">
+                <span className="w-8 text-center text-sm font-medium text-gray-700">
                   {quantity}
                 </span>
                 <button
@@ -196,36 +219,54 @@ export default function ProductPage() {
               <button
                 onClick={handleAddToCart}
                 disabled={cartBusy || !selected}
-                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-40"
+                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-40 hover:cursor-pointer"
               >
                 {cartBusy ? "Adding…" : "Add to Cart"}
               </button>
 
-              <button
-                onClick={handleWishlist}
-                disabled={wishBusy}
-                aria-label={wishlisted ? "Wishlisted" : "Add to wishlist"}
-                className="rounded-xl border border-gray-300 px-4 py-3 text-xl hover:bg-gray-50 disabled:opacity-40"
-              >
-                {wishlisted ? (
-                  <Heart className="bg-rose-500 text-white border-rose-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
-                ) : (
-                  <Heart className="border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
-                )}
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={handleWishlist}
+                  disabled={wishBusy}
+                  aria-label={wishlisted ? "Wishlisted" : "Add to Wishlist"}
+                  className="cursor-pointer rounded-xl border border-slate-300 bg-white p-3 transition-all duration-200 hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Heart
+                    className={`h-6 w-6 transition-colors duration-200 ${
+                      wishlisted
+                        ? "fill-rose-500 text-rose-500"
+                        : "text-slate-500 group-hover:text-rose-500"
+                    }`}
+                  />
+                </button>
+
+                {/* Tooltip */}
+                <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-white opacity-0 shadow-lg transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+                  {wishlisted ? "Wishlisted" : "Add to Wishlist"}
+                </div>
+              </div>
             </div>
 
-            {/* Virtual try-on — logged-in + variant selected only */}
-            {user && selected && (
+            {/* Virtual try-on — needs a variant selected either way */}
+            {selected && (
               <button
                 onClick={() =>
-                  router.push(
-                    `/tryon?product_id=${productId}&variant_id=${selected.variant_id}`,
-                  )
+                  user
+                    ? router.push(
+                        `/tryon?product_id=${productId}&variant_id=${selected.variant_id}`,
+                      )
+                    : openLogin()
                 }
-                className="border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700 hover:bg-indigo-100 hover:cursor-pointer"
               >
-                Virtual Try-On
+                {user ? (
+                  "Virtual Try-On"
+                ) : (
+                  <>
+                    <LogIn className="h-4 w-4" />
+                    Sign In to Try It On
+                  </>
+                )}
               </button>
             )}
 

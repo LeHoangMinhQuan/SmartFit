@@ -30,11 +30,7 @@ function flattenCategories(nodes: Category[]): Category[] {
 }
 
 async function resolveCategoryId(slug: string): Promise<number | null> {
-  // TODO: add categories for UI test
-  // const categories: Category[] = await categoryService.getCategories();
-  const categories = [
-    { category_id: 1, name: "TestCategory", parent_id: null, children: [] },
-  ];
+  const categories: Category[] = await categoryService.getCategories();
   const flat = flattenCategories(categories);
   const decoded = decodeURIComponent(slug);
   const match =
@@ -56,38 +52,19 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   }
 
   const page = Number(query.page ?? 1);
-  // TODO: use sample data for UI test
-  // const result = await categoryService.getCategoryProducts(category_id, {
-  //   page,
-  //   limit: 20,
-  //   minPrice: query.minPrice ? Number(query.minPrice) : undefined,
-  //   maxPrice: query.maxPrice ? Number(query.maxPrice) : undefined,
-  //   sort: query.sort,
-  // });
-  const result = {
-    data: [
-      {
-        product_id: 1,
-        name: "Test Product",
-        description: "This is a test product description.",
-        image: null,
-        price: 19.99,
-        originalPrice: undefined,
-        discountActive: false,
-        avg_rating: null, 
-      },
-    ],
-    meta: {
-      page: 1,
-      limit: 20,
-      total: 21,
-      totalPages: 2,
-    },
-  };
+  const result = await categoryService.getCategoryProducts(category_id, {
+    page,
+    limit: 20,
+    minPrice: query.minPrice ? Number(query.minPrice) : undefined,
+    maxPrice: query.maxPrice ? Number(query.maxPrice) : undefined,
+    sort: query.sort,
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="mb-8 text-2xl font-bold">{decodeURIComponent(slug)}</h1>
+      <h1 className="mb-8 text-2xl font-bold text-gray-900">
+        {decodeURIComponent(slug)}
+      </h1>
 
       <div className="flex gap-8">
         <Suspense fallback={<div className="w-52 shrink-0" />}>

@@ -216,7 +216,7 @@ export default function StaffCategoriesPage() {
                     type="number"
                     value={editOrder}
                     onChange={(e) => setEditOrder(e.target.value)}
-                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm text-black"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -229,7 +229,7 @@ export default function StaffCategoriesPage() {
                     onChange={(e) =>
                       setEditImageFile(e.target.files?.[0] ?? null)
                     }
-                    className="text-xs"
+                    className="text-xs text-gray-600"
                   />
                 </div>
               </>
@@ -336,7 +336,7 @@ export default function StaffCategoriesPage() {
                     type="number"
                     value={displayOrder}
                     onChange={(e) => setDisplayOrder(e.target.value)}
-                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm text-black"
                   />
                 </div>
                 <div className="flex flex-col gap-1">

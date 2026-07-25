@@ -73,7 +73,7 @@ export default function StaffDetailPage() {
       .finally(() => setLoading(false));
   }, [staffId]);
 
-  async function handleSaveInfo(e: React.FormEvent) {
+  async function handleSaveInfo(e: React.SubmitEvent) {
     e.preventDefault();
     setSavingInfo(true);
     try {
@@ -163,7 +163,7 @@ export default function StaffDetailPage() {
         ← Back
       </button>
 
-      <h1 className="text-2xl font-bold">
+      <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
         {staff.name}
         <span className="ml-2 text-sm font-normal text-gray-400">
           #{staff.staff_id}
@@ -250,7 +250,7 @@ export default function StaffDetailPage() {
                 <select
                   value={assignRoleId}
                   onChange={(e) => setAssignRoleId(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
                 >
                   <option value="">Choose role…</option>
                   {unassignedRoles.map((r) => (
@@ -263,7 +263,7 @@ export default function StaffDetailPage() {
               <button
                 type="submit"
                 disabled={!assignRoleId}
-                className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-40"
+                className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-40 hover:cursor-pointer"
               >
                 Assign
               </button>

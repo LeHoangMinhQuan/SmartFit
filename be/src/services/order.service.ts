@@ -4,9 +4,13 @@ import * as OrderModel from "../models/order.model.js";
 import * as CartModel from "../models/cart.model.js";
 import * as VoucherModel from "../models/voucher.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
+import { DEFAULT_STORE_ID } from "../config/store.js";
+
 
 const SYSTEM_STAFF_ID = 1;
-const DEFAULT_STORE_ID = 1; // TODO: resolve closest store by ward; using store 1 for now
+// Single-store scope (see ecommerce-api-plan.md scope note + §12): GHN has one
+// registered shop, so all orders fulfill from the one seeded `store` row.
+// Swap this for assignFulfillmentStores() (§12.3) if a second store is added.
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending_payment: ["paid", "payment_failed", "cancelled"],
@@ -57,6 +61,7 @@ export async function createOrder(
   const orderItems = cartItems.map((item: any) => ({
     product_id: item.product_id,
     variant_id: item.variant_id,
+    store_id: DEFAULT_STORE_ID,
     quantity: item.quantity,
     unit_price: Number(item.unit_price),
     subtotal: Number(item.subtotal),
@@ -91,12 +96,13 @@ export async function createOrder(
     }
 
     // Create order (shipping_order_id nullable — filled after payment via IPN)
-    const [orderRow] = await trx('"ORDER"')
+    const [orderRow] = await trx("ORDER")
       .insert({
         user_id,
         staff_id: SYSTEM_STAFF_ID,
         payment_method_id: data.payment_method_id,
         shipping_address: data.shipping_address,
+        ward_id: data.ward_id,
         total_amount,
         status: "pending_payment",
       })
@@ -177,7 +183,7 @@ export async function cancelOrder(order_id: number, user_id: number) {
         .increment("quantity", item.quantity);
     }
 
-    await trx('"ORDER"')
+    await trx("ORDER")
       .where({ order_id })
       .update({ status: "cancelled", updated_at: db.fn.now() });
   });

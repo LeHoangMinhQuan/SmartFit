@@ -90,17 +90,26 @@ export default function StaffInventoryPage() {
   });
   const variants = variantsQuery.data ?? [];
 
-  useEffect(() => {
-    adminService
-      .getStores()
-      .then(setStores)
-      .catch(() => {});
-    adminService
-      .getSuppliers()
-      .then(setSuppliers)
-      .catch(() => {});
-    loadImportHistory(1);
-  }, []);
+useEffect(() => {
+  adminService
+    .getStores()
+    .then((rows) => {
+      setStores(rows);
+      // Single-store scope (see ecommerce-api-plan.md §12): auto-select
+      // when there's exactly one store so staff aren't forced to pick from
+      // a dropdown with only one option. Stops mattering once a second
+      // store exists — the dropdown falls back to manual selection.
+      if (rows.length === 1) {
+        setSelectedStoreId(String(rows[0].store_id));
+      }
+    })
+    .catch(() => {});
+  adminService
+    .getSuppliers()
+    .then(setSuppliers)
+    .catch(() => {});
+  loadImportHistory(1);
+}, []);
 
   useEffect(() => {
     loadImportHistory(importsPage);

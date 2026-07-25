@@ -62,7 +62,7 @@ export default function PaymentResultPage({
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl">
           ✓
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
           Payment Successful!
         </h1>
         <p className="text-sm text-gray-600">
@@ -113,7 +113,9 @@ export default function PaymentResultPage({
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-3xl">
         ✕
       </div>
-      <h1 className="text-2xl font-bold text-gray-900">Payment Failed</h1>
+      <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
+        Payment Failed
+      </h1>
       <p className="text-sm text-gray-600">{errorMsg}</p>
       {responseCode && (
         <p className="text-xs text-gray-400">Code: {responseCode}</p>

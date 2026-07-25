@@ -1333,7 +1333,7 @@ paths:
       description: |
         GHN calls this when shipment status changes. Maps GHN status strings to
         ≤10 chars before inserting into `shipping_logs.status`. If status = 'delivered',
-        updates `"ORDER".status` to 'delivered'.
+        updates `ORDER.status` to 'delivered'.
       requestBody:
         required: true
         content:

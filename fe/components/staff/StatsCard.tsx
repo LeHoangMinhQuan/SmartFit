@@ -50,7 +50,9 @@ export default function StatsCard({
       <p className="text-xs font-semibold uppercase tracking-wider text-gray-900">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
+      <p className="mt-2 text-2xl font-bold text-gray-900 text-gray-900">
+        {value}
+      </p>
       {hint && (
         <p
           className={clsx(

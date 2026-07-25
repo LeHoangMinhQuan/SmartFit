@@ -104,7 +104,9 @@ export default function OrderDetailPage({ params }: Props) {
     <div className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Order #{order.order_id}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Order #{order.order_id}
+          </h1>
           <p className="text-sm text-gray-500">
             Placed on {formatDate(order.created_at)}
           </p>
@@ -122,7 +124,7 @@ export default function OrderDetailPage({ params }: Props) {
               (v) => v.variant_id === item.variant_id,
             );
             const image =
-              variant?.images[0]?.s3_url ?? product?.images[0]?.s3_url;
+              variant?.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url;
 
             return (
               <div

@@ -23,29 +23,29 @@ export interface CreateOrderData {
 // ─── Order ────────────────────────────────────────────────────────────────────
 
 export async function createOrder(data: CreateOrderData): Promise<number> {
-  const [row] = await db('"ORDER"').insert(data).returning("order_id");
+  const [row] = await db("ORDER").insert(data).returning("order_id");
   return row.order_id;
 }
 
 export async function findOrderById(order_id: number) {
-  return db('"ORDER"').where({ order_id }).first();
+  return db("ORDER").where({ order_id }).first();
 }
 
 export async function findOrderByIdAndUser(order_id: number, user_id: number) {
-  return db('"ORDER"').where({ order_id, user_id }).first();
+  return db("ORDER").where({ order_id, user_id }).first();
 }
 
 export async function findOrdersByUser(user_id: number, page = 1, limit = 20) {
   const offset = (page - 1) * limit;
-  const rows = await db('"ORDER"')
+  const rows = await db("ORDER")
     .where({ user_id })
     .orderBy("created_at", "desc")
     .limit(limit)
     .offset(offset);
-  const totalResult = await db('"ORDER"')
+  const totalResult = await db("ORDER")
     .where({ user_id })
     .count("order_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
+  const total = totalResult[0]?.["total"] ?? 0;
 
   return { rows, total: Number(total) };
 }
@@ -61,7 +61,7 @@ export async function findAllOrders(filters: {
   const { status, user_id, from, to, page = 1, limit = 20 } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db('"ORDER"').select("*");
+  let query = db("ORDER").select("*");
   if (status) query = query.where({ status });
   if (user_id) query = query.where({ user_id });
   if (from) query = query.where("created_at", ">=", from);
@@ -72,17 +72,17 @@ export async function findAllOrders(filters: {
     .limit(limit)
     .offset(offset);
 
-  let countQ = db('"ORDER"').count("order_id as total");
+  let countQ = db("ORDER").count("order_id as total");
   if (status) countQ = countQ.where({ status });
   if (user_id) countQ = countQ.where({ user_id });
   const totalResult = await countQ;
-  const total = totalResult[0]?.['total'] ?? 0;
+  const total = totalResult[0]?.["total"] ?? 0;
 
   return { rows, total: Number(total) };
 }
 
 export async function updateOrderStatus(order_id: number, status: OrderStatus) {
-  return db('"ORDER"')
+  return db("ORDER")
     .where({ order_id })
     .update({ status, updated_at: db.fn.now() });
 }
@@ -91,7 +91,7 @@ export async function setOrderShippingId(
   order_id: number,
   shipping_order_id: number,
 ) {
-  return db('"ORDER"')
+  return db("ORDER")
     .where({ order_id })
     .update({ shipping_order_id, updated_at: db.fn.now() });
 }

@@ -110,11 +110,12 @@ export default function TryOnPage({ productId, variantId }: Props) {
     );
   }
 
-  const garmentImage = variant?.images[0]?.s3_url ?? product?.images[0]?.s3_url;
+  const garmentImage =
+    variant?.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="mb-2 text-2xl font-bold">Virtual Try-On</h1>
+      <h1 className="mb-2 text-2xl font-bold text-gray-900">Virtual Try-On</h1>
       {product && (
         <p className="mb-8 text-sm text-gray-500">
           {product.name} — {variant?.name}

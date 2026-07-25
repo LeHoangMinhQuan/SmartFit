@@ -29,7 +29,11 @@ export default function StaffLoginPage() {
         password,
       });
       const extractedData = data.data; // Extract the actual data object from the response
-      setAuth(extractedData.staff_id, extractedData.name, extractedData.accessToken);
+      setAuth(
+        extractedData.staff_id,
+        extractedData.name,
+        extractedData.accessToken,
+      );
       router.push("/staff");
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -46,7 +50,9 @@ export default function StaffLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-8">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Staff Login</h1>
+          <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
+            Staff Login
+          </h1>
           <p className="mt-1 text-sm text-gray-500">Internal access only</p>
         </div>
 

@@ -2,8 +2,8 @@ import { Knex } from "knex";
 
 /**
  * Optional demo seed for local development.
- * Creates 3 top-level categories (2 featured, for the landing page's
- * "Browse By Category" section) plus 1 nested category, and 8 demo products
+ * Creates 5 top-level categories (4 featured, for the landing page's
+ * "Browse By Category" section) plus 1 nested category, and 12 demo products
  * spread across them with variants, attributes, prices, and inventory — so
  * cart/order/category-browsing/homepage flows can all be exercised without
  * manual setup.
@@ -70,6 +70,18 @@ export async function seed(knex: Knex): Promise<void> {
     display_order: 2,
     image_url:
       "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800",
+  });
+  const newArrivalsId = await getOrCreateCategory("New Arrivals", null, {
+    is_featured: true,
+    display_order: 3,
+    image_url:
+      "https://images.unsplash.com/photo-1479064555552-3ef4979f8908?w=800",
+  });
+  const onSaleId = await getOrCreateCategory("On Sale", null, {
+    is_featured: true,
+    display_order: 4,
+    image_url:
+      "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800",
   });
   const jacketsId = await getOrCreateCategory("Jackets", null); // not featured — exercises the "unfeatured category" path
   await getOrCreateCategory("Formal", shirtsId); // nested under Shirts — exercises tree depth, no products assigned
@@ -151,6 +163,40 @@ export async function seed(knex: Knex): Promise<void> {
       size: "L",
       price: 529000,
     },
+    // New Arrivals Products
+    {
+      name: "Arrival T-Shirt",
+      description: "Fresh out of the box new arrival.",
+      category_id: newArrivalsId,
+      color: "White",
+      size: "L",
+      price: 320000,
+    },
+    {
+      name: "Arrival Hoodie",
+      description: "Latest autumn collection hoodie.",
+      category_id: newArrivalsId,
+      color: "Grey",
+      size: "XL",
+      price: 750000,
+    },
+    // On Sale Products
+    {
+      name: "Discounted Hat",
+      description: "Summer clearance item.",
+      category_id: onSaleId,
+      color: "Black",
+      size: "OS",
+      price: 150000,
+    },
+    {
+      name: "Sale Sneakers",
+      description: "Last pair on sale.",
+      category_id: onSaleId,
+      color: "White",
+      size: "42",
+      price: 890000,
+    },
   ];
 
   const store = await knex("store").first();
@@ -169,7 +215,7 @@ export async function seed(knex: Knex): Promise<void> {
     await knex("product_variant").insert({
       product_id,
       variant_id: 1,
-      is_primary: true, // only variant for this demo product — schema audit found this column was previously undocumented/unset
+      is_primary: true, // only variant for this demo product
       name: `${p.color} / ${p.size}`,
     });
 
@@ -206,6 +252,6 @@ export async function seed(knex: Knex): Promise<void> {
   }
 
   console.log(
-    `Seeded 3 categories (2 featured) + 1 nested category, and ${products.length} demo products.`,
+    `Seeded 5 categories (4 featured) + 1 nested category, and ${products.length} demo products.`,
   );
 }
