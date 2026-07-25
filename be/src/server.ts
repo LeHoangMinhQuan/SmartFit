@@ -1,10 +1,10 @@
 import dotenv from "dotenv";
-import app from "./src/app.js";
+import app from "./app.js";
 
 dotenv.config();
 
 // Start the server
-const port:number = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const port:number = process.env['PORT'] ? parseInt(process.env['PORT']) : 3000;
 
 app.listen(port, "0.0.0.0", (error?: Error) => {
   if (error) {
