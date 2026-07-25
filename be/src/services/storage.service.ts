@@ -6,12 +6,30 @@ import { env } from "../config/env.js";
 /**
  * storage.service.ts
  *
- * Centralises all direct S3 operations (delete, pre-sign).
+ * Centralises all direct S3 operations (delete, pre-sign, CDN URL building).
  * Uploads are handled by multer-s3 in middleware/upload.ts and middleware/tryonUpload.ts.
  *
- * Product images (products/ prefix) are publicly readable — no pre-signing needed.
- * Try-on assets (tryon-sessions/ prefix) are private — always serve via pre-signed URL.
+ * The S3 bucket is fully private (Block Public Access ON, no bucket ACLs,
+ * Object Ownership = bucket owner enforced). Public read access to product
+ * and category images (`products/`, `categories/` prefixes) is provided by a
+ * CloudFront distribution using Origin Access Control (OAC) — the bucket
+ * policy only trusts that specific distribution, never the public internet
+ * directly. See §10 of the API plan for the full CloudFront/IAM setup.
+ *
+ * Try-on assets (`tryon-sessions/` prefix) stay private and are never put
+ * behind CloudFront — always serve via pre-signed URL.
  */
+
+/**
+ * Build the public CDN URL for an object under the `products/` or
+ * `categories/` prefix. Use this instead of the raw multer-s3 `file.location`
+ * (which points at the private S3 origin and would 403 in the browser).
+ *
+ * @param s3Key - e.g. "products/abc123.jpg" or "categories/def456.jpg"
+ */
+export function cdnUrlForKey(s3Key: string): string {
+  return `https://${env.CDN_DOMAIN}/${s3Key}`;
+}
 
 /**
  * Generate a pre-signed GetObject URL for a private S3 object.

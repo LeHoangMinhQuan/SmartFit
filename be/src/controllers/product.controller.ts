@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync.js";
 import * as ProductService from "../services/product.service.js";
+import { cdnUrlForKey } from "../services/storage.service.js";
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export const deleteProduct = catchAsync(async (req: Request, res: Response) => {
 
 export const uploadProductImage = catchAsync(
   async (req: Request, res: Response) => {
-    const files = req.files as (Express.Multer.File & { location?: string })[];
+    const files = req.files as Express.MulterS3.File[];
     if (!files || files.length === 0) {
       res.status(400).json({ message: "No images uploaded" });
       return;
@@ -76,7 +77,7 @@ export const uploadProductImage = catchAsync(
       : undefined;
     const image_ids: number[] = [];
     for (const file of files) {
-      const s3_url = file.location ?? file.path;
+      const s3_url = cdnUrlForKey(file.key);
       const result = await ProductService.addProductImage(
         Number(req.params["id"]),
         variant_id,
@@ -238,7 +239,7 @@ export const uploadCategoryImage = catchAsync(
     if (!req.file) {
       return res.status(400).json({ message: "No image file provided" });
     }
-    const s3Url = (req.file as Express.MulterS3.File).location;
+    const s3Url = cdnUrlForKey((req.file as Express.MulterS3.File).key);
     const category_id = Number(req.params["category_id"]);
     const result = await ProductService.setCategoryImage(category_id, s3Url);
     res.json({ data: result });

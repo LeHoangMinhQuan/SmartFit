@@ -7,10 +7,16 @@ import { s3 } from "../config/s3.js";
 import { env } from "../config/env.js";
 
 /**
- * Product image upload middleware (FR-14).
+ * Product & category image upload middleware (FR-14).
  *
- * Uploads to S3 under products/{uuid}.ext
- * The resulting s3_url is stored in product_image.s3_url by the service layer.
+ * Uploads to S3 under products/{uuid}.ext or categories/{uuid}.ext, chosen by
+ * which route invoked the middleware (see `prefixForRequest` below). Keeping
+ * these prefixes distinct is what lets the CloudFront/bucket-policy/IAM setup
+ * grant public read access to product & category images without ever making
+ * the bucket itself public — see §10 of the API plan.
+ *
+ * The resulting s3_url is stored in product_image.s3_url / category.image_url
+ * by the service layer.
  * product_image.image_id is GENERATED ALWAYS AS IDENTITY — the DB returns it on insert.
  *
  * S3 credentials come from the shared s3 client (config/s3.ts):
@@ -28,17 +34,22 @@ const ALLOWED_MIME_TYPES = [
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_FILE_COUNT = 10;
 
+function prefixForRequest(req: Request): "products" | "categories" {
+  // /api/categories/:category_id/image → categories/, everything else (products/:id/images) → products/
+  return req.baseUrl.includes("/categories") ? "categories" : "products";
+}
+
 const s3Storage = multerS3({
   s3,
   bucket: env.S3_BUCKET,
   contentType: multerS3.AUTO_CONTENT_TYPE,
   key: (
-    _req: Request,
+    req: Request,
     file: Express.Multer.File,
     cb: (error: any, key?: string) => void,
   ) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `products/${uuidv4()}${ext}`);
+    cb(null, `${prefixForRequest(req)}/${uuidv4()}${ext}`);
   },
 });
 

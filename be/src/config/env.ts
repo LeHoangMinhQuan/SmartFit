@@ -33,6 +33,10 @@ const required = [
   "AWS_REGION",
   "S3_BUCKET",
 
+  // CloudFront distribution domain that fronts the private S3 bucket for
+  // publicly-readable product/category images (see §10 of the API plan)
+  "CDN_DOMAIN",
+
   // VNPay
   "VNPAY_TMN_CODE",
   "VNPAY_HASH_SECRET",
@@ -78,6 +82,7 @@ export const env = {
   // No AWS keys — instance role only
   AWS_REGION: process.env["AWS_REGION"]!,
   S3_BUCKET: process.env["S3_BUCKET"]!,
+  CDN_DOMAIN: process.env["CDN_DOMAIN"]!,
 
   VNPAY_TMN_CODE: process.env["VNPAY_TMN_CODE"]!,
   VNPAY_HASH_SECRET: process.env["VNPAY_HASH_SECRET"]!,
