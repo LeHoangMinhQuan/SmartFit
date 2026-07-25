@@ -58,8 +58,22 @@ jobs:
           ECR_REPOSITORY: ${{ vars[matrix.ecr_repo_secret] }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ${{ matrix.dockerfile }} ${{ matrix.context }}
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          if [ "${{ matrix.service }}" = "fe" ]; then
+            docker build \
+              --build-arg NEXT_PUBLIC_BASE_URL=${{ secrets.NEXT_PUBLIC_BASE_URL }} \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+              -f ${{ matrix.dockerfile }} \
+              ${{ matrix.context }}
+          else
+            docker build \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+              -f ${{ matrix.dockerfile }} \
+              ${{ matrix.context }}
+          fi
+
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
