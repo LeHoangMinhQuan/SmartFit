@@ -31,6 +31,9 @@ import supplierRoutes from "./routes/supplier.routes.js";
 
 const app = express();
 
+// Trust the first proxy in front of Express (CLoudflare Proxy)
+app.set("trust proxy", 1);
+
 // ─── Security & CORS ──────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(
