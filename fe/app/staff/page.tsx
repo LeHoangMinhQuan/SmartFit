@@ -3,18 +3,11 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { adminService } from "../../services/staff/admin.service";
+import type { DashboardStats } from "../../services/staff/admin.service";
 import { formatPrice } from "../../lib/utils";
 import { toast } from "../../components/ui/Toast";
 import StatsCard from "../../components/staff/StatsCard";
 import Spinner from "../../components/ui/Spinner";
-import type { OrderStatus } from "../../interfaces";
-
-interface DashboardStats {
-  total_revenue: number;
-  orders_by_status: Record<OrderStatus, number>;
-  top_products: Array<{ product_id: number; name: string; sold: number }>;
-  new_users_last_30d: number;
-}
 
 export default function StaffDashboardPage() {
   const {
@@ -23,7 +16,7 @@ export default function StaffDashboardPage() {
     isError,
   } = useQuery({
     queryKey: ["staff-dashboard"],
-    queryFn: () => adminService.getDashboard() as Promise<DashboardStats>,
+    queryFn: () => adminService.getDashboard(),
   });
 
   useEffect(() => {
@@ -38,6 +31,15 @@ export default function StaffDashboardPage() {
     );
   if (!stats)
     return <div className="p-8 text-gray-500">No data available.</div>;
+
+  // Flatten the backend's array-of-rows shape into a lookup map so both the
+  // top KPI cards and the per-status breakdown below can index by status.
+  const ordersByStatus: Record<string, number> = Object.fromEntries(
+    (stats.orders_by_status ?? []).map((row) => [
+      row.status,
+      Number(row.count),
+    ]),
+  );
 
   return (
     <div className="p-8 flex flex-col gap-8 min-h-screen bg-slate-50 p-8">
@@ -59,12 +61,12 @@ export default function StaffDashboardPage() {
         />
         <StatsCard
           label="Delivered Orders"
-          value={stats.orders_by_status?.["delivered"] ?? 0}
+          value={ordersByStatus["delivered"] ?? 0}
           variant="delivered"
         />
         <StatsCard
           label="Pending Payment"
-          value={stats.orders_by_status?.["pending_payment"] ?? 0}
+          value={ordersByStatus["pending_payment"] ?? 0}
           variant="pending"
         />
       </div>
@@ -73,12 +75,7 @@ export default function StaffDashboardPage() {
       <section className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
         <h2 className="mb-4 font-semibold text-slate-800">Orders by Status</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {(
-            Object.entries(stats?.orders_by_status ?? {}) as [
-              OrderStatus,
-              number,
-            ][]
-          ).map(([status, count]) => (
+          {Object.entries(ordersByStatus).map(([status, count]) => (
             <StatsCard
               key={status}
               label={status.replace(/_/g, " ")}

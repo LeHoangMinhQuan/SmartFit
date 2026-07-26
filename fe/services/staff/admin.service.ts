@@ -23,9 +23,13 @@ interface ApiResponse<T> {
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 
-interface DashboardStats {
+export interface DashboardStats {
   total_revenue: number;
-  orders_by_status: Record<OrderStatus, number>;
+  // Backend returns this as an array of grouped rows (SQL GROUP BY status —
+  // see admin.controller.ts getDashboard), not a Record keyed by status.
+  // `count` comes back as a string because Postgres COUNT() is bigint and
+  // the pg driver stringifies bigints to avoid precision loss.
+  orders_by_status: Array<{ status: OrderStatus; count: string | number }>;
   top_products: Array<{ product_id: number; name: string; sold: number }>;
   new_users_last_30d: number;
 }
