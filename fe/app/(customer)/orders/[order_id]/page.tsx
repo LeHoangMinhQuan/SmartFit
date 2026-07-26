@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orderService } from "../../../../services/order.service";
 import { productService } from "../../../../services/product.service";
 import { shippingService } from "../../../../services/shipping.service";
@@ -10,7 +11,7 @@ import { formatDate, formatDateTime, formatPrice } from "../../../../lib/utils";
 import { toast } from "../../../../components/ui/Toast";
 import Spinner from "../../../../components/ui/Spinner";
 import OrderStatusBadge from "../../../../components/order/OrderStatusBadge";
-import type { Order, Product, ShippingLog } from "../../../../interfaces";
+import type { Product } from "../../../../interfaces";
 
 interface Props {
   params: { order_id: string };
@@ -19,67 +20,76 @@ interface Props {
 export default function OrderDetailPage({ params }: Props) {
   const orderId = Number(params.order_id);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-
-  const [order, setOrder] = useState<Order | null>(null);
-  // order_item has no name/image snapshot — enrich from product_id lookups
-  const [productMap, setProductMap] = useState<Record<number, Product>>({});
-  const [trackingLogs, setTrackingLogs] = useState<ShippingLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!user) router.replace("/");
   }, [user, router]);
 
+  const orderQuery = useQuery({
+    queryKey: ["order", orderId],
+    queryFn: () => orderService.getOrder(orderId),
+    enabled: !!user,
+  });
+  const order = orderQuery.data ?? null;
+  const loading = orderQuery.isLoading;
+
   useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    orderService
-      .getOrder(orderId)
-      .then(async (o) => {
-        setOrder(o);
+    if (orderQuery.isError) toast.error("Failed to load order.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderQuery.isError]);
 
-        // Bulk-fetch distinct products referenced in order_item
-        const distinctIds = Array.from(
-          new Set(o.items.map((i) => i.product_id)),
-        );
-        const products = await Promise.all(
-          distinctIds.map((id) =>
-            productService.getProduct(id).catch(() => null),
-          ),
-        );
-        const map: Record<number, Product> = {};
-        products.forEach((p) => {
-          if (p) map[p.product_id] = p;
-        });
-        setProductMap(map);
+  // order_item has no name/image snapshot — enrich from product_id lookups
+  const productMapQuery = useQuery({
+    queryKey: [
+      "order-products",
+      orderId,
+      order?.items.map((i) => i.product_id),
+    ],
+    queryFn: async () => {
+      const distinctIds = Array.from(
+        new Set(order!.items.map((i) => i.product_id)),
+      );
+      const products = await Promise.all(
+        distinctIds.map((id) =>
+          productService.getProduct(id).catch(() => null),
+        ),
+      );
+      const map: Record<number, Product> = {};
+      products.forEach((p) => {
+        if (p) map[p.product_id] = p;
+      });
+      return map;
+    },
+    enabled: !!order,
+  });
+  const productMap = productMapQuery.data ?? {};
 
-        // Tracking — only if a shipping order exists
-        if (o.shipping?.tracking_code) {
-          shippingService
-            .trackOrder(o.shipping.tracking_code)
-            .then(setTrackingLogs)
-            .catch(() => {});
-        }
-      })
-      .catch(() => toast.error("Failed to load order."))
-      .finally(() => setLoading(false));
-  }, [user, orderId]);
+  const trackingQuery = useQuery({
+    queryKey: ["order-tracking", order?.shipping?.tracking_code],
+    queryFn: () => shippingService.trackOrder(order!.shipping!.tracking_code!),
+    enabled: !!order?.shipping?.tracking_code,
+  });
+  const trackingLogs = trackingQuery.data ?? [];
+
+  const cancelMutation = useMutation({
+    mutationFn: () => orderService.cancelOrder(order!.order_id),
+    onSuccess: () => {
+      queryClient.setQueryData(["order", orderId], (old: typeof order) =>
+        old ? { ...old, status: "cancelled" } : old,
+      );
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Order cancelled.");
+    },
+    onError: () => toast.error("Failed to cancel order."),
+  });
+  const cancelling = cancelMutation.isPending;
 
   async function handleCancel() {
     if (!order) return;
     if (!confirm("Cancel this order? This cannot be undone.")) return;
-    setCancelling(true);
-    try {
-      await orderService.cancelOrder(order.order_id);
-      setOrder({ ...order, status: "cancelled" });
-      toast.success("Order cancelled.");
-    } catch {
-      toast.error("Failed to cancel order.");
-    } finally {
-      setCancelling(false);
-    }
+    cancelMutation.mutate();
   }
 
   if (!user) return null;

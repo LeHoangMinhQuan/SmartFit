@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import { useCartStore } from "@/store/useCartStore";
@@ -16,6 +17,7 @@ import type { CartItem } from "@/interfaces";
 
 export default function CartPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const openLogin = useAuthModalStore((s) => s.openLogin);
   const {
@@ -28,20 +30,52 @@ export default function CartPage() {
     totalCount,
   } = useCartStore();
 
-  const [loading, setLoading] = useState(false);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
-  // On mount: if logged in, sync server cart → local store
-  useEffect(() => {
-    if (!user) return;
+  // On mount (and whenever the user logs in): sync server cart → local store.
+  const { isLoading: loading } = useQuery({
+    queryKey: ["cart", user?.user_id],
+    queryFn: async () => {
+      const cart = await cartService.getCart();
+      setCartData(cart.items, cart.total);
+      return cart;
+    },
+    enabled: !!user,
+  });
 
-    setLoading(true);
-    cartService
-      .getCart()
-      .then((cart) => setCartData(cart.items, cart.total))
-      .catch(() => toast.error("Failed to load cart"))
-      .finally(() => setLoading(false));
-  }, [user, setCartData]);
+  const updateItemMutation = useMutation({
+    mutationFn: (vars: {
+      product_id: number;
+      variant_id: number;
+      quantity: number;
+    }) => cartService.updateItem(vars),
+    onSuccess: (cart) => {
+      // updateItem already returns the full authoritative cart — no need
+      // for a second GET /cart round trip.
+      setCartData(cart.items, cart.total);
+      queryClient.setQueryData(["cart", user?.user_id], cart);
+    },
+    onError: () => toast.error("Failed to update quantity"),
+  });
+
+  const removeItemMutation = useMutation({
+    mutationFn: (vars: { product_id: number; variant_id: number }) =>
+      cartService.removeItem(vars),
+    onSuccess: (cart) => {
+      setCartData(cart.items, cart.total);
+      queryClient.setQueryData(["cart", user?.user_id], cart);
+    },
+    onError: () => toast.error("Failed to remove item"),
+  });
+
+  const clearCartMutation = useMutation({
+    mutationFn: () => cartService.clearCart(),
+    onSuccess: () => {
+      clearItems();
+      queryClient.invalidateQueries({ queryKey: ["cart", user?.user_id] });
+    },
+    onError: () => toast.error("Failed to clear cart"),
+  });
 
   const itemKey = (item: CartItem) => `${item.product_id}-${item.variant_id}`;
 
@@ -54,19 +88,14 @@ export default function CartPage() {
 
     try {
       if (user) {
-        const cart = await cartService.updateItem({
+        await updateItemMutation.mutateAsync({
           product_id: item.product_id,
           variant_id: item.variant_id,
           quantity: newQty,
         });
-        // updateItem already returns the full authoritative cart —
-        // no need for a second GET /cart round trip.
-        setCartData(cart.items, cart.total);
       } else {
         updateItem(item.product_id, item.variant_id, newQty);
       }
-    } catch {
-      toast.error("Failed to update quantity");
     } finally {
       setUpdatingKey(null);
     }
@@ -78,16 +107,13 @@ export default function CartPage() {
 
     try {
       if (user) {
-        const cart = await cartService.removeItem({
+        await removeItemMutation.mutateAsync({
           product_id: item.product_id,
           variant_id: item.variant_id,
         });
-        setCartData(cart.items, cart.total);
       } else {
         removeItem(item.product_id, item.variant_id);
       }
-    } catch {
-      toast.error("Failed to remove item");
     } finally {
       setUpdatingKey(null);
     }
@@ -96,11 +122,12 @@ export default function CartPage() {
   const handleClear = async () => {
     try {
       if (user) {
-        await cartService.clearCart();
+        await clearCartMutation.mutateAsync();
+      } else {
+        clearItems();
       }
-      clearItems();
     } catch {
-      toast.error("Failed to clear cart");
+      // toasted in mutation onError
     }
   };
 

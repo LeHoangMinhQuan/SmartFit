@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import Input from "../../../components/ui/Input";
-import type { PaginationMeta, Staff } from "../../../interfaces";
 
 export default function StaffListPage() {
   const router = useRouter();
-  const [staffList, setStaffList] = useState<Staff[]>([]);
-  // const [meta, setMeta] = useState<PaginationMeta | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["staff-staff-list"],
+    queryFn: () => adminService.getStaffList(),
+  });
+  const staffList = data?.data ?? [];
   const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
     birth_date: "",
@@ -22,21 +24,23 @@ export default function StaffListPage() {
     password: "",
   });
 
-  async function refresh() {
-    setLoading(true);
-    adminService
-      .getStaffList()
-      .then((res) => {
-        setStaffList(res.data);
-        // setMeta(res.meta);
-      })
-      .catch(() => toast.error("Failed to load staff."))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => {
-    refresh();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: () =>
+      adminService.createStaff({
+        name: form.name,
+        ...(form.birth_date ? { birth_date: form.birth_date } : {}),
+        ...(form.start_time ? { start_time: form.start_time } : {}),
+        password: form.password,
+      }),
+    onSuccess: () => {
+      toast.success("Staff member created.");
+      setForm({ name: "", birth_date: "", start_time: "", password: "" });
+      setAdding(false);
+      queryClient.invalidateQueries({ queryKey: ["staff-staff-list"] });
+    },
+    onError: () => toast.error("Failed to create staff member."),
+  });
+  const saving = createMutation.isPending;
 
   async function handleCreate(e: React.SubmitEvent) {
     e.preventDefault();
@@ -44,23 +48,7 @@ export default function StaffListPage() {
       toast.error("Name and password are required.");
       return;
     }
-    setSaving(true);
-    try {
-      await adminService.createStaff({
-        name: form.name,
-        ...(form.birth_date ? { birth_date: form.birth_date } : {}),
-        ...(form.start_time ? { start_time: form.start_time } : {}),
-        password: form.password,
-      });
-      toast.success("Staff member created.");
-      setForm({ name: "", birth_date: "", start_time: "", password: "" });
-      setAdding(false);
-      refresh();
-    } catch {
-      toast.error("Failed to create staff member.");
-    } finally {
-      setSaving(false);
-    }
+    createMutation.mutate();
   }
 
   return (
@@ -95,9 +83,7 @@ export default function StaffListPage() {
             label="Password"
             type="password"
             value={form.password}
-            onChange={(e) =>
-              setForm({ ...form, password: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
             required
             hint="Will be hashed server-side"
           />

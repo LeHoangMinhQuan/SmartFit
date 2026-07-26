@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { adminService } from "../../services/staff/admin.service";
 import { formatPrice } from "../../lib/utils";
 import { toast } from "../../components/ui/Toast";
@@ -16,16 +17,18 @@ interface DashboardStats {
 }
 
 export default function StaffDashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: stats,
+    isLoading: loading,
+    isError,
+  } = useQuery({
+    queryKey: ["staff-dashboard"],
+    queryFn: () => adminService.getDashboard() as Promise<DashboardStats>,
+  });
 
   useEffect(() => {
-    adminService
-      .getDashboard()
-      .then(setStats)
-      .catch(() => toast.error("Failed to load dashboard."))
-      .finally(() => setLoading(false));
-  }, []);
+    if (isError) toast.error("Failed to load dashboard.");
+  }, [isError]);
 
   if (loading)
     return (

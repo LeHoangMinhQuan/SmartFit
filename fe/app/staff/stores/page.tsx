@@ -1,66 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { clsx } from "clsx";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import Input from "../../../components/ui/Input";
 import Spinner from "../../../components/ui/Spinner";
-import type { Staff, Store } from "../../../interfaces";
+import type { Store } from "../../../interfaces";
 
 type DetailTab = "inventory" | "staff";
 
-interface StoreInventoryRow {
-  product_id: number;
-  variant_id: number;
-  store_id: number;
-  quantity: number;
-}
-
 export default function StaffStoresPage() {
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: stores = [], isLoading: loading } = useQuery({
+    queryKey: ["staff-stores-list"],
+    queryFn: () => adminService.getStores(),
+  });
   const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: "", address: "" });
 
   // Selected store detail
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>("inventory");
-  const [storeInventory, setStoreInventory] = useState<StoreInventoryRow[]>([]);
-  const [storeStaff, setStoreStaff] = useState<Staff[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
 
-  async function refresh() {
-    setLoading(true);
-    adminService
-      .getStores()
-      .then(setStores)
-      .catch(() => toast.error("Failed to load stores."))
-      .finally(() => setLoading(false));
-  }
+  const selectedStore =
+    stores.find((s) => s.store_id === selectedStoreId) ?? null;
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  async function handleSelectStore(store: Store) {
-    setSelectedStore(store);
-    setDetailLoading(true);
-    try {
+  const detailQuery = useQuery({
+    queryKey: ["staff-store-detail", selectedStoreId],
+    queryFn: async () => {
       const [inv, staff] = await Promise.all([
-        adminService.getStoreInventory(store.store_id),
-        adminService.getStoreStaff(store.store_id),
+        adminService.getStoreInventory(selectedStoreId!),
+        adminService.getStoreStaff(selectedStoreId!),
       ]);
-      setStoreInventory(inv);
-      setStoreStaff(staff);
-    } catch {
-      toast.error("Failed to load store details.");
-    } finally {
-      setDetailLoading(false);
-    }
+      return { inventory: inv, staff };
+    },
+    enabled: selectedStoreId != null,
+  });
+  const storeInventory = detailQuery.data?.inventory ?? [];
+  const storeStaff = detailQuery.data?.staff ?? [];
+  const detailLoading = detailQuery.isLoading;
+
+  function handleSelectStore(store: Store) {
+    setSelectedStoreId(store.store_id);
   }
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      adminService.createStore({ name: form.name, address: form.address }),
+    onSuccess: () => {
+      toast.success("Store created.");
+      setForm({ name: "", address: "" });
+      setAdding(false);
+      queryClient.invalidateQueries({ queryKey: ["staff-stores-list"] });
+    },
+    onError: () => toast.error("Failed to create store."),
+  });
+  const saving = createMutation.isPending;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -68,39 +66,30 @@ export default function StaffStoresPage() {
       toast.error("Name and address are required.");
       return;
     }
-    setSaving(true);
-    try {
-      await adminService.createStore({
-        name: form.name,
-        address: form.address,
-      });
-      toast.success("Store created.");
-      setForm({ name: "", address: "" });
-      setAdding(false);
-      refresh();
-    } catch {
-      toast.error("Failed to create store.");
-    } finally {
-      setSaving(false);
-    }
+    createMutation.mutate();
   }
+
+  const updateMutation = useMutation({
+    mutationFn: (vars: {
+      store_id: number;
+      body: { name?: string; address?: string };
+    }) => adminService.updateStore(vars.store_id, vars.body),
+    onSuccess: (_data, vars) => {
+      queryClient.setQueryData<Store[]>(["staff-stores-list"], (old) =>
+        old?.map((s) =>
+          s.store_id === vars.store_id ? { ...s, ...vars.body } : s,
+        ),
+      );
+      toast.success("Store updated.");
+    },
+    onError: () => toast.error("Failed to update store."),
+  });
 
   async function handleUpdate(
     store_id: number,
     body: { name?: string; address?: string },
   ) {
-    try {
-      await adminService.updateStore(store_id, body);
-      setStores((prev) =>
-        prev.map((s) => (s.store_id === store_id ? { ...s, ...body } : s)),
-      );
-      if (selectedStore?.store_id === store_id) {
-        setSelectedStore((prev) => (prev ? { ...prev, ...body } : prev));
-      }
-      toast.success("Store updated.");
-    } catch {
-      toast.error("Failed to update store.");
-    }
+    updateMutation.mutate({ store_id, body });
   }
 
   if (loading)

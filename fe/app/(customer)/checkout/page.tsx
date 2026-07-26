@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { cartService } from "../../../services/cart.service";
 import { orderService } from "../../../services/order.service";
 import { paymentService } from "../../../services/payment.service";
@@ -32,11 +33,6 @@ export default function CheckoutPage() {
   const { items, clearItems } = useCartStore();
 
   const [step, setStep] = useState<Step>("address");
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [cartTotal, setCartTotal] = useState(0);
-  const [addresses, setAddresses] = useState<UserAddress[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState(false);
 
   // Address step state
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(
@@ -63,21 +59,30 @@ export default function CheckoutPage() {
   }, [user, router]);
 
   // Load cart + addresses on mount
+  const { data: checkoutData, isLoading: loading } = useQuery({
+    queryKey: ["checkout", user?.user_id],
+    queryFn: async () => {
+      const [cart, addrs] = await Promise.all([
+        cartService.getCart(),
+        userService.getAddresses(),
+      ]);
+      const addressList = Array.isArray(addrs) ? addrs : [];
+      return { cart, addresses: addressList };
+    },
+    enabled: !!user,
+  });
+
+  const cartItems: CartItem[] = checkoutData?.cart.items ?? [];
+  const cartTotal = checkoutData?.cart.total ?? 0;
+  const addresses: UserAddress[] = checkoutData?.addresses ?? [];
+
+  // Default address selection, applied once addresses load.
   useEffect(() => {
-    if (!user) return;
-    Promise.all([cartService.getCart(), userService.getAddresses()])
-      .then(([cart, addrs]) => {
-        setCartItems(cart.items);
-        setCartTotal(cart.total);
-        const addressList = Array.isArray(addrs) ? addrs : [];
-        setAddresses(addressList);
-        const def = addressList.find((a) => a.is_default);
-        if (def) setSelectedAddressId(def.address_id);
-      })
-      .catch(() => toast.error("Failed to load checkout data."))
-      .finally(() => setLoading(false));
+    if (!checkoutData || selectedAddressId != null) return;
+    const def = checkoutData.addresses.find((a) => a.is_default);
+    if (def) setSelectedAddressId(def.address_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkoutData]);
 
   const activeAddress =
     !useNew && selectedAddressId
@@ -90,6 +95,26 @@ export default function CheckoutPage() {
   const subtotal = cartTotal;
   const discount = voucher?.discount_amount ?? 0;
   const total = Math.max(0, subtotal + shippingFee - discount);
+
+  const placeOrderMutation = useMutation({
+    mutationFn: async () => {
+      const addr = activeAddress ?? newAddress;
+      const { order_id } = await orderService.createOrder({
+        payment_method_id: VNPAY_METHOD_ID,
+        shipping_address: addr.address_line!,
+        ward_id: addr.ward_id!,
+        ...(voucher ? { voucher_id: voucher.voucher_id } : {}),
+      });
+      const { paymentUrl } = await paymentService.createVNPayUrl(order_id);
+      return paymentUrl;
+    },
+    onSuccess: (paymentUrl) => {
+      clearItems();
+      window.location.href = paymentUrl;
+    },
+    onError: () => toast.error("Failed to place order. Please try again."),
+  });
+  const placing = placeOrderMutation.isPending;
 
   async function handlePlaceOrder() {
     if (!activeAddress && !useNew) {
@@ -107,26 +132,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    setPlacing(true);
-    try {
-      const { order_id } = await orderService.createOrder({
-        payment_method_id: VNPAY_METHOD_ID,
-        shipping_address: addr.address_line,
-        ward_id: addr.ward_id,
-        ...(voucher ? { voucher_id: voucher.voucher_id } : {}),
-      });
-
-      const { paymentUrl } = await paymentService.createVNPayUrl(order_id);
-
-      // Clear local cart
-      clearItems();
-
-      // Redirect to VNPay
-      window.location.href = paymentUrl;
-    } catch {
-      toast.error("Failed to place order. Please try again.");
-      setPlacing(false);
-    }
+    placeOrderMutation.mutate();
   }
 
   // ─── Loading state ────────────────────────────────────────────────────────

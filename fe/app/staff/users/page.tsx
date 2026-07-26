@@ -1,29 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { adminService } from "../../../services/staff/admin.service";
 import { formatDate } from "../../../lib/utils";
-import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
-import type { PaginationMeta, User } from "../../../interfaces";
 
 export default function StaffUsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [meta, setMeta] = useState<PaginationMeta | null>(null);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
-    adminService
-      .getAllUsers({ page, limit: 20 })
-      .then((res) => {
-        setUsers(res.data);
-        setMeta(res.meta);
-      })
-      .catch(() => toast.error("Failed to load users."))
-      .finally(() => setLoading(false));
-  }, [page]);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["staff-users", page],
+    queryFn: () => adminService.getAllUsers({ page, limit: 20 }),
+    placeholderData: keepPreviousData,
+  });
+  const users = data?.data ?? [];
+  const meta = data?.meta ?? null;
 
   return (
     <div className="p-8 flex flex-col gap-6">

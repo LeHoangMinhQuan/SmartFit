@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { orderService } from "../../../services/order.service";
 import Spinner from "../../../components/ui/Spinner";
 
@@ -24,28 +25,24 @@ export default function PaymentResultPage({
 
   const isSuccess = responseCode === SUCCESS_CODE;
 
-  // Poll the real order status from DB — IPN is authoritative, not this return URL
-  const [orderStatus, setOrderStatus] = useState<string | null>(null);
-  const [polling, setPolling] = useState(isSuccess);
-
+  // Poll the real order status from DB — IPN is authoritative, not this return URL.
+  // Give IPN a short delay to process before checking.
+  const [delayElapsed, setDelayElapsed] = useState(false);
   useEffect(() => {
-    if (!isSuccess || !orderId) {
-      setPolling(false);
-      return;
-    }
-    // Poll once after a short delay to give IPN time to process
-    const timer = setTimeout(async () => {
-      try {
-        const order = await orderService.getOrder(Number(orderId));
-        setOrderStatus(order.status);
-      } catch {
-        // Non-critical — we already show success based on VNPay response code
-      } finally {
-        setPolling(false);
-      }
-    }, 2000);
+    if (!isSuccess || !orderId) return;
+    const timer = setTimeout(() => setDelayElapsed(true), 2000);
     return () => clearTimeout(timer);
   }, [isSuccess, orderId]);
+
+  const orderStatusQuery = useQuery({
+    queryKey: ["payment-result-order", orderId],
+    queryFn: () => orderService.getOrder(Number(orderId)),
+    enabled: isSuccess && !!orderId && delayElapsed,
+    retry: false,
+  });
+  const orderStatus = orderStatusQuery.data?.status ?? null;
+  const polling =
+    isSuccess && !!orderId && (!delayElapsed || orderStatusQuery.isFetching);
 
   if (polling) {
     return (

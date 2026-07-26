@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import axios from "axios";
+import { useMutation } from "@tanstack/react-query";
 import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useCartStore } from "@/store/useCartStore";
@@ -34,13 +35,11 @@ export default function RegisterModal({
   const [form, setForm] = useState(initialForm);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const resetForm = useCallback(() => {
     setForm(initialForm);
     setAgreed(false);
     setError(null);
-    setLoading(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -98,18 +97,8 @@ export default function RegisterModal({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-
-    if (form.password !== form.confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
+  const registerMutation = useMutation({
+    mutationFn: async () => {
       // Use the shared `api` instance (lib/axios.ts) instead of a bare axios
       // call — this is the single place that knows NEXT_PUBLIC_BASE_URL.
       // The previous `process.env.BASE_URL` read undefined client-side
@@ -121,18 +110,18 @@ export default function RegisterModal({
         password: form.password,
         phone: form.phone,
       });
-
+      return data;
+    },
+    onSuccess: async (data) => {
       // Auto-login: tokens arrive as httpOnly Set-Cookie headers — the
       // response body only contains the (non-sensitive) user object.
       setAuth(data.user);
-
       await mergeCartOnLogin();
-
       handleClose();
-    } catch (err) {
+    },
+    onError: (err) => {
       if (axios.isAxiosError(err)) {
         const data = err.response?.data;
-
         setError(
           data?.detail?.message ??
             data?.message ??
@@ -141,9 +130,20 @@ export default function RegisterModal({
       } else {
         setError("Something went wrong. Please try again.");
       }
-    } finally {
-      setLoading(false);
+    },
+  });
+  const loading = registerMutation.isPending;
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
     }
+
+    registerMutation.mutate();
   };
 
   if (!isOpen) return null;

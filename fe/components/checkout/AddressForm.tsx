@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { shippingService } from "../../services/shipping.service";
 import Input from "../ui/Input";
-import type { District, Province, Ward } from "../../interfaces";
 
 export interface AddressFormValues {
   address_line: string; // VARCHAR(20) — max 20 chars
@@ -25,39 +25,49 @@ export default function AddressForm({
   onChange,
   errors,
 }: AddressFormProps) {
-  const [provinces, setProvinces] = useState<Province[]>([]);
-  const [districts, setDistricts] = useState<District[]>([]);
-  const [wards, setWards] = useState<Ward[]>([]);
+  const { data: provinces = [] } = useQuery({
+    queryKey: ["shipping", "provinces"],
+    queryFn: () => shippingService.getProvinces(),
+    // Reference data — safe to keep around indefinitely once fetched.
+    staleTime: Infinity,
+  });
 
-  useEffect(() => {
-    shippingService.getProvinces().then(setProvinces);
-  }, []);
+  const { data: rawDistricts } = useQuery({
+    queryKey: ["shipping", "districts", value.province_id],
+    queryFn: () => shippingService.getDistricts(value.province_id as number),
+    enabled: !!value.province_id,
+    staleTime: Infinity,
+  });
+  // Filter GHN-locked districts: supporttype === 0 means no delivery
+  const districts = (rawDistricts ?? []).filter(
+    (d) => d.status === 1 && d.supporttype !== 0,
+  );
 
+  const { data: rawWards } = useQuery({
+    queryKey: ["shipping", "wards", value.district_id],
+    queryFn: () => shippingService.getWards(value.district_id as number),
+    enabled: !!value.district_id,
+    staleTime: Infinity,
+  });
+  // Filter GHN-locked wards
+  const wards = (rawWards ?? []).filter(
+    (w) => w.status === 1 && w.supporttype !== 0,
+  );
+
+  // Clear the downstream selection whenever its parent selection changes —
+  // mirrors the original effects, which reset district/ward on province
+  // change and ward on district change.
   useEffect(() => {
-    if (!value.province_id) {
-      setDistricts([]);
-      setWards([]);
-      return;
-    }
-    shippingService.getDistricts(value.province_id).then((data) => {
-      // Filter GHN-locked districts: supporttype === 0 means no delivery
-      setDistricts(data.filter((d) => d.status === 1 && d.supporttype !== 0));
-      setWards([]);
+    if (value.district_id !== undefined || value.ward_id !== undefined) {
       onChange({ ...value, district_id: undefined, ward_id: undefined });
-    });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.province_id]);
 
   useEffect(() => {
-    if (!value.district_id) {
-      setWards([]);
-      return;
-    }
-    shippingService.getWards(value.district_id).then((data) => {
-      // Filter GHN-locked wards
-      setWards(data.filter((w) => w.status === 1 && w.supporttype !== 0));
+    if (value.ward_id !== undefined) {
       onChange({ ...value, ward_id: undefined });
-    });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.district_id]);
 

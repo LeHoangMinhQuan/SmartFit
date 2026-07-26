@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { categoryService } from "../../../services/category.service";
 import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
@@ -9,22 +10,23 @@ import Spinner from "../../../components/ui/Spinner";
 import type { Category } from "../../../interfaces";
 
 export default function StaffCategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: categories = [], isLoading: loading } = useQuery({
+    queryKey: ["staff-categories"],
+    queryFn: () => categoryService.getCategories(),
+  });
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string>("");
   const [isFeatured, setIsFeatured] = useState(false);
   const [displayOrder, setDisplayOrder] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [saving, setSaving] = useState(false);
 
   // Inline "manage featured" state for existing rows
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editFeatured, setEditFeatured] = useState(false);
   const [editOrder, setEditOrder] = useState<string>("");
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
-  const [editSaving, setEditSaving] = useState(false);
 
   function flattenCategories(nodes: Category[]): Category[] {
     const out: Category[] = [];
@@ -38,19 +40,6 @@ export default function StaffCategoriesPage() {
     return out;
   }
 
-  async function refresh() {
-    setLoading(true);
-    categoryService
-      .getCategories()
-      .then(setCategories)
-      .catch(() => toast.error("Failed to load categories."))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => {
-    refresh();
-  }, []);
-
   function isDuplicateNameError(err: unknown): boolean {
     // axios error shape
     const status = (err as { response?: { status?: number } })?.response
@@ -58,11 +47,8 @@ export default function StaffCategoriesPage() {
     return status === 409;
   }
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const { category_id } = await adminService.createCategory({
         name: name.trim(),
         ...(parentId ? { parent_id: Number(parentId) } : {}),
@@ -81,7 +67,8 @@ export default function StaffCategoriesPage() {
           );
         }
       }
-
+    },
+    onSuccess: () => {
       toast.success("Category created.");
       setName("");
       setParentId("");
@@ -89,16 +76,22 @@ export default function StaffCategoriesPage() {
       setDisplayOrder("");
       setImageFile(null);
       setAdding(false);
-      refresh();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ["staff-categories"] });
+    },
+    onError: (err) => {
       if (isDuplicateNameError(err)) {
         toast.error("A category with this name already exists.");
       } else {
         toast.error("Failed to create category.");
       }
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+  const saving = createMutation.isPending;
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    createMutation.mutate();
   }
 
   function startEditing(c: Category) {
@@ -108,9 +101,8 @@ export default function StaffCategoriesPage() {
     setEditImageFile(null);
   }
 
-  async function handleSaveFeatured(c: Category) {
-    setEditSaving(true);
-    try {
+  const updateMutation = useMutation({
+    mutationFn: async (c: Category) => {
       await adminService.updateCategory(c.category_id, {
         is_featured: editFeatured,
         display_order: editFeatured && editOrder ? Number(editOrder) : null,
@@ -119,20 +111,36 @@ export default function StaffCategoriesPage() {
       if (editFeatured && editImageFile) {
         await adminService.uploadCategoryImage(c.category_id, editImageFile);
       }
-
+    },
+    onSuccess: () => {
       toast.success("Category updated.");
       setEditingId(null);
-      refresh();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ["staff-categories"] });
+    },
+    onError: (err) => {
       if (isDuplicateNameError(err)) {
         toast.error("A category with this name already exists.");
       } else {
         toast.error("Failed to update category.");
       }
-    } finally {
-      setEditSaving(false);
-    }
+    },
+  });
+  const editSaving = updateMutation.isPending;
+
+  async function handleSaveFeatured(c: Category) {
+    updateMutation.mutate(c);
   }
+
+  const deleteMutation = useMutation({
+    mutationFn: (category_id: number) =>
+      adminService.deleteCategory(category_id),
+    onSuccess: () => {
+      toast.success("Category deleted.");
+      queryClient.invalidateQueries({ queryKey: ["staff-categories"] });
+    },
+    onError: () =>
+      toast.error("Failed to delete category. It may have products assigned."),
+  });
 
   async function handleDelete(category_id: number, categoryName: string) {
     if (
@@ -141,13 +149,7 @@ export default function StaffCategoriesPage() {
       )
     )
       return;
-    try {
-      await adminService.deleteCategory(category_id);
-      toast.success("Category deleted.");
-      refresh();
-    } catch {
-      toast.error("Failed to delete category. It may have products assigned.");
-    }
+    deleteMutation.mutate(category_id);
   }
 
   const flat = flattenCategories(categories);

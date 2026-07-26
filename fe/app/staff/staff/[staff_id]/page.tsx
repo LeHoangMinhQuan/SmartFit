@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { clsx } from "clsx";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../../services/staff/admin.service";
 import { toast } from "../../../../components/ui/Toast";
 import Spinner from "../../../../components/ui/Spinner";
 import Input from "../../../../components/ui/Input";
-import type { Role, Staff, Store } from "../../../../interfaces";
+import type { Role } from "../../../../interfaces";
 
 type Tab = "info" | "roles" | "history" | "transfer";
 
@@ -28,95 +29,118 @@ const TABS: { key: Tab; label: string }[] = [
 
 export default function StaffDetailPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useParams<{ staff_id: string }>();
 
   const staffId = Number(params.staff_id);
 
   const [tab, setTab] = useState<Tab>("info");
 
-  const [staff, setStaff] = useState<Staff | null>(null);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [allRoles, setAllRoles] = useState<Role[]>([]);
-  const [history, setHistory] = useState<StaffHistory[]>([]);
-  const [stores, setStores] = useState<Store[]>([]);
-  const [loading, setLoading] = useState(true);
+  const detailQuery = useQuery({
+    queryKey: ["staff-detail", staffId],
+    queryFn: async () => {
+      const [s, allR, hist, storeList] = await Promise.all([
+        adminService.getStaff(staffId),
+        adminService.getRoles(),
+        adminService.getStaffHistory(staffId),
+        adminService.getStores(),
+      ]);
+      return { staff: s, allRoles: allR, history: hist, stores: storeList };
+    },
+  });
+  const staff = detailQuery.data?.staff ?? null;
+  const allRoles = detailQuery.data?.allRoles ?? [];
+  const history: StaffHistory[] = detailQuery.data?.history ?? [];
+  const stores = detailQuery.data?.stores ?? [];
+  const loading = detailQuery.isLoading;
 
-  // Edit info state
+  useEffect(() => {
+    if (detailQuery.isError) toast.error("Failed to load staff detail.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailQuery.isError]);
+
+  const [roles, setRoles] = useState<Role[]>([]);
+
+  // Edit info state — reset when staff loads
   const [editName, setEditName] = useState("");
-  const [savingInfo, setSavingInfo] = useState(false);
+  useEffect(() => {
+    if (staff) setEditName(staff.name);
+  }, [staff]);
 
   // Transfer state
   const [transferStoreId, setTransferStoreId] = useState("");
-  const [transferring, setTransferring] = useState(false);
 
   // Role assign state
   const [assignRoleId, setAssignRoleId] = useState("");
-  const [togglingRole, setTogglingRole] = useState<number | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      adminService.getStaff(staffId),
-      adminService.getRoles(),
-      adminService.getStaffHistory(staffId),
-      adminService.getStores(),
-    ])
-      .then(([s, allR, hist, storeList]) => {
-        setStaff(s);
-        setEditName(s.name);
-        setAllRoles(allR);
-        setHistory(hist);
-        setStores(storeList);
-        console.log("Staff detail loaded:", s, allR, hist, storeList);
-      })
-      .catch(() => toast.error("Failed to load staff detail."))
-      .finally(() => setLoading(false));
-  }, [staffId]);
+  const saveInfoMutation = useMutation({
+    mutationFn: () => adminService.updateStaff(staffId, { name: editName }),
+    onSuccess: () => {
+      queryClient.setQueryData(
+        ["staff-detail", staffId],
+        (old: typeof detailQuery.data) =>
+          old && { ...old, staff: { ...old.staff, name: editName } },
+      );
+      toast.success("Staff info updated.");
+    },
+    onError: () => toast.error("Failed to update staff info."),
+  });
+  const savingInfo = saveInfoMutation.isPending;
 
   async function handleSaveInfo(e: React.SubmitEvent) {
     e.preventDefault();
-    setSavingInfo(true);
-    try {
-      await adminService.updateStaff(staffId, { name: editName });
-      setStaff((prev) => (prev ? { ...prev, name: editName } : prev));
-      toast.success("Staff info updated.");
-    } catch {
-      toast.error("Failed to update staff info.");
-    } finally {
-      setSavingInfo(false);
-    }
+    saveInfoMutation.mutate();
   }
 
-  async function handleAssignRole(e: React.FormEvent) {
-    e.preventDefault();
-    if (!assignRoleId) return;
-    const role_id = Number(assignRoleId);
-    setTogglingRole(role_id);
-    try {
-      await adminService.assignRole(staffId, role_id);
+  const assignRoleMutation = useMutation({
+    mutationFn: (role_id: number) => adminService.assignRole(staffId, role_id),
+    onSuccess: (_data, role_id) => {
       const assigned = allRoles.find((r) => r.role_id === role_id);
       if (assigned) setRoles((prev) => [...prev, assigned]);
       toast.success("Role assigned.");
       setAssignRoleId("");
-    } catch {
-      toast.error("Failed to assign role.");
-    } finally {
-      setTogglingRole(null);
-    }
+    },
+    onError: () => toast.error("Failed to assign role."),
+  });
+
+  const removeRoleMutation = useMutation({
+    mutationFn: (role_id: number) => adminService.removeRole(staffId, role_id),
+    onSuccess: (_data, role_id) => {
+      setRoles((prev) => prev.filter((r) => r.role_id !== role_id));
+      toast.success("Role removed.");
+    },
+    onError: () => toast.error("Failed to remove role."),
+  });
+
+  const togglingRole = assignRoleMutation.isPending
+    ? Number(assignRoleId)
+    : removeRoleMutation.isPending
+      ? removeRoleMutation.variables
+      : null;
+
+  async function handleAssignRole(e: React.FormEvent) {
+    e.preventDefault();
+    if (!assignRoleId) return;
+    assignRoleMutation.mutate(Number(assignRoleId));
   }
 
   async function handleRemoveRole(role_id: number) {
-    setTogglingRole(role_id);
-    try {
-      await adminService.removeRole(staffId, role_id);
-      setRoles((prev) => prev.filter((r) => r.role_id !== role_id));
-      toast.success("Role removed.");
-    } catch {
-      toast.error("Failed to remove role.");
-    } finally {
-      setTogglingRole(null);
-    }
+    removeRoleMutation.mutate(role_id);
   }
+
+  const transferMutation = useMutation({
+    mutationFn: () =>
+      adminService.transferStaff(staffId, {
+        store_id: Number(transferStoreId),
+      }),
+    onSuccess: async () => {
+      toast.success("Staff transferred. History updated.");
+      queryClient.invalidateQueries({ queryKey: ["staff-detail", staffId] });
+      setTransferStoreId("");
+    },
+    onError: () => toast.error("Failed to transfer staff."),
+  });
+  const transferring = transferMutation.isPending;
 
   async function handleTransfer(e: React.FormEvent) {
     e.preventDefault();
@@ -124,21 +148,7 @@ export default function StaffDetailPage() {
       toast.error("Select a store.");
       return;
     }
-    setTransferring(true);
-    try {
-      await adminService.transferStaff(staffId, {
-        store_id: Number(transferStoreId),
-      });
-      toast.success("Staff transferred. History updated.");
-      // Refresh history
-      const hist = await adminService.getStaffHistory(staffId);
-      setHistory(hist);
-      setTransferStoreId("");
-    } catch {
-      toast.error("Failed to transfer staff.");
-    } finally {
-      setTransferring(false);
-    }
+    transferMutation.mutate();
   }
 
   if (loading)

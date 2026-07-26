@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { shippingService } from "../../services/shipping.service";
 import { formatPrice } from "../../lib/utils";
 import Spinner from "../ui/Spinner";
-
-interface ShippingService {
-  service_id: number;
-  short_name: string;
-  service_type_id: number;
-}
 
 interface ShippingSelectorProps {
   toDistrictId: number | null;
@@ -24,51 +18,52 @@ export default function ShippingSelector({
   selectedServiceId,
   onSelect,
 }: ShippingSelectorProps) {
-  const [services, setServices] = useState<ShippingService[]>([]);
-  const [fees, setFees] = useState<Record<number, number>>({});
-  const [loading, setLoading] = useState(false);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["shipping", "services", toDistrictId, toWardCode],
+    queryFn: async () => {
+      const svcs = await shippingService.getServices({
+        to_district_id: toDistrictId as number,
+      });
 
-  useEffect(() => {
-    if (!toDistrictId || !toWardCode) return;
-    setLoading(true);
-    shippingService
-      .getServices({ to_district_id: toDistrictId })
-      .then(async (svcs) => {
-        // Fetch fees independently — a service tier GHN can't quote for this
-        // parcel (e.g. a "heavy" tier rejecting our placeholder 500g weight)
-        // must not take the other, quotable tiers down with it. Promise.all
-        // previously failed the whole batch on a single rejection, wiping
-        // out services the UI had already shown.
-        const results = await Promise.allSettled(
-          svcs.map((s) =>
-            shippingService
-              .estimateFee({
-                service_id: s.service_id,
-                to_district_id: toDistrictId,
-                to_ward_code: toWardCode?.toString() || "",
-                weight: 500, // default 500g — refine if product weight is known
-              })
-              .then((r) => [s.service_id, r.total] as [number, number]),
-          ),
-        );
+      // Fetch fees independently — a service tier GHN can't quote for this
+      // parcel (e.g. a "heavy" tier rejecting our placeholder 500g weight)
+      // must not take the other, quotable tiers down with it. Promise.all
+      // previously failed the whole batch on a single rejection, wiping
+      // out services the UI had already shown.
+      const results = await Promise.allSettled(
+        svcs.map((s) =>
+          shippingService
+            .estimateFee({
+              service_id: s.service_id,
+              to_district_id: toDistrictId as number,
+              to_ward_code: toWardCode?.toString() || "",
+              weight: 500, // default 500g — refine if product weight is known
+            })
+            .then((r) => [s.service_id, r.total] as [number, number]),
+        ),
+      );
 
-        const quotable = new Set<number>();
-        const feeEntries: [number, number][] = [];
-        for (const result of results) {
-          if (result.status === "fulfilled") {
-            feeEntries.push(result.value);
-            quotable.add(result.value[0]);
-          }
+      const quotable = new Set<number>();
+      const feeEntries: [number, number][] = [];
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          feeEntries.push(result.value);
+          quotable.add(result.value[0]);
         }
+      }
 
-        // Only render services GHN actually priced — a service with no fee
-        // would otherwise sit stuck on "…" forever and be unselectable.
-        setServices(svcs.filter((s) => quotable.has(s.service_id)));
-        setFees(Object.fromEntries(feeEntries));
-      })
-      .catch(() => setServices([]))
-      .finally(() => setLoading(false));
-  }, [toDistrictId, toWardCode]);
+      // Only render services GHN actually priced — a service with no fee
+      // would otherwise sit stuck on "…" forever and be unselectable.
+      return {
+        services: svcs.filter((s) => quotable.has(s.service_id)),
+        fees: Object.fromEntries(feeEntries) as Record<number, number>,
+      };
+    },
+    enabled: !!toDistrictId && !!toWardCode,
+  });
+
+  const services = data?.services ?? [];
+  const fees = data?.fees ?? {};
 
   if (!toDistrictId || !toWardCode) return null;
   if (loading) return <Spinner size="sm" />;

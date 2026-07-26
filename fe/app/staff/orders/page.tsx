@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { adminService } from "../../../services/staff/admin.service";
 import { formatDate, formatPrice } from "../../../lib/utils";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import OrderStatusBadge from "../../../components/order/OrderStatusBadge";
 import Input from "../../../components/ui/Input";
-import type { Order, OrderStatus, PaginationMeta } from "../../../interfaces";
+import type { Order, OrderStatus } from "../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
@@ -24,44 +30,49 @@ const STATUS_OPTIONS: OrderStatus[] = [
 
 export default function StaffOrdersPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [meta, setMeta] = useState<PaginationMeta | null>(null);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
   const [userIdFilter, setUserIdFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    adminService
-      .getAllOrders({
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ["staff-orders", { page, statusFilter, userIdFilter }],
+    queryFn: () =>
+      adminService.getAllOrders({
         page,
         limit: 20,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(userIdFilter ? { user_id: Number(userIdFilter) } : {}),
-      })
-      .then((res) => {
-        setOrders(res.data);
-        setMeta(res.meta);
-      })
-      .catch(() => toast.error("Failed to load orders."))
-      .finally(() => setLoading(false));
-  }, [page, statusFilter, userIdFilter]);
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const orders = data?.data ?? [];
+  const meta = data?.meta ?? null;
 
-  async function handleStatusChange(order_id: number, status: OrderStatus) {
-    setUpdatingId(order_id);
-    try {
-      await adminService.updateOrderStatus(order_id, status);
-      setOrders((prev) =>
-        prev.map((o) => (o.order_id === order_id ? { ...o, status } : o)),
+  const updateStatusMutation = useMutation({
+    mutationFn: (vars: { order_id: number; status: OrderStatus }) =>
+      adminService.updateOrderStatus(vars.order_id, vars.status),
+    onSuccess: (_data, vars) => {
+      queryClient.setQueriesData<{ data: Order[]; meta: unknown } | undefined>(
+        { queryKey: ["staff-orders"] },
+        (old) =>
+          old && {
+            ...old,
+            data: old.data.map((o) =>
+              o.order_id === vars.order_id ? { ...o, status: vars.status } : o,
+            ),
+          },
       );
       toast.success("Status updated.");
-    } catch {
-      toast.error("Failed to update status.");
-    } finally {
-      setUpdatingId(null);
-    }
+    },
+    onError: () => toast.error("Failed to update status."),
+  });
+  const updatingId = updateStatusMutation.isPending
+    ? updateStatusMutation.variables?.order_id
+    : null;
+
+  async function handleStatusChange(order_id: number, status: OrderStatus) {
+    updateStatusMutation.mutate({ order_id, status });
   }
 
   return (

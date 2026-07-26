@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { productService } from "../../services/product.service";
 import { reviewService } from "../../services/review.service";
 import { useAuthStore } from "../../store/useAuthStore";
 import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
-import type { Review } from "../../interfaces";
 // ReviewCard already exists — adjust path if needed after migration
 import ReviewCard from "./ReviewCard";
 
@@ -20,20 +20,38 @@ export default function ReviewSection({
   variant_id,
 }: ReviewSectionProps) {
   const user = useAuthStore((s) => s.user);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+
+  const {
+    data: reviews = [],
+    isLoading: loading,
+    isError,
+  } = useQuery({
+    queryKey: ["reviews", product_id],
+    queryFn: async () => (await productService.getReviews(product_id)).data,
+  });
 
   useEffect(() => {
-    setLoading(true);
-    productService
-      .getReviews(product_id)
-      .then((data) => setReviews(data.data))
-      .catch(() => toast.error("Failed to load reviews."))
-      .finally(() => setLoading(false));
-  }, [product_id]);
+    if (isError) toast.error("Failed to load reviews.");
+  }, [isError]);
+
+  const submitReviewMutation = useMutation({
+    mutationFn: () =>
+      reviewService.submitReview(product_id, variant_id as number, {
+        rating,
+        comment,
+      }),
+    onSuccess: () => {
+      toast.success("Review submitted!");
+      setComment("");
+      setRating(5);
+      queryClient.invalidateQueries({ queryKey: ["reviews", product_id] });
+    },
+    onError: () => toast.error("Failed to submit review."),
+  });
+  const submitting = submitReviewMutation.isPending;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,23 +59,7 @@ export default function ReviewSection({
       toast.error("Select a variant before reviewing.");
       return;
     }
-    setSubmitting(true);
-    try {
-      await reviewService.submitReview(product_id, variant_id, {
-        rating,
-        comment,
-      });
-      toast.success("Review submitted!");
-      setComment("");
-      setRating(5);
-      // Refresh list
-      const fresh = (await productService.getReviews(product_id)).data;
-      setReviews(fresh);
-    } catch {
-      toast.error("Failed to submit review.");
-    } finally {
-      setSubmitting(false);
-    }
+    submitReviewMutation.mutate();
   }
 
   return (

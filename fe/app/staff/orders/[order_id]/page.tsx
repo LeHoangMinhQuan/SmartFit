@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../../services/staff/admin.service";
 import { orderService } from "../../../../services/order.service";
 import { formatDate, formatPrice } from "../../../../lib/utils";
 import { toast } from "../../../../components/ui/Toast";
 import Spinner from "../../../../components/ui/Spinner";
 import OrderStatusBadge from "../../../../components/order/OrderStatusBadge";
-import type { Order, OrderStatus } from "../../../../interfaces";
+import type { OrderStatus } from "../../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
@@ -28,31 +29,38 @@ export default function StaffOrderDetailPage({
   params: { order_id: string };
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const orderId = Number(params.order_id);
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+
+  const orderQuery = useQuery({
+    queryKey: ["staff-order", orderId],
+    queryFn: () => orderService.getOrder(orderId),
+  });
+  const order = orderQuery.data ?? null;
+  const loading = orderQuery.isLoading;
 
   useEffect(() => {
-    orderService
-      .getOrder(orderId)
-      .then(setOrder)
-      .catch(() => toast.error("Failed to load order."))
-      .finally(() => setLoading(false));
-  }, [orderId]);
+    if (orderQuery.isError) toast.error("Failed to load order.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderQuery.isError]);
+
+  const updateStatusMutation = useMutation({
+    mutationFn: (status: OrderStatus) =>
+      adminService.updateOrderStatus(order!.order_id, status),
+    onSuccess: (_data, status) => {
+      queryClient.setQueryData(["staff-order", orderId], (old: typeof order) =>
+        old ? { ...old, status } : old,
+      );
+      queryClient.invalidateQueries({ queryKey: ["staff-orders"] });
+      toast.success("Status updated.");
+    },
+    onError: () => toast.error("Failed to update status."),
+  });
+  const updating = updateStatusMutation.isPending;
 
   async function handleStatusChange(status: OrderStatus) {
     if (!order) return;
-    setUpdating(true);
-    try {
-      await adminService.updateOrderStatus(order.order_id, status);
-      setOrder({ ...order, status });
-      toast.success("Status updated.");
-    } catch {
-      toast.error("Failed to update status.");
-    } finally {
-      setUpdating(false);
-    }
+    updateStatusMutation.mutate(status);
   }
 
   if (loading)

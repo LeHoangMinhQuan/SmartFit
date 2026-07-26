@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { userService } from "../../services/user.service";
 import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
@@ -9,66 +10,81 @@ import type { UserAddress } from "../../interfaces";
 import { Plus, Star, Trash2, Loader2, MapPin } from "lucide-react";
 
 export default function AddressBook() {
-  const [addresses, setAddresses] = useState<UserAddress[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Partial<AddressFormValues>>({});
 
-  async function refresh() {
-    try {
-      setAddresses(await userService.getAddresses());
-    } finally {
-      setLoading(false);
-    }
-  }
+  const {
+    data: addresses = [],
+    isLoading: loading,
+    isError,
+  } = useQuery({
+    queryKey: ["addresses"],
+    queryFn: () => userService.getAddresses(),
+  });
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (isError) toast.error("Failed to load addresses.");
+  }, [isError]);
 
-  async function handleAdd(e: React.SubmitEvent) {
+  const addMutation = useMutation({
+    mutationFn: () => userService.addAddress(form as AddressFormValues),
+    onSuccess: () => {
+      toast.success("Address added.");
+      setAdding(false);
+      setForm({});
+      queryClient.invalidateQueries({ queryKey: ["addresses"] });
+    },
+    onError: () => toast.error("Failed to add address."),
+  });
+  const saving = addMutation.isPending;
+
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     const { address_line, province_id, district_id, ward_id } = form;
     if (!address_line || !province_id || !district_id || !ward_id) {
       toast.error("Please fill all required fields.");
       return;
     }
-    setSaving(true);
-    try {
-      await userService.addAddress(form as AddressFormValues);
-      toast.success("Address added.");
-      setAdding(false);
-      setForm({});
-      setLoading(true);
-      refresh();
-    } catch {
-      toast.error("Failed to add address.");
-    } finally {
-      setSaving(false);
-    }
+    addMutation.mutate();
   }
+
+  const deleteMutation = useMutation({
+    mutationFn: (address_id: number) => userService.deleteAddress(address_id),
+    onSuccess: (_data, address_id) => {
+      toast.success("Address removed.");
+      queryClient.setQueryData(
+        ["addresses"],
+        (prev: UserAddress[] | undefined) =>
+          (prev ?? []).filter((a) => a.address_id !== address_id),
+      );
+    },
+    onError: () => toast.error("Failed to remove address."),
+  });
 
   async function handleDelete(address_id: number) {
-    try {
-      await userService.deleteAddress(address_id);
-      toast.success("Address removed.");
-      setAddresses((prev) => prev.filter((a) => a.address_id !== address_id));
-    } catch {
-      toast.error("Failed to remove address.");
-    }
+    deleteMutation.mutate(address_id);
   }
 
-  async function handleSetDefault(address_id: number) {
-    try {
-      await userService.setDefaultAddress(address_id);
+  const setDefaultMutation = useMutation({
+    mutationFn: (address_id: number) =>
+      userService.setDefaultAddress(address_id),
+    onSuccess: (_data, address_id) => {
       toast.success("Default address updated.");
-      setAddresses((prev) =>
-        prev.map((a) => ({ ...a, is_default: a.address_id === address_id })),
+      queryClient.setQueryData(
+        ["addresses"],
+        (prev: UserAddress[] | undefined) =>
+          (prev ?? []).map((a) => ({
+            ...a,
+            is_default: a.address_id === address_id,
+          })),
       );
-    } catch {
-      toast.error("Failed to update default.");
-    }
+    },
+    onError: () => toast.error("Failed to update default."),
+  });
+
+  async function handleSetDefault(address_id: number) {
+    setDefaultMutation.mutate(address_id);
   }
 
   if (loading) {

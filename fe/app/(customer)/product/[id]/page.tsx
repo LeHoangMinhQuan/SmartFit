@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { productService } from "../../../../services/product.service";
 import { cartService } from "../../../../services/cart.service";
 import { wishlistService } from "../../../../services/wishlist.service";
@@ -16,7 +17,7 @@ import VariantSelector from "../../../../components/product/VariantSelector";
 import PriceDisplay from "../../../../components/product/PriceDisplay";
 import ReviewSection from "../../../../components/product/ReviewSection";
 import { Heart, LogIn } from "lucide-react";
-import type { Product, ProductVariant } from "../../../../interfaces";
+import type { ProductVariant } from "../../../../interfaces";
 
 export default function ProductPage() {
   const params = useParams();
@@ -27,26 +28,28 @@ export default function ProductPage() {
   const { addItem: addLocalItem, setCartData } = useCartStore();
   const { addItem: addWishlistItem, isWishlisted } = useWishlistStore();
 
-  const [product, setProduct] = useState<Product | null>(null);
   const [selected, setSelected] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [cartBusy, setCartBusy] = useState(false);
-  const [wishBusy, setWishBusy] = useState(false);
+
+  const productQuery = useQuery({
+    queryKey: ["product", productId],
+    queryFn: () => productService.getProduct(productId),
+  });
+  const product = productQuery.data ?? null;
+  const loading = productQuery.isLoading;
+
+  // Pre-select first in-stock variant once the product loads.
+  useEffect(() => {
+    if (!product) return;
+    const first = product.variants.find((v) => (v.stock ?? 0) > 0);
+    if (first) setSelected(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.product_id]);
 
   useEffect(() => {
-    setLoading(true);
-    productService
-      .getProduct(productId)
-      .then((p) => {
-        setProduct(p);
-        // Pre-select first in-stock variant
-        const first = p.variants.find((v) => (v.stock ?? 0) > 0);
-        if (first) setSelected(first);
-      })
-      .catch(() => toast.error("Failed to load product."))
-      .finally(() => setLoading(false));
-  }, [productId]);
+    if (productQuery.isError) toast.error("Failed to load product.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productQuery.isError]);
 
   // Gallery shows selected variant images, falling back to product-level images.
   // Both selected.images and product.images can come back missing/undefined
@@ -57,51 +60,75 @@ export default function ProductPage() {
   const productImages = product?.images ?? [];
   const displayImages = selectedImages.length ? selectedImages : productImages;
 
+  const addToCartMutation = useMutation({
+    mutationFn: (vars: { variant_id: number; quantity: number }) =>
+      cartService.addItem({
+        product_id: productId,
+        variant_id: vars.variant_id,
+        quantity: vars.quantity,
+      }),
+    onSuccess: (cart) => {
+      // cartService.addItem returns the full, authoritative cart — feed
+      // it straight into the store so Header's badge (which reads
+      // useCartStore, not the server) updates immediately.
+      setCartData(cart.items, cart.total);
+      toast.success("Added to cart!");
+    },
+    onError: () => toast.error("Failed to add to cart."),
+  });
+  const cartBusy = addToCartMutation.isPending;
+
   async function handleAddToCart() {
     if (!selected) {
       toast.error("Please select a variant.");
       return;
     }
-    setCartBusy(true);
-    try {
-      if (user) {
-        // cartService.addItem returns the full, authoritative cart — feed
-        // it straight into the store so Header's badge (which reads
-        // useCartStore, not the server) updates immediately. Previously
-        // this only hit the backend and never touched the local store, so
-        // the badge stayed stale until the next full /cart fetch (e.g.
-        // visiting /cart).
-        const cart = await cartService.addItem({
-          product_id: productId,
-          variant_id: selected.variant_id,
-          quantity,
-        });
-        setCartData(cart.items, cart.total);
-      } else {
-        // Guest — local store; merges with server on login
-        addLocalItem({
-          product_id: productId,
-          variant_id: selected.variant_id,
-          quantity,
-          // unit_price and subtotal are server-computed on merge;
-          // these local values are display-only until then
-          unit_price: selected.base_price,
-          subtotal: selected.base_price * quantity,
-          user_id: 0,
-          cart_id: 0,
-          product_name: product?.name,
-          variant_name: selected.name,
-          image_url:
-            selected.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url,
-        });
-      }
+    if (user) {
+      addToCartMutation.mutate({
+        variant_id: selected.variant_id,
+        quantity,
+      });
+    } else {
+      // Guest — local store; merges with server on login
+      addLocalItem({
+        product_id: productId,
+        variant_id: selected.variant_id,
+        quantity,
+        // unit_price and subtotal are server-computed on merge;
+        // these local values are display-only until then
+        unit_price: selected.base_price,
+        subtotal: selected.base_price * quantity,
+        user_id: 0,
+        cart_id: 0,
+        product_name: product?.name,
+        variant_name: selected.name,
+        image_url: selected.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url,
+      });
       toast.success("Added to cart!");
-    } catch {
-      toast.error("Failed to add to cart.");
-    } finally {
-      setCartBusy(false);
     }
   }
+
+  const addWishlistMutation = useMutation({
+    mutationFn: (vars: { variant_id: number }) =>
+      wishlistService.addToWishlist({
+        product_id: productId,
+        variant_id: vars.variant_id,
+      }),
+    onSuccess: (_data, vars) => {
+      addWishlistItem({
+        product_id: productId,
+        variant_id: vars.variant_id,
+        created_at: new Date().toISOString(),
+        product_name: product?.name,
+        variant_name: selected?.name,
+        base_price: String(selected?.base_price),
+        image_url: displayImages[0]?.s3_url ?? null,
+      });
+      toast.success("Saved to wishlist!");
+    },
+    onError: () => toast.error("Failed to update wishlist."),
+  });
+  const wishBusy = addWishlistMutation.isPending;
 
   async function handleWishlist() {
     if (!user) {
@@ -116,27 +143,7 @@ export default function ProductPage() {
       toast.info("Already in your wishlist.");
       return;
     }
-    setWishBusy(true);
-    try {
-      await wishlistService.addToWishlist({
-        product_id: productId,
-        variant_id: selected.variant_id,
-      });
-      addWishlistItem({
-        product_id: productId,
-        variant_id: selected.variant_id,
-        created_at: new Date().toISOString(),
-        product_name: product?.name,
-        variant_name: selected.name,
-        base_price: String(selected.base_price),
-        image_url: displayImages[0]?.s3_url ?? null,
-      });
-      toast.success("Saved to wishlist!");
-    } catch {
-      toast.error("Failed to update wishlist.");
-    } finally {
-      setWishBusy(false);
-    }
+    addWishlistMutation.mutate({ variant_id: selected.variant_id });
   }
 
   if (loading) {

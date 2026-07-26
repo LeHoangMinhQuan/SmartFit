@@ -1,24 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { clsx } from "clsx";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { voucherAdminService } from "../../../services/staff/voucher.service";
 import { formatDate } from "../../../lib/utils";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import Input from "../../../components/ui/Input";
-import type { Voucher } from "../../../interfaces";
 
 type Tab = "vouchers" | "discounts";
-
-interface DiscountRow {
-  discount_id: number;
-  voucher_code: string;
-  voucher_type: string;
-  voucher_value: number;
-  start_date: string;
-  end_date: string;
-}
 
 const emptyVoucherForm = {
   code: "",
@@ -41,13 +32,16 @@ const emptyDiscountForm = {
 };
 
 export default function StaffVouchersPage() {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("vouchers");
 
   // Voucher state
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const { data: vouchers = [] } = useQuery({
+    queryKey: ["staff-vouchers"],
+    queryFn: () => voucherAdminService.listVouchers(),
+  });
   const [voucherForm, setVoucherForm] = useState(emptyVoucherForm);
   const [addingVoucher, setAddingVoucher] = useState(false);
-  const [savingVoucher, setSavingVoucher] = useState(false);
 
   // Discount state
   const [discountForm, setDiscountForm] = useState(emptyDiscountForm);
@@ -56,21 +50,10 @@ export default function StaffVouchersPage() {
     product_id: "",
     variant_id: "",
   });
-  const [savingDiscount, setSavingDiscount] = useState(false);
-  const [assigningDiscount, setAssigningDiscount] = useState(false);
 
-  useEffect(() => {
-    voucherAdminService
-      .listVouchers()
-      .then(setVouchers)
-      .catch(() => {});
-  }, []);
-
-  async function handleCreateVoucher(e: React.FormEvent) {
-    e.preventDefault();
-    setSavingVoucher(true);
-    try {
-      await voucherAdminService.createVoucher({
+  const createVoucherMutation = useMutation({
+    mutationFn: () =>
+      voucherAdminService.createVoucher({
         code: voucherForm.code,
         type: voucherForm.type,
         value: Number(voucherForm.value),
@@ -80,53 +63,61 @@ export default function StaffVouchersPage() {
         end_date: voucherForm.end_date,
         usage_limit: Number(voucherForm.usage_limit),
         description: voucherForm.description,
-      });
+      }),
+    onSuccess: () => {
       toast.success("Voucher created.");
       setVoucherForm(emptyVoucherForm);
       setAddingVoucher(false);
-      voucherAdminService.listVouchers().then(setVouchers);
-    } catch {
-      toast.error("Failed to create voucher.");
-    } finally {
-      setSavingVoucher(false);
-    }
+      queryClient.invalidateQueries({ queryKey: ["staff-vouchers"] });
+    },
+    onError: () => toast.error("Failed to create voucher."),
+  });
+  const savingVoucher = createVoucherMutation.isPending;
+
+  async function handleCreateVoucher(e: React.FormEvent) {
+    e.preventDefault();
+    createVoucherMutation.mutate();
   }
 
-  async function handleCreateDiscount(e: React.FormEvent) {
-    e.preventDefault();
-    setSavingDiscount(true);
-    try {
-      await voucherAdminService.createDiscount({
+  const createDiscountMutation = useMutation({
+    mutationFn: () =>
+      voucherAdminService.createDiscount({
         voucher_code: discountForm.voucher_code,
         voucher_type: discountForm.voucher_type,
         voucher_value: Number(discountForm.voucher_value),
         start_date: discountForm.start_date,
         end_date: discountForm.end_date,
-      });
+      }),
+    onSuccess: () => {
       toast.success("Discount created.");
       setDiscountForm(emptyDiscountForm);
-    } catch {
-      toast.error("Failed to create discount.");
-    } finally {
-      setSavingDiscount(false);
-    }
+    },
+    onError: () => toast.error("Failed to create discount."),
+  });
+  const savingDiscount = createDiscountMutation.isPending;
+
+  async function handleCreateDiscount(e: React.FormEvent) {
+    e.preventDefault();
+    createDiscountMutation.mutate();
   }
+
+  const assignDiscountMutation = useMutation({
+    mutationFn: () =>
+      voucherAdminService.assignDiscount(Number(assignForm.discount_id), {
+        product_id: Number(assignForm.product_id),
+        variant_id: Number(assignForm.variant_id),
+      }),
+    onSuccess: () => {
+      toast.success("Discount assigned.");
+      setAssignForm({ discount_id: "", product_id: "", variant_id: "" });
+    },
+    onError: () => toast.error("Failed to assign discount."),
+  });
+  const assigningDiscount = assignDiscountMutation.isPending;
 
   async function handleAssignDiscount(e: React.FormEvent) {
     e.preventDefault();
-    setAssigningDiscount(true);
-    try {
-      await voucherAdminService.assignDiscount(Number(assignForm.discount_id), {
-        product_id: Number(assignForm.product_id),
-        variant_id: Number(assignForm.variant_id),
-      });
-      toast.success("Discount assigned.");
-      setAssignForm({ discount_id: "", product_id: "", variant_id: "" });
-    } catch {
-      toast.error("Failed to assign discount.");
-    } finally {
-      setAssigningDiscount(false);
-    }
+    assignDiscountMutation.mutate();
   }
 
   return (

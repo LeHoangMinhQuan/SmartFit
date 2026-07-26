@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
+import { useMutation } from "@tanstack/react-query";
 import { userService } from "../../../services/user.service";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { toast } from "../../../components/ui/Toast";
@@ -34,17 +35,10 @@ export default function ProfilePage() {
   const [username, setUsername] = useState(user?.username ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [address, setAddress] = useState(user?.address ?? "");
-  const [savingInfo, setSavingInfo] = useState(false);
 
-  async function handleSaveInfo(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSavingInfo(true);
-    try {
-      const updated = await userService.updateProfile({
-        username,
-        phone,
-        address,
-      });
+  const saveInfoMutation = useMutation({
+    mutationFn: () => userService.updateProfile({ username, phone, address }),
+    onSuccess: (updated) => {
       // Keep the session, just refresh the cached user object
       if (user) {
         setAuth({
@@ -56,18 +50,37 @@ export default function ProfilePage() {
         });
       }
       toast.success("Profile updated.");
-    } catch {
-      toast.error("Failed to update profile.");
-    } finally {
-      setSavingInfo(false);
-    }
+    },
+    onError: () => toast.error("Failed to update profile."),
+  });
+  const savingInfo = saveInfoMutation.isPending;
+
+  async function handleSaveInfo(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    saveInfoMutation.mutate();
   }
 
   // ── Change Password state ──
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
-  const [savingPw, setSavingPw] = useState(false);
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () =>
+      userService.changePassword({
+        current_password: currentPw,
+        new_password: newPw,
+      }),
+    onSuccess: () => {
+      toast.success("Password changed.");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    },
+    onError: () =>
+      toast.error("Failed to change password. Check your current password."),
+  });
+  const savingPw = changePasswordMutation.isPending;
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -75,21 +88,7 @@ export default function ProfilePage() {
       toast.error("New passwords don't match.");
       return;
     }
-    setSavingPw(true);
-    try {
-      await userService.changePassword({
-        current_password: currentPw,
-        new_password: newPw,
-      });
-      toast.success("Password changed.");
-      setCurrentPw("");
-      setNewPw("");
-      setConfirmPw("");
-    } catch {
-      toast.error("Failed to change password. Check your current password.");
-    } finally {
-      setSavingPw(false);
-    }
+    changePasswordMutation.mutate();
   }
 
   if (!user) {

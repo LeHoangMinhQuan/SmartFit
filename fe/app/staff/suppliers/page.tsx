@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
@@ -13,29 +14,32 @@ interface Supplier {
 }
 
 export default function StaffSuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: suppliers = [], isLoading: loading } = useQuery({
+    queryKey: ["staff-suppliers-list"],
+    queryFn: async () => {
+      const res = await adminService.getSuppliers();
+      return Array.isArray(res) ? res : [];
+    },
+  });
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
 
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  function load() {
-    setLoading(true);
-    adminService
-      .getSuppliers()
-      .then((res) => setSuppliers(Array.isArray(res) ? res : []))
-      .catch(() => toast.error("Failed to load suppliers."))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(load, []);
+  const createMutation = useMutation({
+    mutationFn: () => adminService.createSupplier({ name: newName.trim() }),
+    onSuccess: () => {
+      toast.success("Supplier created.");
+      setNewName("");
+      setAdding(false);
+      queryClient.invalidateQueries({ queryKey: ["staff-suppliers-list"] });
+    },
+    onError: () => toast.error("Failed to create supplier."),
+  });
+  const creating = createMutation.isPending;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -43,18 +47,7 @@ export default function StaffSuppliersPage() {
       toast.error("Supplier name is required.");
       return;
     }
-    setCreating(true);
-    try {
-      await adminService.createSupplier({ name: newName.trim() });
-      toast.success("Supplier created.");
-      setNewName("");
-      setAdding(false);
-      load();
-    } catch {
-      toast.error("Failed to create supplier.");
-    } finally {
-      setCreating(false);
-    }
+    createMutation.mutate();
   }
 
   function startEdit(s: Supplier) {
@@ -62,32 +55,34 @@ export default function StaffSuppliersPage() {
     setEditName(s.name);
   }
 
+  const updateMutation = useMutation({
+    mutationFn: (supplier_id: number) =>
+      adminService.updateSupplier(supplier_id, { name: editName.trim() }),
+    onSuccess: () => {
+      toast.success("Supplier updated.");
+      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ["staff-suppliers-list"] });
+    },
+    onError: () => toast.error("Failed to update supplier."),
+  });
+  const savingEdit = updateMutation.isPending;
+
   async function handleSaveEdit(supplier_id: number) {
     if (!editName.trim()) {
       toast.error("Supplier name is required.");
       return;
     }
-    setSavingEdit(true);
-    try {
-      await adminService.updateSupplier(supplier_id, { name: editName.trim() });
-      toast.success("Supplier updated.");
-      setEditingId(null);
-      load();
-    } catch {
-      toast.error("Failed to update supplier.");
-    } finally {
-      setSavingEdit(false);
-    }
+    updateMutation.mutate(supplier_id);
   }
 
-  async function handleDelete(supplier_id: number) {
-    if (!confirm("Delete this supplier? This cannot be undone.")) return;
-    setDeletingId(supplier_id);
-    try {
-      await adminService.deleteSupplier(supplier_id);
+  const deleteMutation = useMutation({
+    mutationFn: (supplier_id: number) =>
+      adminService.deleteSupplier(supplier_id),
+    onSuccess: () => {
       toast.success("Supplier deleted.");
-      load();
-    } catch (err: unknown) {
+      queryClient.invalidateQueries({ queryKey: ["staff-suppliers-list"] });
+    },
+    onError: (err: unknown) => {
       const status = (err as { response?: { status?: number } })?.response
         ?.status;
       if (status === 409) {
@@ -97,9 +92,13 @@ export default function StaffSuppliersPage() {
       } else {
         toast.error("Failed to delete supplier.");
       }
-    } finally {
-      setDeletingId(null);
-    }
+    },
+  });
+  const deletingId = deleteMutation.isPending ? deleteMutation.variables : null;
+
+  async function handleDelete(supplier_id: number) {
+    if (!confirm("Delete this supplier? This cannot be undone.")) return;
+    deleteMutation.mutate(supplier_id);
   }
 
   return (

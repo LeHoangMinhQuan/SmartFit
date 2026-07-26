@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { adminService } from "../../services/staff/admin.service";
 import { toast } from "../ui/Toast";
 import Input from "../ui/Input";
@@ -40,21 +41,23 @@ export default function VariantManager({
 }: VariantManagerProps) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<NewVariantForm>(emptyForm);
-  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   // Global attribute catalog — loaded once, used by every variant's
   // "add attribute" dropdown below.
-  const [catalog, setCatalog] = useState<Attribute[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const {
+    data: catalog = [],
+    isLoading: catalogLoading,
+    isError: catalogError,
+  } = useQuery({
+    queryKey: ["staff", "attributes"],
+    queryFn: () => adminService.getAttributes(),
+    staleTime: Infinity,
+  });
 
   useEffect(() => {
-    adminService
-      .getAttributes()
-      .then(setCatalog)
-      .catch(() => toast.error("Failed to load attribute catalog."))
-      .finally(() => setCatalogLoading(false));
-  }, []);
+    if (catalogError) toast.error("Failed to load attribute catalog.");
+  }, [catalogError]);
 
   // variant_id is app-supplied per product (1, 2, 3…) — suggest the next
   // free integer as a starting point, but let staff override it.
@@ -63,6 +66,34 @@ export default function VariantManager({
       ? Math.max(...variants.map((v) => v.variant_id)) + 1
       : 1;
 
+  const createVariantMutation = useMutation({
+    mutationFn: async (vars: { variant_id: number; form: NewVariantForm }) => {
+      await adminService.createVariant(productId, {
+        variant_id: vars.variant_id,
+        name: vars.form.name.trim(),
+      });
+
+      // Price is a separate write — only call it if the staff filled it in.
+      // A variant can exist without an active price row, but won't be
+      // purchasable/displayed with a price until one is set.
+      if (vars.form.base_price && vars.form.start_date && vars.form.end_date) {
+        await adminService.upsertPrice(productId, vars.variant_id, {
+          base_price: Number(vars.form.base_price),
+          start_date: new Date(vars.form.start_date).toISOString(),
+          end_date: new Date(vars.form.end_date).toISOString(),
+        });
+      }
+    },
+    onSuccess: () => {
+      toast.success("Variant created.");
+      setForm(emptyForm);
+      setAdding(false);
+      onChange();
+    },
+    onError: () => toast.error("Failed to create variant."),
+  });
+  const saving = createVariantMutation.isPending;
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     const variant_id = Number(form.variant_id || nextSuggestedId);
@@ -70,50 +101,28 @@ export default function VariantManager({
       toast.error("Variant name is required.");
       return;
     }
-    setSaving(true);
-    try {
-      await adminService.createVariant(productId, {
-        variant_id,
-        name: form.name.trim(),
-      });
-
-      // Price is a separate write — only call it if the staff filled it in.
-      // A variant can exist without an active price row, but won't be
-      // purchasable/displayed with a price until one is set.
-      if (form.base_price && form.start_date && form.end_date) {
-        await adminService.upsertPrice(productId, variant_id, {
-          base_price: Number(form.base_price),
-          start_date: new Date(form.start_date).toISOString(),
-          end_date: new Date(form.end_date).toISOString(),
-        });
-      }
-
-      toast.success("Variant created.");
-      setForm(emptyForm);
-      setAdding(false);
-      onChange();
-    } catch {
-      toast.error("Failed to create variant.");
-    } finally {
-      setSaving(false);
-    }
+    createVariantMutation.mutate({ variant_id, form });
   }
+
+  const deleteVariantMutation = useMutation({
+    mutationFn: (variant_id: number) =>
+      adminService.deleteVariant(productId, variant_id),
+    onMutate: (variant_id) => setDeletingId(variant_id),
+    onSuccess: () => {
+      toast.success("Variant deleted.");
+      onChange();
+    },
+    onError: () =>
+      toast.error(
+        "Failed to delete variant. It may have existing orders or stock.",
+      ),
+    onSettled: () => setDeletingId(null),
+  });
 
   async function handleDeleteVariant(variant_id: number) {
     if (!confirm(`Delete variant #${variant_id}? This cannot be undone.`))
       return;
-    setDeletingId(variant_id);
-    try {
-      await adminService.deleteVariant(productId, variant_id);
-      toast.success("Variant deleted.");
-      onChange();
-    } catch {
-      toast.error(
-        "Failed to delete variant. It may have existing orders or stock.",
-      );
-    } finally {
-      setDeletingId(null);
-    }
+    deleteVariantMutation.mutate(variant_id);
   }
 
   return (
@@ -239,7 +248,6 @@ function VariantRow({
   const [addingAttr, setAddingAttr] = useState(false);
   const [selectedAttrId, setSelectedAttrId] = useState("");
   const [attrValue, setAttrValue] = useState("");
-  const [savingAttr, setSavingAttr] = useState(false);
 
   // Inline edit state — keyed by attribute_id, holds the in-progress value
   const [editingAttrId, setEditingAttrId] = useState<number | null>(null);
@@ -256,24 +264,17 @@ function VariantRow({
     (a) => !attachedIds.has(a.attribute_id),
   );
 
-  async function handleAddAttribute(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedAttrId || !attrValue.trim()) {
-      toast.error("Select an attribute and enter a value.");
-      return;
-    }
-    setSavingAttr(true);
-    try {
-      await adminService.assignAttribute(productId, variant.variant_id, {
-        attribute_id: Number(selectedAttrId),
-        value: attrValue.trim(),
-      });
+  const addAttributeMutation = useMutation({
+    mutationFn: (vars: { attribute_id: number; value: string }) =>
+      adminService.assignAttribute(productId, variant.variant_id, vars),
+    onSuccess: () => {
       toast.success("Attribute added.");
       setAddingAttr(false);
       setSelectedAttrId("");
       setAttrValue("");
       onChange();
-    } catch (err: unknown) {
+    },
+    onError: (err: unknown) => {
       const status = (err as { response?: { status?: number } })?.response
         ?.status;
       if (status === 409) {
@@ -281,9 +282,20 @@ function VariantRow({
       } else {
         toast.error("Failed to add attribute.");
       }
-    } finally {
-      setSavingAttr(false);
+    },
+  });
+  const savingAddAttr = addAttributeMutation.isPending;
+
+  async function handleAddAttribute(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedAttrId || !attrValue.trim()) {
+      toast.error("Select an attribute and enter a value.");
+      return;
     }
+    addAttributeMutation.mutate({
+      attribute_id: Number(selectedAttrId),
+      value: attrValue.trim(),
+    });
   }
 
   function startEdit(attributeId: number, currentValue: string) {
@@ -291,45 +303,46 @@ function VariantRow({
     setEditValue(currentValue);
   }
 
+  const saveEditMutation = useMutation({
+    mutationFn: (vars: { attributeId: number; value: string }) =>
+      adminService.updateAttributeValue(
+        productId,
+        variant.variant_id,
+        vars.attributeId,
+        vars.value,
+      ),
+    onSuccess: () => {
+      toast.success("Attribute updated.");
+      setEditingAttrId(null);
+      onChange();
+    },
+    onError: () => toast.error("Failed to update attribute."),
+  });
+  const savingEditAttr = saveEditMutation.isPending;
+
   async function handleSaveEdit(attributeId: number) {
     if (!editValue.trim()) {
       toast.error("Value cannot be empty.");
       return;
     }
-    setSavingAttr(true);
-    try {
-      await adminService.updateAttributeValue(
-        productId,
-        variant.variant_id,
-        attributeId,
-        editValue.trim(),
-      );
-      toast.success("Attribute updated.");
-      setEditingAttrId(null);
-      onChange();
-    } catch {
-      toast.error("Failed to update attribute.");
-    } finally {
-      setSavingAttr(false);
-    }
+    saveEditMutation.mutate({ attributeId, value: editValue.trim() });
   }
+
+  const removeAttributeMutation = useMutation({
+    mutationFn: (attributeId: number) =>
+      adminService.removeAttribute(productId, variant.variant_id, attributeId),
+    onMutate: (attributeId) => setRemovingAttrId(attributeId),
+    onSuccess: () => {
+      toast.success("Attribute removed.");
+      onChange();
+    },
+    onError: () => toast.error("Failed to remove attribute."),
+    onSettled: () => setRemovingAttrId(null),
+  });
 
   async function handleRemoveAttribute(attributeId: number) {
     if (!confirm("Remove this attribute from the variant?")) return;
-    setRemovingAttrId(attributeId);
-    try {
-      await adminService.removeAttribute(
-        productId,
-        variant.variant_id,
-        attributeId,
-      );
-      toast.success("Attribute removed.");
-      onChange();
-    } catch {
-      toast.error("Failed to remove attribute.");
-    } finally {
-      setRemovingAttrId(null);
-    }
+    removeAttributeMutation.mutate(attributeId);
   }
 
   return (
@@ -371,7 +384,7 @@ function VariantRow({
               />
               <button
                 onClick={() => handleSaveEdit(a.attribute_id)}
-                disabled={savingAttr}
+                disabled={savingEditAttr}
                 className="text-xs text-green-600 hover:underline"
               >
                 Save
@@ -437,7 +450,7 @@ function VariantRow({
             />
             <button
               type="submit"
-              disabled={savingAttr}
+              disabled={savingAddAttr}
               className="text-xs text-green-600 hover:underline"
             >
               Add

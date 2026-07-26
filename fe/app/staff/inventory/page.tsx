@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { clsx } from "clsx";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inventoryService } from "../../../services/staff/inventory.service";
 import { adminService } from "../../../services/staff/admin.service";
 import { productService } from "../../../services/product.service";
@@ -11,7 +11,6 @@ import DataTable from "../../../components/staff/DataTable";
 import Spinner from "../../../components/ui/Spinner";
 import Input from "../../../components/ui/Input";
 import Pagination from "../../../components/ui/Pagination";
-import type { Store, Supplier, PaginationMeta } from "../../../interfaces";
 
 type Tab = "stock" | "history";
 
@@ -38,17 +37,11 @@ interface ImportRow {
 }
 
 export default function StaffInventoryPage() {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("stock");
-  const [stores, setStores] = useState<Store[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
-  const [stock, setStock] = useState<InventoryRow[]>([]);
-  const [imports, setImports] = useState<ImportRow[]>([]);
-  const [importsMeta, setImportsMeta] = useState<PaginationMeta | undefined>();
   const [importsPage, setImportsPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [adjusting, setAdjusting] = useState<string | null>(null); // "product_id-variant_id"
   const [adjustQty, setAdjustQty] = useState<Record<string, string>>({});
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showImportForm, setShowImportForm] = useState(false);
   const [importForm, setImportForm] = useState({
     supplier_id: "",
@@ -58,17 +51,51 @@ export default function StaffInventoryPage() {
     quantity: "",
     import_date: "",
   });
-  const [savingImport, setSavingImport] = useState(false);
 
-  function loadImportHistory(page: number) {
-    inventoryService
-      .getImportHistory({ page, limit: 10 })
-      .then((res) => {
-        setImports(res.data);
-        setImportsMeta(res.meta);
-      })
-      .catch(() => {});
-  }
+  const storesQuery = useQuery({
+    queryKey: ["staff-stores"],
+    queryFn: () => adminService.getStores(),
+  });
+  const stores = storesQuery.data ?? [];
+
+  // Single-store scope (see ecommerce-api-plan.md §12): auto-select
+  // when there's exactly one store so staff aren't forced to pick from
+  // a dropdown with only one option. Stops mattering once a second
+  // store exists — the dropdown falls back to manual selection.
+  useEffect(() => {
+    if (stores.length === 1 && !selectedStoreId) {
+      setSelectedStoreId(String(stores[0].store_id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stores.length]);
+
+  const suppliersQuery = useQuery({
+    queryKey: ["staff-suppliers"],
+    queryFn: () => adminService.getSuppliers(),
+  });
+  const suppliers = suppliersQuery.data ?? [];
+
+  const importsQuery = useQuery({
+    queryKey: ["staff-import-history", importsPage],
+    queryFn: () =>
+      inventoryService.getImportHistory({ page: importsPage, limit: 10 }),
+  });
+  const imports: ImportRow[] = importsQuery.data?.data ?? [];
+  const importsMeta = importsQuery.data?.meta;
+
+  const stockQuery = useQuery({
+    queryKey: ["staff-inventory-stock", selectedStoreId],
+    queryFn: () =>
+      inventoryService.getInventory({ store_id: Number(selectedStoreId) }),
+    enabled: !!selectedStoreId,
+  });
+  const stock: InventoryRow[] = stockQuery.data ?? [];
+  const loading = stockQuery.isLoading;
+
+  useEffect(() => {
+    if (stockQuery.isError) toast.error("Failed to load inventory.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockQuery.isError]);
 
   const productsQuery = useQuery({
     queryKey: ["staff-products-all"],
@@ -90,40 +117,41 @@ export default function StaffInventoryPage() {
   });
   const variants = variantsQuery.data ?? [];
 
-useEffect(() => {
-  adminService
-    .getStores()
-    .then((rows) => {
-      setStores(rows);
-      // Single-store scope (see ecommerce-api-plan.md §12): auto-select
-      // when there's exactly one store so staff aren't forced to pick from
-      // a dropdown with only one option. Stops mattering once a second
-      // store exists — the dropdown falls back to manual selection.
-      if (rows.length === 1) {
-        setSelectedStoreId(String(rows[0].store_id));
-      }
-    })
-    .catch(() => {});
-  adminService
-    .getSuppliers()
-    .then(setSuppliers)
-    .catch(() => {});
-  loadImportHistory(1);
-}, []);
-
-  useEffect(() => {
-    loadImportHistory(importsPage);
-  }, [importsPage]);
-
-  useEffect(() => {
-    if (!selectedStoreId) return;
-    setLoading(true);
-    inventoryService
-      .getInventory({ store_id: Number(selectedStoreId) })
-      .then(setStock)
-      .catch(() => toast.error("Failed to load inventory."))
-      .finally(() => setLoading(false));
-  }, [selectedStoreId]);
+  const adjustMutation = useMutation({
+    mutationFn: (vars: {
+      product_id: number;
+      variant_id: number;
+      store_id: number;
+      quantity: number;
+    }) =>
+      inventoryService.adjustQuantity(
+        vars.product_id,
+        vars.variant_id,
+        vars.store_id,
+        { quantity: vars.quantity },
+      ),
+    onSuccess: (_data, vars) => {
+      queryClient.setQueryData<InventoryRow[]>(
+        ["staff-inventory-stock", selectedStoreId],
+        (old) =>
+          old?.map((r) =>
+            r.product_id === vars.product_id && r.variant_id === vars.variant_id
+              ? { ...r, quantity: vars.quantity }
+              : r,
+          ),
+      );
+      setAdjustQty((prev) => {
+        const next = { ...prev };
+        delete next[`${vars.product_id}-${vars.variant_id}`];
+        return next;
+      });
+      toast.success("Quantity updated.");
+    },
+    onError: () => toast.error("Failed to update quantity."),
+  });
+  const adjusting = adjustMutation.isPending
+    ? `${adjustMutation.variables?.product_id}-${adjustMutation.variables?.variant_id}`
+    : null;
 
   async function handleAdjust(
     product_id: number,
@@ -136,29 +164,7 @@ useEffect(() => {
       toast.error("Enter a valid quantity.");
       return;
     }
-    setAdjusting(key);
-    try {
-      await inventoryService.adjustQuantity(product_id, variant_id, store_id, {
-        quantity: qty,
-      });
-      setStock((prev) =>
-        prev.map((r) =>
-          r.product_id === product_id && r.variant_id === variant_id
-            ? { ...r, quantity: qty }
-            : r,
-        ),
-      );
-      setAdjustQty((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      toast.success("Quantity updated.");
-    } catch {
-      toast.error("Failed to update quantity.");
-    } finally {
-      setAdjusting(null);
-    }
+    adjustMutation.mutate({ product_id, variant_id, store_id, quantity: qty });
   }
 
   function handleProductChange(value: string) {
@@ -166,6 +172,46 @@ useEffect(() => {
     // previous product — variant_id is per-product, not globally unique.
     setImportForm({ ...importForm, product_id: value, variant_id: "" });
   }
+
+  const recordImportMutation = useMutation({
+    mutationFn: (vars: {
+      supplier_id: number;
+      product_id: number;
+      variant_id: number;
+      store_id: number;
+      quantity: number;
+      import_date: string;
+    }) => inventoryService.recordImport(vars),
+    onSuccess: () => {
+      toast.success("Import recorded — stock updated.");
+      setImportForm({
+        supplier_id: "",
+        product_id: "",
+        variant_id: "",
+        store_id: "",
+        quantity: "",
+        import_date: "",
+      });
+      setShowImportForm(false);
+      setImportsPage(1);
+      queryClient.invalidateQueries({ queryKey: ["staff-import-history"] });
+      if (selectedStoreId) {
+        queryClient.invalidateQueries({
+          queryKey: ["staff-inventory-stock", selectedStoreId],
+        });
+      }
+    },
+    onError: (err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 404) {
+        toast.error("Supplier, product, variant, or store not found.");
+      } else {
+        toast.error("Failed to record import.");
+      }
+    },
+  });
+  const savingImport = recordImportMutation.isPending;
 
   async function handleRecordImport(e: React.FormEvent) {
     e.preventDefault();
@@ -184,47 +230,14 @@ useEffect(() => {
       return;
     }
 
-    setSavingImport(true);
-    try {
-      await inventoryService.recordImport({
-        supplier_id,
-        product_id,
-        variant_id,
-        store_id,
-        quantity,
-        import_date: new Date(
-          importForm.import_date || Date.now(),
-        ).toISOString(),
-      });
-      toast.success("Import recorded — stock updated.");
-      setImportForm({
-        supplier_id: "",
-        product_id: "",
-        variant_id: "",
-        store_id: "",
-        quantity: "",
-        import_date: "",
-      });
-      setShowImportForm(false);
-      setImportsPage(1);
-      loadImportHistory(1);
-      if (selectedStoreId) {
-        inventoryService
-          .getInventory({ store_id: Number(selectedStoreId) })
-          .then(setStock)
-          .catch(() => {});
-      }
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response
-        ?.status;
-      if (status === 404) {
-        toast.error("Supplier, product, variant, or store not found.");
-      } else {
-        toast.error("Failed to record import.");
-      }
-    } finally {
-      setSavingImport(false);
-    }
+    recordImportMutation.mutate({
+      supplier_id,
+      product_id,
+      variant_id,
+      store_id,
+      quantity,
+      import_date: new Date(importForm.import_date || Date.now()).toISOString(),
+    });
   }
 
   const showTopStoreSelector = !(tab === "history" && showImportForm);

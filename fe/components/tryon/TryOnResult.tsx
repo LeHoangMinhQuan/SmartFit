@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { tryonService } from "../../services/tryon.service";
 import Spinner from "../ui/Spinner";
-import type { TryOnPollResult, TryOnFailureReason } from "../../interfaces";
+import type { TryOnFailureReason } from "../../interfaces";
 
 interface TryOnResultProps {
   sessionId: number;
@@ -26,52 +27,51 @@ const FAILURE_MESSAGES: Record<TryOnFailureReason, string> = {
 };
 
 export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
-  const [poll, setPoll] = useState<TryOnPollResult>({ status: "processing" });
   const [rateLimited, setRateLimited] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    function doPoll() {
-      tryonService
-        .getPreviewStatus(sessionId)
-        .then((result) => {
-          setPoll(result);
-          if (result.status === "ready" || result.status === "failed") {
-            clearInterval(timerRef.current!);
-          }
-        })
-        .catch((err) => {
-          if (err?.response?.status === 429) {
-            // NOTE: a 429 while polling comes from the global 200/15min
-            // limiter, NOT the 5/10min limiter on session creation — the
-            // two are different limits on different endpoints.
-            clearInterval(timerRef.current!);
-            setRateLimited(true);
-            setCountdown(60); // show 60s countdown before allowing retry
-            countdownRef.current = setInterval(() => {
-              setCountdown((c) => {
-                if (c <= 1) {
-                  clearInterval(countdownRef.current!);
-                  setRateLimited(false);
-                  return 0;
-                }
-                return c - 1;
-              });
-            }, 1000);
-          }
-          // Other errors: keep polling silently
-        });
-    }
+  const { data: poll = { status: "processing" }, error } = useQuery({
+    queryKey: ["tryon-preview", sessionId],
+    queryFn: () => tryonService.getPreviewStatus(sessionId),
+    // Don't let React Query's default retry logic mask a 429 behind extra
+    // attempts — we want the rate-limit effect below to see it right away.
+    retry: false,
+    // Stop polling once we've reached a terminal status, or while we're
+    // sitting out a rate-limit cooldown.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "ready" || status === "failed") return false;
+      if (rateLimited) return false;
+      return POLL_MS;
+    },
+  });
 
-    doPoll();
-    timerRef.current = setInterval(doPoll, POLL_MS);
+  useEffect(() => {
+    // NOTE: a 429 while polling comes from the global 200/15min limiter,
+    // NOT the 5/10min limiter on session creation — the two are different
+    // limits on different endpoints. Other errors: keep polling silently.
+    const status = (error as { response?: { status?: number } } | null)
+      ?.response?.status;
+    if (status === 429 && !rateLimited) {
+      setRateLimited(true);
+      setCountdown(60); // show 60s countdown before allowing retry
+      countdownRef.current = setInterval(() => {
+        setCountdown((c) => {
+          if (c <= 1) {
+            clearInterval(countdownRef.current!);
+            setRateLimited(false);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    }
     return () => {
-      clearInterval(timerRef.current!);
       clearInterval(countdownRef.current!);
     };
-  }, [sessionId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
 
   if (rateLimited) {
     return (

@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import axios from "axios";
+import { useMutation } from "@tanstack/react-query";
 import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useCartStore } from "@/store/useCartStore";
@@ -34,14 +35,12 @@ export default function LoginModal({
   const [email, setEmail] = useState(initialState.email);
   const [password, setPassword] = useState(initialState.password);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const resetForm = useCallback(() => {
     setEmail(initialState.email);
     setPassword(initialState.password);
     setError(null);
-    setLoading(false);
   }, []);
 
   const handleClose = useCallback(() => {
@@ -92,35 +91,37 @@ export default function LoginModal({
     }
   }
 
-  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
+  const loginMutation = useMutation({
+    mutationFn: async () => {
       // Use the shared `api` instance (lib/axios.ts) instead of a bare axios
       // call — this is the single place that knows NEXT_PUBLIC_BASE_URL and
       // keeps the refresh-token interceptor consistent across the app.
       // Login itself doesn't need an access token attached, but routing
       // through `api` means the base URL is never duplicated or drifted.
       const { data } = await api.post("/auth/login", { email, password });
-
+      return data;
+    },
+    onSuccess: async (data) => {
       // Tokens arrive as httpOnly Set-Cookie headers — the response body
       // only contains the (non-sensitive) user object.
       setAuth(data.user);
-
       await mergeCartOnLogin();
-
       handleClose();
-    } catch (err) {
+    },
+    onError: (err) => {
       if (axios.isAxiosError(err)) {
         setError(err.response?.data?.message ?? "Invalid email or password");
       } else {
         setError("Something went wrong. Please try again.");
       }
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+  const loading = loginMutation.isPending;
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    loginMutation.mutate();
   };
 
   if (!isOpen) return null;

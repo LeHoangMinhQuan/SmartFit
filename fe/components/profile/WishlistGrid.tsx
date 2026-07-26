@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { wishlistService } from "../../services/wishlist.service";
 import { useWishlistStore } from "../../store/useWishlistStore";
 import { toast } from "../ui/Toast";
@@ -12,47 +13,49 @@ import { Heart, Trash2 } from "lucide-react";
 import type { WishlistItem } from "../../interfaces";
 
 export default function WishlistGrid() {
+  const queryClient = useQueryClient();
   const setStoreItems = useWishlistStore((s) => s.setItems);
-  const [items, setItems] = useState<WishlistItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
 
   const itemKey = (item: WishlistItem) =>
     `${item.product_id}-${item.variant_id}`;
 
-  async function refresh() {
-    try {
+  const {
+    data: items = [],
+    isLoading: loading,
+    isError,
+  } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: async () => {
       const data = await wishlistService.getWishlist();
-      setItems(data);
       setStoreItems(data);
-    } catch {
-      toast.error("Failed to load wishlist.");
-    } finally {
-      setLoading(false);
-    }
-  }
+      return data;
+    },
+  });
 
   useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (isError) toast.error("Failed to load wishlist.");
+  }, [isError]);
 
-  async function handleRemove(item: WishlistItem) {
-    const key = itemKey(item);
-    setRemovingKey(key);
-    try {
-      await wishlistService.removeFromWishlist(
-        item.product_id,
-        item.variant_id,
+  const removeMutation = useMutation({
+    mutationFn: (item: WishlistItem) =>
+      wishlistService.removeFromWishlist(item.product_id, item.variant_id),
+    onMutate: (item) => setRemovingKey(itemKey(item)),
+    onSuccess: (_data, item) => {
+      queryClient.setQueryData(
+        ["wishlist"],
+        (prev: WishlistItem[] | undefined) =>
+          (prev ?? []).filter((i) => itemKey(i) !== itemKey(item)),
       );
-      setItems((prev) => prev.filter((i) => itemKey(i) !== key));
       useWishlistStore.getState().removeItem(item.product_id, item.variant_id);
       toast.success("Removed from wishlist.");
-    } catch {
-      toast.error("Failed to remove item.");
-    } finally {
-      setRemovingKey(null);
-    }
+    },
+    onError: () => toast.error("Failed to remove item."),
+    onSettled: () => setRemovingKey(null),
+  });
+
+  async function handleRemove(item: WishlistItem) {
+    removeMutation.mutate(item);
   }
 
   if (loading) {
