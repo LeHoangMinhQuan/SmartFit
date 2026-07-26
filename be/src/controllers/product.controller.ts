@@ -6,12 +6,21 @@ import { cdnUrlForKey } from "../services/storage.service.js";
 // ─── Products ─────────────────────────────────────────────────────────────────
 
 export const listProducts = catchAsync(async (req: Request, res: Response) => {
-  const { page, limit, sort, category_id, minPrice, maxPrice, attribute_id } =
-    req.query as any;
+  const {
+    page,
+    limit,
+    sort,
+    order,
+    category_id,
+    minPrice,
+    maxPrice,
+    attribute_id,
+  } = req.query as any;
   const result = await ProductService.listProducts({
     page,
     limit,
     sort,
+    order,
     category_id,
     minPrice,
     maxPrice,
@@ -26,6 +35,16 @@ export const listProducts = catchAsync(async (req: Request, res: Response) => {
     },
   });
 });
+
+export const getTopSellingProducts = catchAsync(
+  async (req: Request, res: Response) => {
+    const { limit } = req.query as any;
+    const rows = await ProductService.getTopSellingProducts(
+      limit ? Number(limit) : undefined,
+    );
+    res.json({ data: rows });
+  },
+);
 
 export const searchProducts = catchAsync(
   async (req: Request, res: Response) => {

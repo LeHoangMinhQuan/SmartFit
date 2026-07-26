@@ -34,10 +34,17 @@ export const listProductsSchema = z.object({
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(100).optional(),
     sort: z.string().optional(),
+    order: z.enum(["asc", "desc"]).optional(),
     category_id: z.coerce.number().int().positive().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
     attribute_id: z.coerce.number().int().positive().optional(),
+  }),
+});
+
+export const topSellingProductsSchema = z.object({
+  query: z.object({
+    limit: z.coerce.number().int().positive().max(100).optional(),
   }),
 });
 

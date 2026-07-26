@@ -16,7 +16,7 @@ import { Knex } from "knex";
  * 🔮 Future work (multi-store): add more entries back to STORES once a
  * second GHN shop exists — see §12.
  */
-const STORES = [{ name: "Main Store", address: "12 Le Loi, Q1" }];
+const STORES = [{ name: "Main Store", address: "12 Le Loi" }];
 
 export async function seed(knex: Knex): Promise<void> {
   const existingCount = await knex("store").count("* as count").first();

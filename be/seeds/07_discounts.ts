@@ -30,6 +30,23 @@ const DISCOUNTS = [
     voucher_type: "fixed",
     voucher_value: 50000,
   },
+  // These two are the actual products seeded under the "On Sale" category
+  // in 06_demo_products.ts — without a real discount row, that page would
+  // show products with the "on sale" label but no actual markdown.
+  {
+    productName: "Discounted Hat",
+    variant_id: 1,
+    voucher_code: "DEMOHAT20",
+    voucher_type: "percent",
+    voucher_value: 20,
+  },
+  {
+    productName: "Sale Sneakers",
+    variant_id: 1,
+    voucher_code: "DEMOSNEAK100K",
+    voucher_type: "fixed",
+    voucher_value: 100000,
+  },
 ];
 
 export async function seed(knex: Knex): Promise<void> {

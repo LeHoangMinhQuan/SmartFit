@@ -4,6 +4,9 @@ import { Knex } from "knex";
  * Seeds sample checkout-level vouchers (distinct from the variant-level
  * `discount` table seeded in 07_discounts.ts). Populates enough variety
  * to exercise both voucher types and the max_discount cap on checkout.
+ *
+ * Updated to align with the case-insensitive (CI) idempotency checks
+ * introduced in 06_demo_products.ts and 07_discounts.ts.
  */
 const VOUCHERS = [
   {
@@ -40,8 +43,11 @@ export async function seed(knex: Knex): Promise<void> {
   const end_date = new Date("2027-12-31").toISOString();
 
   for (const v of VOUCHERS) {
-    // voucher.code is UNIQUE — natural idempotency check
-    const existing = await knex("voucher").where({ code: v.code }).first();
+    // Case-insensitive check to match the robust CI patterns from seeds 06 and 07
+    const existing = await knex("voucher")
+      .whereRaw("LOWER(code) = LOWER(?)", [v.code])
+      .first();
+
     if (existing) {
       console.log(`Voucher already seeded: ${v.code} — skipping.`);
       continue;

@@ -6,7 +6,6 @@ import * as CategoryModel from "../models/category.model.js";
 import * as ReviewModel from "../models/review.model.js";
 import { Category } from "../models/category.model.js";
 
-
 // ─── Products ─────────────────────────────────────────────────────────────────
 
 export async function listProducts(
@@ -21,6 +20,10 @@ export async function searchProducts(
   limit?: number,
 ) {
   return ProductModel.searchProducts(query, page, limit);
+}
+
+export async function getTopSellingProducts(limit?: number) {
+  return ProductModel.findTopSellingProducts(limit);
 }
 
 export async function getProduct(product_id: number) {

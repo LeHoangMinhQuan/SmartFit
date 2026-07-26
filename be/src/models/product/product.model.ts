@@ -30,6 +30,7 @@ export async function findAllProducts(filters: {
   page?: number;
   limit?: number;
   sort?: string;
+  order?: "asc" | "desc";
   category_id?: number;
   minPrice?: number;
   maxPrice?: number;
@@ -38,7 +39,8 @@ export async function findAllProducts(filters: {
   const {
     page = 1,
     limit = 20,
-    sort = "product_id",
+    sort = "p.product_id", // qualified: product_price/product_image also have product_id
+    order = "asc",
     category_id,
     minPrice,
     maxPrice,
@@ -46,7 +48,23 @@ export async function findAllProducts(filters: {
   } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db("product as p").select("p.*");
+  // Was previously `.select("p.*").distinct(...)` with no image/price join at
+  // all, so the list endpoint always returned preview_image/min_price/
+  // max_price as undefined — every card on any page using this endpoint
+  // (landing page, category browse) silently had no image and no price.
+  let query = db("product as p")
+    .select(
+      "p.product_id",
+      "p.name",
+      "p.description",
+      "pi.s3_url as preview_image",
+      db.raw("min(pp.base_price) as min_price"),
+      db.raw("max(pp.base_price) as max_price"),
+    )
+    .leftJoin("product_image as pi", function () {
+      this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
+    })
+    .leftJoin("product_price as pp", "p.product_id", "pp.product_id");
 
   if (category_id) {
     query = query
@@ -54,15 +72,10 @@ export async function findAllProducts(filters: {
       .where("pc.category_id", category_id);
   }
 
-  if (minPrice !== undefined || maxPrice !== undefined) {
-    query = query.join("product_price as pp", function () {
-      this.on("p.product_id", "pp.product_id");
-    });
-    if (minPrice !== undefined)
-      query = query.where("pp.base_price", ">=", minPrice);
-    if (maxPrice !== undefined)
-      query = query.where("pp.base_price", "<=", maxPrice);
-  }
+  if (minPrice !== undefined)
+    query = query.where("pp.base_price", ">=", minPrice);
+  if (maxPrice !== undefined)
+    query = query.where("pp.base_price", "<=", maxPrice);
 
   if (attribute_id) {
     query = query
@@ -71,22 +84,61 @@ export async function findAllProducts(filters: {
   }
 
   query = query
-    .orderBy(sort)
+    .groupBy("p.product_id", "p.name", "p.description", "pi.s3_url")
+    .orderBy(sort, order)
     .limit(limit)
-    .offset(offset)
-    .distinct("p.product_id", "p.name", "p.description");
+    .offset(offset);
 
-  const countQuery = db("product as p").count("p.product_id as total");
-  if (category_id)
+  const countQuery = db("product as p").countDistinct("p.product_id as total");
+  if (category_id) {
     countQuery
       .join("product_category as pc", "p.product_id", "pc.product_id")
       .where("pc.category_id", category_id);
+  }
+  if (minPrice !== undefined || maxPrice !== undefined) {
+    countQuery.join("product_price as pp", "p.product_id", "pp.product_id");
+    if (minPrice !== undefined)
+      countQuery.where("pp.base_price", ">=", minPrice);
+    if (maxPrice !== undefined)
+      countQuery.where("pp.base_price", "<=", maxPrice);
+  }
+  if (attribute_id) {
+    countQuery
+      .join("product_attribute as pa", "p.product_id", "pa.product_id")
+      .where("pa.attribute_id", attribute_id);
+  }
 
   const countResult = (await countQuery) as { total: string | number }[];
   const total = countResult[0]?.total ?? 0;
   const rows = await query;
 
   return { rows, total: Number(total) };
+}
+
+export async function findTopSellingProducts(limit = 8) {
+  // Ranks by total units sold across all orders (any status — a thesis-demo
+  // seed dataset is small enough that restricting to "paid" orders would
+  // likely return too few rows to fill a carousel). Left join so products
+  // with zero sales still have a defined (0) sold_count rather than being
+  // excluded outright.
+  return db("product as p")
+    .select(
+      "p.product_id",
+      "p.name",
+      "p.description",
+      "pi.s3_url as preview_image",
+      db.raw("min(pp.base_price) as min_price"),
+      db.raw("max(pp.base_price) as max_price"),
+      db.raw("coalesce(sum(oi.quantity), 0) as sold_count"),
+    )
+    .leftJoin("product_image as pi", function () {
+      this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
+    })
+    .leftJoin("product_price as pp", "p.product_id", "pp.product_id")
+    .leftJoin("order_item as oi", "p.product_id", "oi.product_id")
+    .groupBy("p.product_id", "p.name", "p.description", "pi.s3_url")
+    .orderBy("sold_count", "desc")
+    .limit(limit);
 }
 
 export async function searchProducts(query: string, page = 1, limit = 20) {

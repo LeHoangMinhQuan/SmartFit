@@ -86,6 +86,20 @@ export async function seed(knex: Knex): Promise<void> {
   const jacketsId = await getOrCreateCategory("Jackets", null); // not featured — exercises the "unfeatured category" path
   await getOrCreateCategory("Formal", shirtsId); // nested under Shirts — exercises tree depth, no products assigned
 
+  // "All" and "Brands" back the Header's nav links (/category/all,
+  // /category/brands). Neither is a real catalog concept: "All" is just
+  // "every product" (here hand-tagged onto every seeded product below,
+  // which only works because this is a closed, finite demo dataset — any
+  // product added later without this tag won't show up under "All"), and
+  // "Brands" doesn't correspond to any real entity in the schema (there's
+  // no brand/manufacturer table) — it's a curated subset for demo purposes
+  // only. Not featured, so they don't appear as extra tiles in the
+  // landing page's "Browse By Category" grid.
+  const allId = await getOrCreateCategory("All", null, { is_featured: false });
+  const brandsId = await getOrCreateCategory("Brands", null, {
+    is_featured: false,
+  });
+
   // ── Attributes ──────────────────────────────────────────────────────────
   const colorAttr = await getOrCreateAttribute("Color");
   const sizeAttr = await getOrCreateAttribute("Size");
@@ -122,6 +136,7 @@ export async function seed(knex: Knex): Promise<void> {
       color: "White",
       size: "M",
       price: 399000,
+      isBrand: true,
     },
     {
       name: "Slim Fit Jeans",
@@ -130,6 +145,7 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Indigo",
       size: "32",
       price: 459000,
+      isBrand: true,
     },
     {
       name: "Chino Pants",
@@ -146,6 +162,7 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Blue",
       size: "L",
       price: 599000,
+      isBrand: true,
     },
     {
       name: "Bomber Jacket",
@@ -154,6 +171,7 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Black",
       size: "M",
       price: 649000,
+      isBrand: true,
     },
     {
       name: "Windbreaker",
@@ -207,10 +225,11 @@ export async function seed(knex: Knex): Promise<void> {
       .returning("product_id");
     const product_id: number = prodRow.product_id;
 
-    await knex("product_category").insert({
-      product_id,
-      category_id: p.category_id,
-    });
+    const category_ids = [p.category_id, allId];
+    if (p.isBrand) category_ids.push(brandsId);
+    await knex("product_category").insert(
+      category_ids.map((category_id) => ({ product_id, category_id })),
+    );
 
     await knex("product_variant").insert({
       product_id,
@@ -252,6 +271,6 @@ export async function seed(knex: Knex): Promise<void> {
   }
 
   console.log(
-    `Seeded 5 categories (4 featured) + 1 nested category, and ${products.length} demo products.`,
+    `Seeded 7 categories (4 featured) + 1 nested category, and ${products.length} demo products.`,
   );
 }

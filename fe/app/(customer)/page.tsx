@@ -1,85 +1,24 @@
 import Carousel from "@/components/Carousel";
 import Image from "next/image";
-import { ProductCardProps, Category } from "@/interfaces";
+import { ProductCardProps, ProductSummary, Category } from "@/interfaces";
 import Link from "next/link";
 import { categoryService } from "@/services/category.service";
+import { productService } from "@/services/product.service";
 
-
-// Add this dummy data at the top of your file or in a separate constants file
-const NEW_ARRIVALS: ProductCardProps[] = [
-  {
-    id: 1,
-    name: "T-shirt with Tape Details",
-    price: 80,
-    originalPrice: 100,
-    discount: 20,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 2,
-    name: "Skinny Fit Jeans",
-    price: 240,
-    originalPrice: 260,
-    discount: 20,
-    rating: 3.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 3,
-    name: "Checkered Shirt",
-    price: 180,
-    originalPrice: 200,
-    discount: 10,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 4,
-    name: "Sleeve Striped T-shirt",
-    price: 130,
-    originalPrice: 160,
-    discount: 30,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 5,
-    name: "Sleeve Striped T-shirt",
-    price: 130,
-    originalPrice: 160,
-    discount: 30,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 6,
-    name: "Sleeve Striped T-shirt",
-    price: 130,
-    originalPrice: 160,
-    discount: 30,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 7,
-    name: "Sleeve Striped T-shirt",
-    price: 130,
-    originalPrice: 160,
-    discount: 30,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-  {
-    id: 8,
-    name: "Sleeve Striped T-shirt",
-    price: 130,
-    originalPrice: 160,
-    discount: 30,
-    rating: 4.5,
-    imageUrl: "/images/landing_img.jpg",
-  },
-];
+// Maps the backend's ProductSummary shape to what Carousel/ProductCard expect.
+// originalPrice/discount are omitted since list endpoints never return
+// discount info (see ProductSummary's discountActive comment) — the card
+// component already treats both as optional and simply omits the
+// strikethrough/badge when absent.
+function toCardProps(p: ProductSummary): ProductCardProps {
+  return {
+    id: p.product_id,
+    name: p.name,
+    price: p.price ?? 0,
+    rating: p.avg_rating ?? 0,
+    imageUrl: p.image ?? undefined,
+  };
+}
 
 const STYLES = [
   {
@@ -106,14 +45,36 @@ const STYLES = [
 
 export default async function Home() {
   let featuredCategories: Category[] = [];
+  let newArrivals: ProductSummary[] = [];
+  let topSelling: ProductSummary[] = [];
 
-  try {
-    featuredCategories = await categoryService.getFeaturedCategories();
-  } catch (error) {
-    // Silently fall back to empty array if backend is offline during 'npm run build'
+  const [categoriesResult, newArrivalsResult, topSellingResult] =
+    await Promise.allSettled([
+      categoryService.getFeaturedCategories(),
+      productService.getNewArrivals(8),
+      productService.getTopSelling(8),
+    ]);
+
+  // Each section falls back to an empty array independently — e.g. if the
+  // backend is offline during 'npm run build', or if one endpoint fails,
+  // the rest of the landing page still renders with real data.
+  if (categoriesResult.status === "fulfilled") {
+    featuredCategories = categoriesResult.value;
+  } else {
     console.warn(
-      "Backend unavailable during build time, skipping featured categories.",
+      "Failed to load featured categories:",
+      categoriesResult.reason,
     );
+  }
+  if (newArrivalsResult.status === "fulfilled") {
+    newArrivals = newArrivalsResult.value;
+  } else {
+    console.warn("Failed to load new arrivals:", newArrivalsResult.reason);
+  }
+  if (topSellingResult.status === "fulfilled") {
+    topSelling = topSellingResult.value;
+  } else {
+    console.warn("Failed to load top selling:", topSellingResult.reason);
   }
 
   return (
@@ -189,10 +150,14 @@ export default async function Home() {
       </div>
 
       {/* NEW ARRIVALS */}
-      <Carousel title="New Arrivals" data={NEW_ARRIVALS} />
+      {newArrivals.length > 0 && (
+        <Carousel title="New Arrivals" data={newArrivals.map(toCardProps)} />
+      )}
 
       {/* TOP SELLINGS */}
-      <Carousel title="Top Selling" data={NEW_ARRIVALS} />
+      {topSelling.length > 0 && (
+        <Carousel title="Top Selling" data={topSelling.map(toCardProps)} />
+      )}
 
       {/* BROWSE BY CATEGORY (was "Browse By dress style") */}
       <section className="max-w-7xl mx-auto px-4 py-16">
@@ -202,8 +167,7 @@ export default async function Home() {
           </h2>
 
           {featuredCategories.length ===
-          0 ? // No categories marked featured yet — section simply doesn't
-          // render rather than showing broken/placeholder tiles.
+          0 ? // render rather than showing broken/placeholder tiles. // No categories marked featured yet — section simply doesn't
           null : (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 h-auto md:h-[600px]">
               {featuredCategories.map((category, i) => (

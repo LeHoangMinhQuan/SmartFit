@@ -7,6 +7,7 @@ import * as ProductController from "../controllers/product.controller.js";
 import {
   listProductsSchema,
   searchProductsSchema,
+  topSellingProductsSchema,
   productParamsSchema,
   createProductSchema,
   updateProductSchema,
@@ -75,6 +76,11 @@ router.get(
   "/search",
   validate(searchProductsSchema),
   ProductController.searchProducts,
+);
+router.get(
+  "/top-selling",
+  validate(topSellingProductsSchema),
+  ProductController.getTopSellingProducts,
 );
 router.get("/", validate(listProductsSchema), ProductController.listProducts);
 router.get("/:id", validate(productParamsSchema), ProductController.getProduct);

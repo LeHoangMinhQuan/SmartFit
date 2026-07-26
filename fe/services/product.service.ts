@@ -91,6 +91,24 @@ export const productService = {
     };
   },
 
+  /** Newest products first — for the landing page's "New Arrivals" carousel. */
+  async getNewArrivals(limit = 8): Promise<ProductSummary[]> {
+    const { data } = await api.get<{ data: RawProductListItem[] }>(
+      "/products",
+      { params: { sort: "p.product_id", order: "desc", limit } },
+    );
+    return data.data.map(toSummary);
+  },
+
+  /** Ranked by real units sold — for the landing page's "Top Selling" carousel. */
+  async getTopSelling(limit = 8): Promise<ProductSummary[]> {
+    const { data } = await api.get<{ data: RawProductListItem[] }>(
+      "/products/top-selling",
+      { params: { limit } },
+    );
+    return data.data.map(toSummary);
+  },
+
   async getProduct(id: number): Promise<Product> {
     const { data } = await api.get<{ data: Product }>(`/products/${id}`);
     return data.data;
