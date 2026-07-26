@@ -57,7 +57,6 @@ export interface RegisterResult {
     username: string;
     email: string;
     phone: string;
-    address: string;
   };
   accessToken: string;
   refreshToken: string;
@@ -78,7 +77,6 @@ export const register = async (body: RegisterBody): Promise<RegisterResult> => {
     email: body.email,
     password_hash,
     phone: body.phone,
-    address: body.address,
   });
 
   if (!user) {
@@ -97,7 +95,6 @@ export const register = async (body: RegisterBody): Promise<RegisterResult> => {
       username: user.username,
       email: user.email,
       phone: user.phone,
-      address: user.address,
     },
     accessToken,
     refreshToken,
@@ -112,7 +109,6 @@ export interface LoginResult {
     username: string;
     email: string;
     phone: string;
-    address: string;
   };
   accessToken: string;
   refreshToken: string;
@@ -146,7 +142,6 @@ export const login = async (body: LoginBody): Promise<LoginResult> => {
       username: user.username,
       email: user.email,
       phone: user.phone,
-      address: user.address,
     },
     accessToken,
     refreshToken,

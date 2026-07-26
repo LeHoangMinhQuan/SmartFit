@@ -8,8 +8,12 @@ import { z } from "zod";
  *   "USER".username  VARCHAR(50) NOT NULL
  *   "USER".email     VARCHAR(50) NOT NULL
  *   "USER".phone     CHAR(10)    NOT NULL — exactly 10 digits
- *   "USER".address   VARCHAR(70) NOT NULL
  *   "USER".password_hash stored; raw password validated here before hashing
+ *
+ * "USER".address was dropped (see sql schema) — signup no longer collects
+ * an address at all. Real address management lives entirely in the
+ * address book (address/user_address tables), which the user fills in
+ * from their profile after registering — see components/profile/AddressBook.tsx.
  */
 
 export const registerSchema = z.object({
@@ -21,7 +25,6 @@ export const registerSchema = z.object({
       .string()
       .length(10)
       .regex(/^\d{10}$/),
-    address: z.string().min(1).max(70).trim(),
   }),
 });
 

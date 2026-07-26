@@ -21,7 +21,6 @@ const initialForm = {
   password: "",
   confirmPassword: "",
   phone: "",
-  address: "",
 };
 
 export default function RegisterModal({
@@ -121,7 +120,6 @@ export default function RegisterModal({
         email: form.email,
         password: form.password,
         phone: form.phone,
-        address: form.address,
       });
 
       // Auto-login: tokens arrive as httpOnly Set-Cookie headers — the
@@ -235,23 +233,6 @@ export default function RegisterModal({
               maxLength={10}
               pattern="\d{10}"
               title="Phone must be exactly 10 digits"
-            />
-          </div>
-
-          {/* Address */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Address
-            </label>
-            <input
-              type="text"
-              placeholder="123 Le Loi, Q1, HCMC"
-              value={form.address}
-              onChange={set("address")}
-              className="w-full bg-[#F0F0F0] rounded-xl px-4 py-3 outline-none text-black"
-              required
-              disabled={loading}
-              maxLength={70}
             />
           </div>
 

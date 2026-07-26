@@ -62,7 +62,7 @@ export default function ReviewSection({
 
   return (
     <section className="flex flex-col gap-6">
-      <h2 className="text-lg font-semibold">Customer Reviews</h2>
+      <h2 className="text-lg font-semibold text-gray-900">Customer Reviews</h2>
 
       {loading ? (
         <Spinner />
@@ -81,17 +81,17 @@ export default function ReviewSection({
           onSubmit={handleSubmit}
           className="flex flex-col gap-3 border-t pt-6"
         >
-          <p className="font-medium">Write a review</p>
+          <p className="font-medium text-gray-900">Write a review</p>
 
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">Rating:</label>
             <select
               value={rating}
               onChange={(e) => setRating(Number(e.target.value))}
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
               {[5, 4, 3, 2, 1].map((n) => (
-                <option key={n} value={n}>
+                <option key={n} value={n} className="text-yellow">
                   {n} ★
                 </option>
               ))}
@@ -104,7 +104,7 @@ export default function ReviewSection({
             placeholder="Share your experience…"
             rows={3}
             required
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-600 outline-none focus:border-black"
           />
 
           <button

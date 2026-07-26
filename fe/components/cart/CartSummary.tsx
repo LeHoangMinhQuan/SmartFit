@@ -61,7 +61,7 @@ export default function ReviewSection({
 
   return (
     <section className="flex flex-col gap-6">
-      <h2 className="text-lg font-semibold">Customer Reviews</h2>
+      <h2 className="text-lg font-semibold text-gray-900">Customer Reviews</h2>
 
       {loading ? (
         <Spinner />
@@ -80,7 +80,7 @@ export default function ReviewSection({
           onSubmit={handleSubmit}
           className="flex flex-col gap-3 border-t pt-6"
         >
-          <p className="font-medium">Write a review</p>
+          <p className="font-medium text-gray-900">Write a review</p>
 
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">Rating:</label>

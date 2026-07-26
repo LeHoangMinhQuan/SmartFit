@@ -277,9 +277,12 @@ export async function findProductsByCategory(
   category_id: number,
   page = 1,
   limit = 20,
+  minPrice?: number,
+  maxPrice?: number,
+  sort?: string,
 ) {
   const offset = (page - 1) * limit;
-  const rows = await db("product as p")
+  let query = db("product as p")
     .select(
       "p.*",
       "pi.s3_url as preview_image",
@@ -291,14 +294,57 @@ export async function findProductsByCategory(
       this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
     })
     .leftJoin("product_price as pp", "p.product_id", "pp.product_id")
-    .where("pc.category_id", category_id)
-    .groupBy("p.product_id", "pi.s3_url")
-    .limit(limit)
-    .offset(offset);
-  const countResult = (await db("product_category")
-    .where({ category_id })
-    .count("product_id as total")) as { total: string | number }[];
+    .where("pc.category_id", category_id);
+
+  if (minPrice !== undefined)
+    query = query.where("pp.base_price", ">=", minPrice);
+  if (maxPrice !== undefined)
+    query = query.where("pp.base_price", "<=", maxPrice);
+
+  query = query.groupBy("p.product_id", "pi.s3_url");
+
+  // ProductFilters.tsx sends one of: price_asc | price_desc | newest | undefined.
+  // NULLS LAST explicitly on both directions so products with no priced
+  // variant sink to the bottom either way, instead of Postgres's default
+  // (NULLS FIRST on DESC) surfacing them at the top of "Price: High → Low".
+  switch (sort) {
+    case "price_asc":
+      query = query.orderByRaw("min_price ASC NULLS LAST");
+      break;
+    case "price_desc":
+      query = query.orderByRaw("max_price DESC NULLS LAST");
+      break;
+    case "newest":
+      query = query.orderBy("p.product_id", "desc");
+      break;
+    // no sort param: previous behavior (DB default order) — unchanged
+  }
+
+  query = query.limit(limit).offset(offset);
+
+  // total must reflect the same price filter, or Pagination shows a total
+  // that doesn't match what's actually returned. countDistinct — not a
+  // plain count — because joining product_price fans out one row per
+  // variant; a plain count would over-count any product with 2+ variants.
+  let countQuery = db("product as p")
+    .join("product_category as pc", "p.product_id", "pc.product_id")
+    .where("pc.category_id", category_id);
+  if (minPrice !== undefined || maxPrice !== undefined) {
+    countQuery = countQuery.join(
+      "product_price as pp",
+      "p.product_id",
+      "pp.product_id",
+    );
+    if (minPrice !== undefined)
+      countQuery = countQuery.where("pp.base_price", ">=", minPrice);
+    if (maxPrice !== undefined)
+      countQuery = countQuery.where("pp.base_price", "<=", maxPrice);
+  }
+  const countResult = (await countQuery.countDistinct(
+    "p.product_id as total",
+  )) as { total: string | number }[];
   const total = countResult[0]?.total ?? 0;
+  const rows = await query;
   return { rows, total: Number(total) };
 }
 

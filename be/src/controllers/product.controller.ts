@@ -212,11 +212,14 @@ export const getCategoryTree = catchAsync(
 
 export const getProductsByCategory = catchAsync(
   async (req: Request, res: Response) => {
-    const { page, limit } = req.query as any;
+    const { page, limit, minPrice, maxPrice, sort } = req.query as any;
     const result = await ProductService.getProductsByCategory(
       Number(req.params["category_id"]),
       page,
       limit,
+      minPrice !== undefined ? Number(minPrice) : undefined,
+      maxPrice !== undefined ? Number(maxPrice) : undefined,
+      sort,
     );
     res.json({ data: result.rows, meta: { total: result.total } });
   },

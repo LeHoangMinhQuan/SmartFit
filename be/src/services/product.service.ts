@@ -227,10 +227,20 @@ export async function getProductsByCategory(
   category_id: number,
   page?: number,
   limit?: number,
+  minPrice?: number,
+  maxPrice?: number,
+  sort?: string,
 ) {
   const cat = await CategoryModel.findCategoryById(category_id);
   if (!cat) throw new ApiError(404, "Category not found");
-  return ProductModel.findProductsByCategory(category_id, page, limit);
+  return ProductModel.findProductsByCategory(
+    category_id,
+    page,
+    limit,
+    minPrice,
+    maxPrice,
+    sort,
+  );
 }
 
 export async function createCategory(data: Category) {

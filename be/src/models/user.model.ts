@@ -8,7 +8,6 @@ export interface UserRow {
   email: string;
   password_hash: string;
   phone: string; // CHAR(10) NOT NULL
-  address: string; // VARCHAR(70) NOT NULL
   avatar_url: string | null;
   google_id: string | null;
   created_at: Date;
@@ -45,7 +44,6 @@ export const insertUser = (user: {
   email: string;
   password_hash: string;
   phone: string; // CHAR(10) NOT NULL
-  address: string; // VARCHAR(70) NOT NULL
 }): Promise<UserRow[]> => db<UserRow>("USER").insert(user).returning("*");
 
 // ─── refresh_token queries ────────────────────────────────────────────────────
