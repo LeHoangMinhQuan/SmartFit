@@ -1,6 +1,6 @@
 import { Knex } from "knex";
 
-const DEFAULT_ROLES = ["admin", "warehouse", "sales"];
+const DEFAULT_ROLES = ["admin", "customer"];
 
 export async function seed(knex: Knex): Promise<void> {
   for (const name of DEFAULT_ROLES) {

@@ -12,7 +12,6 @@ interface ShippingService {
 }
 
 interface ShippingSelectorProps {
-  fromDistrictId: number | null;
   toDistrictId: number | null;
   toWardCode: string | null;
   selectedServiceId: number | null;
@@ -20,7 +19,6 @@ interface ShippingSelectorProps {
 }
 
 export default function ShippingSelector({
-  fromDistrictId,
   toDistrictId,
   toWardCode,
   selectedServiceId,
@@ -31,22 +29,21 @@ export default function ShippingSelector({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!fromDistrictId || !toDistrictId || !toWardCode) return;
+    if (!toDistrictId || !toWardCode) return;
     setLoading(true);
     shippingService
-      .getServices({
-        from_district_id: fromDistrictId,
-        to_district_id: toDistrictId,
-      })
+      .getServices({ to_district_id: toDistrictId })
       .then(async (svcs) => {
-        setServices(svcs);
-        // Fetch fees for all services in parallel
-        const feeResults = await Promise.all(
+        // Fetch fees independently — a service tier GHN can't quote for this
+        // parcel (e.g. a "heavy" tier rejecting our placeholder 500g weight)
+        // must not take the other, quotable tiers down with it. Promise.all
+        // previously failed the whole batch on a single rejection, wiping
+        // out services the UI had already shown.
+        const results = await Promise.allSettled(
           svcs.map((s) =>
             shippingService
               .estimateFee({
                 service_id: s.service_id,
-                from_district_id: fromDistrictId,
                 to_district_id: toDistrictId,
                 to_ward_code: toWardCode?.toString() || "",
                 weight: 500, // default 500g — refine if product weight is known
@@ -54,13 +51,26 @@ export default function ShippingSelector({
               .then((r) => [s.service_id, r.total] as [number, number]),
           ),
         );
-        setFees(Object.fromEntries(feeResults));
+
+        const quotable = new Set<number>();
+        const feeEntries: [number, number][] = [];
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            feeEntries.push(result.value);
+            quotable.add(result.value[0]);
+          }
+        }
+
+        // Only render services GHN actually priced — a service with no fee
+        // would otherwise sit stuck on "…" forever and be unselectable.
+        setServices(svcs.filter((s) => quotable.has(s.service_id)));
+        setFees(Object.fromEntries(feeEntries));
       })
       .catch(() => setServices([]))
       .finally(() => setLoading(false));
-  }, [fromDistrictId, toDistrictId, toWardCode]);
+  }, [toDistrictId, toWardCode]);
 
-  if (!fromDistrictId || !toDistrictId || !toWardCode) return null;
+  if (!toDistrictId || !toWardCode) return null;
   if (loading) return <Spinner size="sm" />;
   if (!services.length)
     return (
@@ -85,9 +95,9 @@ export default function ShippingSelector({
               checked={selectedServiceId === s.service_id}
               onChange={() => onSelect(s.service_id, fees[s.service_id] ?? 0)}
             />
-            <span className="text-sm">{s.short_name}</span>
+            <span className="text-sm text-gray-700">{s.short_name}</span>
           </div>
-          <span className="text-sm font-medium">
+          <span className="text-sm font-medium text-gray-700">
             {fees[s.service_id] !== undefined
               ? formatPrice(fees[s.service_id])
               : "…"}

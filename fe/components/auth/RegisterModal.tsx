@@ -72,23 +72,27 @@ export default function RegisterModal({
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   // Merge guest cart into the server cart, then replace local state with the
-  // authoritative server copy. Must run AFTER setAuth() so lib/axios.ts picks
-  // up the new access token on these requests — otherwise they 401.
+  // authoritative server copy. Must run AFTER the register call so the
+  // accessToken cookie the server just set is present on these requests —
+  // otherwise they 401.
   // Identical to the merge in LoginModal.tsx — registration also auto-logs in.
   async function mergeCartOnLogin() {
     const localItems = useCartStore.getState().items;
     try {
-      if (localItems.length > 0) {
-        await cartService.mergeCart(
-          localItems.map((i) => ({
-            product_id: i.product_id,
-            variant_id: i.variant_id,
-            quantity: i.quantity,
-          })),
-        );
-      }
-      const serverCart = await cartService.getCart();
-      useCartStore.getState().setItems(serverCart);
+      // mergeCart() already returns the full post-merge cart, so there's no
+      // need for a separate GET /cart afterward — only fall back to getCart()
+      // when there was nothing local to merge in the first place.
+      const cart =
+        localItems.length > 0
+          ? await cartService.mergeCart(
+              localItems.map((i) => ({
+                product_id: i.product_id,
+                variant_id: i.variant_id,
+                quantity: i.quantity,
+              })),
+            )
+          : await cartService.getCart();
+      useCartStore.getState().setCartData(cart.items, cart.total);
     } catch {
       // Non-fatal — don't block registration on cart sync failure
       toast.error("Could not sync your cart. It will retry next time.");

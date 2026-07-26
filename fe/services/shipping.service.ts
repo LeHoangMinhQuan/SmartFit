@@ -2,13 +2,11 @@ import api from "../lib/axios";
 import type { District, Province, ShippingLog, Ward } from "../interfaces";
 
 interface ServicesBody {
-  from_district_id: number;
   to_district_id: number;
 }
 
 interface FeeBody {
   service_id: number;
-  from_district_id: number;
   to_district_id: number;
   to_ward_code: string;
   weight: number; // grams
@@ -53,13 +51,18 @@ export const shippingService = {
       .get<{ data: Ward[] }>(`/shipping/wards/${district_id}`)
       .then((r) => r.data.data),
 
-  // Available GHN service tiers for the given route
+  // Available GHN service tiers for the given route. `from_district_id` is
+  // intentionally NOT sent — the backend always uses its own GHN_FROM_DISTRICT
+  // (the shop's actual registered pickup point). Sending a client-guessed
+  // "from" district here previously caused GHN to silently return an empty
+  // service list whenever it didn't match the shop's real registration.
   getServices: (body: ServicesBody) =>
     api
       .post<{ data: ShippingService[] }>("/shipping/services", body)
       .then((r) => r.data.data),
 
-  // Estimated fee for a specific service + parcel dimensions
+  // Estimated fee for a specific service + parcel dimensions. Same note as
+  // above — no from_district_id/from_ward_code, the backend supplies those.
   estimateFee: (body: FeeBody) =>
     api
       .post<{ data: FeeEstimate }>("/shipping/fee", body)

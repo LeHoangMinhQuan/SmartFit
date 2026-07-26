@@ -29,6 +29,8 @@ export async function createShipmentForOrder(order_id: number) {
     payment_type_id: 2, // recipient pays
     note: "",
     required_note: "CHOXEMHANGKHONG",
+    from_district_id: Number(env.GHN_FROM_DISTRICT),
+    from_ward_code: env.GHN_FROM_WARD,
     to_name: "Customer",
     to_phone: "0900000000",
     to_address: order.shipping_address,
@@ -46,7 +48,7 @@ export async function createShipmentForOrder(order_id: number) {
     })),
   };
 
-  const { data } = await ghnClient.post("/v2/shipping-order/create", payload);
+  const { data } = await ghnClient.post("/shipping-order/create", payload);
   const ghnOrder = data.data;
 
   // Insert shipping_order (IDENTITY — do not supply shipping_order_id)
@@ -68,30 +70,40 @@ export async function createShipmentForOrder(order_id: number) {
 
 // ─── Fee estimation ───────────────────────────────────────────────────────────
 
+// `from_district_id`/`from_ward_code` are deliberately NOT accepted from the
+// caller — they must always be the shop's own registered pickup point
+// (env.GHN_FROM_DISTRICT/GHN_FROM_WARD), never client-supplied. GHN validates
+// that `shop_id` can actually ship from the given `from_district`/`from_ward`
+// and silently returns an empty result (not an error) on mismatch — this is
+// what caused "no delivery services available" when the frontend was sending
+// its own guessed district (NEXT_PUBLIC_STORE_DISTRICT_ID) instead.
 export async function estimateFee(body: {
   service_id: number;
-  from_district_id: number;
   to_district_id: number;
   to_ward_code: string;
   weight: number;
+  length?: number;
+  width?: number;
+  height?: number;
 }) {
-  const { data } = await ghnClient.get("/v2/shipping-order/fee", {
-    params: body,
+  const { data } = await ghnClient.get("/shipping-order/fee", {
+    params: {
+      ...body,
+      from_district_id: Number(env.GHN_FROM_DISTRICT),
+      from_ward_code: env.GHN_FROM_WARD,
+    },
   });
   return data.data;
 }
 
 // ─── Available services ───────────────────────────────────────────────────────
 
-export async function getAvailableServices(
-  from_district: number,
-  to_district: number,
-) {
+export async function getAvailableServices(to_district: number) {
   const { data } = await ghnClient.post(
-    "/v2/shipping-order/available-services",
+    "/shipping-order/available-services",
     {
       shop_id: Number(env.GHN_SHOP_ID),
-      from_district,
+      from_district: Number(env.GHN_FROM_DISTRICT),
       to_district,
     },
   );

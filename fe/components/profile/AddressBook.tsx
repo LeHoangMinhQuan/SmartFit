@@ -6,6 +6,7 @@ import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
 import AddressForm, { type AddressFormValues } from "../checkout/AddressForm";
 import type { UserAddress } from "../../interfaces";
+import { Plus, Star, Trash2, Loader2, MapPin } from "lucide-react";
 
 export default function AddressBook() {
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
@@ -26,7 +27,7 @@ export default function AddressBook() {
     refresh();
   }, []);
 
-  async function handleAdd(e: React.FormEvent) {
+  async function handleAdd(e: React.SubmitEvent) {
     e.preventDefault();
     const { address_line, province_id, district_id, ward_id } = form;
     if (!address_line || !province_id || !district_id || !ward_id) {
@@ -70,39 +71,55 @@ export default function AddressBook() {
     }
   }
 
-  if (loading) return <Spinner />;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <Spinner size="md" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
       {addresses.map((a) => (
         <div
           key={a.address_id}
-          className="flex items-start justify-between rounded-xl border p-4"
+          className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-slate-300"
         >
-          <div className="text-sm">
-            {a.label && <p className="font-medium text-gray-800">{a.label}</p>}
-            <p className="text-gray-600">{a.address_line}</p>
-            {a.is_default && (
-              <span className="mt-1 inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                Default
-              </span>
-            )}
+          <div className="flex items-start gap-4">
+            <div className="mt-1 rounded-full bg-slate-100 p-2 text-slate-500">
+              <MapPin className="h-4 w-4" />
+            </div>
+            <div className="text-sm">
+              {a.label && (
+                <p className="font-semibold text-slate-900">{a.label}</p>
+              )}
+              <p className="mt-0.5 text-slate-600">{a.address_line}</p>
+              {a.is_default && (
+                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                  <Star className="h-3 w-3 fill-emerald-700" />
+                  Default Address
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col items-end gap-1">
+
+          <div className="flex flex-col items-end gap-3">
+            <button
+              onClick={() => handleDelete(a.address_id)}
+              className="text-slate-400 transition hover:text-red-500"
+              aria-label="Remove address"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
             {!a.is_default && (
               <button
                 onClick={() => handleSetDefault(a.address_id)}
-                className="text-xs text-blue-500 hover:underline"
+                className="text-xs font-medium text-indigo-500 transition hover:text-indigo-600 hover:underline"
               >
-                Set default
+                Set as default
               </button>
             )}
-            <button
-              onClick={() => handleDelete(a.address_id)}
-              className="text-xs text-red-500 hover:underline"
-            >
-              Remove
-            </button>
           </div>
         </div>
       ))}
@@ -110,17 +127,23 @@ export default function AddressBook() {
       {adding ? (
         <form
           onSubmit={handleAdd}
-          className="flex flex-col gap-4 rounded-xl border p-4"
+          className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
         >
-          <p className="font-medium">New Address</p>
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3 text-slate-900">
+            <MapPin className="h-4 w-4 text-indigo-500" />
+            <h3 className="font-semibold">Add New Address</h3>
+          </div>
+
           <AddressForm value={form} onChange={setForm} />
-          <div className="flex gap-2">
+
+          <div className="mt-2 flex items-center gap-3">
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-black px-5 py-2 text-sm text-white disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? "Saving…" : "Save Address"}
             </button>
             <button
               type="button"
@@ -128,7 +151,7 @@ export default function AddressBook() {
                 setAdding(false);
                 setForm({});
               }}
-              className="text-sm text-gray-500 hover:underline"
+              className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
             >
               Cancel
             </button>
@@ -137,9 +160,10 @@ export default function AddressBook() {
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="rounded-xl border border-dashed border-gray-300 py-4 text-sm text-gray-500 hover:border-gray-500"
+          className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 py-5 text-sm font-medium text-slate-500 transition hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-600"
         >
-          + Add new address
+          <Plus className="h-4 w-4" />
+          Add new address
         </button>
       )}
     </div>

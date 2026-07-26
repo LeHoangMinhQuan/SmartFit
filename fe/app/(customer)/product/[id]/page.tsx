@@ -24,7 +24,7 @@ export default function ProductPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const openLogin = useAuthModalStore((s) => s.openLogin);
-  const { addItem: addLocalItem } = useCartStore();
+  const { addItem: addLocalItem, setCartData } = useCartStore();
   const { addItem: addWishlistItem, isWishlisted } = useWishlistStore();
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -65,11 +65,18 @@ export default function ProductPage() {
     setCartBusy(true);
     try {
       if (user) {
-        await cartService.addItem({
+        // cartService.addItem returns the full, authoritative cart — feed
+        // it straight into the store so Header's badge (which reads
+        // useCartStore, not the server) updates immediately. Previously
+        // this only hit the backend and never touched the local store, so
+        // the badge stayed stale until the next full /cart fetch (e.g.
+        // visiting /cart).
+        const cart = await cartService.addItem({
           product_id: productId,
           variant_id: selected.variant_id,
           quantity,
         });
+        setCartData(cart.items, cart.total);
       } else {
         // Guest — local store; merges with server on login
         addLocalItem({

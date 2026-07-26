@@ -116,6 +116,24 @@ export default function UserMenu({
                 </p>
               </div>
 
+              <Link
+                href="/profile"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2.5 text-sm text-black transition-colors hover:bg-gray-50"
+              >
+                My Profile
+              </Link>
+
+              <Link
+                href="/orders"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2.5 text-sm text-black transition-colors hover:bg-gray-50"
+              >
+                My Orders
+              </Link>
+
+              <div className="my-1 border-t border-gray-100" />
+
               <button
                 onClick={handleLogout}
                 className="w-full px-4 py-2.5 text-left text-sm text-red-500 transition-colors hover:bg-gray-50"

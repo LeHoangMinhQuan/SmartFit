@@ -16,7 +16,13 @@
  *   - Rotate VNPAY_HASH_SECRET and store it in a secrets manager
  */
 
-import { VNPay, HashAlgorithm, ignoreLogger, ProductCode, VnpLocale } from "vnpay";
+import {
+  VNPay,
+  HashAlgorithm,
+  ignoreLogger,
+  ProductCode,
+  VnpLocale,
+} from "vnpay";
 import { env } from "./env.js";
 
 // ── Client ────────────────────────────────────────────────────────────────────
@@ -24,7 +30,7 @@ import { env } from "./env.js";
 export const vnpayClient = new VNPay({
   tmnCode: env.VNPAY_TMN_CODE,
   secureSecret: env.VNPAY_HASH_SECRET,
-  vnpayHost: "https://sandbox.vnpayment.vn", // TODO: swap for production
+  vnpayHost: "https://sandbox.vnpayment.vn",
   testMode: env.NODE_ENV !== "production",
   hashAlgorithm: HashAlgorithm.SHA512,
   enableLog: env.NODE_ENV === "development",
@@ -85,6 +91,27 @@ export const VNPAY_IPN_URL = env.VNPAY_IPN_URL;
  */
 export function buildTxnRef(orderId: number): string {
   return `${orderId}-${Date.now()}`;
+}
+
+/**
+ * Build the VNPay payment redirect URL via the SDK.
+ *
+ * This is the only place that should speak VNPay's `vnp_*` wire format —
+ * everywhere else in the app uses the `vnpay_*` internal convention.
+ *
+ * Note: pass the raw order amount (not × 100) — the SDK multiplies by 100
+ * internally when building the URL.
+ */
+export function buildPaymentUrl(params: BuildPaymentUrlParams): string {
+  return vnpayClient.buildPaymentUrl({
+    vnp_Amount: params.amount,
+    vnp_TxnRef: params.txnRef,
+    vnp_OrderInfo: params.orderInfo,
+    vnp_IpAddr: params.ipAddr,
+    vnp_ReturnUrl: VNPAY_RETURN_URL,
+    vnp_BankCode: params.bankCode,
+    vnp_Locale: params.locale ?? VnpLocale.VN,
+  });
 }
 
 /**

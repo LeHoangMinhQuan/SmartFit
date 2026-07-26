@@ -18,8 +18,15 @@ export default function CartPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const openLogin = useAuthModalStore((s) => s.openLogin);
-  const { items, setItems, updateItem, removeItem, clearItems, totalCount } =
-    useCartStore();
+  const {
+    items,
+    total,
+    setCartData,
+    updateItem,
+    removeItem,
+    clearItems,
+    totalCount,
+  } = useCartStore();
 
   const [loading, setLoading] = useState(false);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
@@ -31,10 +38,10 @@ export default function CartPage() {
     setLoading(true);
     cartService
       .getCart()
-      .then((cartItems) => setItems(cartItems)) // getCart() returns CartItem[] directly
+      .then((cart) => setCartData(cart.items, cart.total))
       .catch(() => toast.error("Failed to load cart"))
       .finally(() => setLoading(false));
-  }, [user, setItems]);
+  }, [user, setCartData]);
 
   const itemKey = (item: CartItem) => `${item.product_id}-${item.variant_id}`;
 
@@ -47,14 +54,14 @@ export default function CartPage() {
 
     try {
       if (user) {
-        await cartService.updateItem({
+        const cart = await cartService.updateItem({
           product_id: item.product_id,
           variant_id: item.variant_id,
           quantity: newQty,
         });
-        // Re-fetch to get authoritative unit_price/subtotal from server
-        const cartItems = await cartService.getCart();
-        setItems(cartItems);
+        // updateItem already returns the full authoritative cart —
+        // no need for a second GET /cart round trip.
+        setCartData(cart.items, cart.total);
       } else {
         updateItem(item.product_id, item.variant_id, newQty);
       }
@@ -71,12 +78,11 @@ export default function CartPage() {
 
     try {
       if (user) {
-        await cartService.removeItem({
+        const cart = await cartService.removeItem({
           product_id: item.product_id,
           variant_id: item.variant_id,
         });
-        const cartItems = await cartService.getCart();
-        setItems(cartItems);
+        setCartData(cart.items, cart.total);
       } else {
         removeItem(item.product_id, item.variant_id);
       }
@@ -110,7 +116,9 @@ export default function CartPage() {
     router.push("/checkout");
   };
 
-  const total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
+  // `total` comes straight from the store (server-computed for logged-in
+  // users via setCartData, locally derived for guests) — no per-render
+  // reduce needed here.
 
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {

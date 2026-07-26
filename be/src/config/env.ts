@@ -41,7 +41,6 @@ const required = [
   "VNPAY_TMN_CODE",
   "VNPAY_HASH_SECRET",
   "VNPAY_RETURN_URL",
-  "VNPAY_URL",
   "VNPAY_IPN_URL",
 
   // GHN
@@ -87,7 +86,6 @@ export const env = {
   VNPAY_TMN_CODE: process.env["VNPAY_TMN_CODE"]!,
   VNPAY_HASH_SECRET: process.env["VNPAY_HASH_SECRET"]!,
   VNPAY_RETURN_URL: process.env["VNPAY_RETURN_URL"]!,
-  VNPAY_URL: process.env["VNPAY_URL"]!,
   VNPAY_IPN_URL: process.env["VNPAY_IPN_URL"]!,
 
   GHN_API_URL: process.env["GHN_API_URL"]!,

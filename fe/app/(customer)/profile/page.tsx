@@ -9,14 +9,16 @@ import { toast } from "../../../components/ui/Toast";
 import Input from "../../../components/ui/Input";
 import AddressBook from "../../../components/profile/AddressBook";
 import WishlistGrid from "../../../components/profile/WishlistGrid";
+import Spinner from "../../../components/ui/Spinner";
+import { User, MapPin, Heart, Key, Loader2 } from "lucide-react";
 
 type Tab = "info" | "addresses" | "wishlist" | "password";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "info", label: "My Info" },
-  { key: "addresses", label: "Addresses" },
-  { key: "wishlist", label: "Wishlist" },
-  { key: "password", label: "Change Password" },
+const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: "info", label: "My Info", icon: User },
+  { key: "addresses", label: "Addresses", icon: MapPin },
+  { key: "wishlist", label: "Wishlist", icon: Heart },
+  { key: "password", label: "Security", icon: Key },
 ];
 
 export default function ProfilePage() {
@@ -34,7 +36,7 @@ export default function ProfilePage() {
   const [address, setAddress] = useState(user?.address ?? "");
   const [savingInfo, setSavingInfo] = useState(false);
 
-  async function handleSaveInfo(e: React.SubmitEvent<HTMLFormElement>) {
+  async function handleSaveInfo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSavingInfo(true);
     try {
@@ -90,115 +92,167 @@ export default function ProfilePage() {
     }
   }
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="mb-8 text-2xl font-bold">Profile</h1>
+    <div className="min-h-screen bg-slate-50 py-10">
+      <div className="mx-auto max-w-5xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Profile
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Manage your personal information, addresses, and security settings.
+          </p>
+        </div>
 
-      {/* Tabs */}
-      <div className="mb-8 flex gap-1 border-b">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={clsx(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition",
-              tab === t.key
-                ? "border-black text-black"
-                : "border-transparent text-gray-500 hover:text-gray-800",
+        {/* Tabs */}
+        <div className="mb-8 flex gap-2 overflow-x-auto border-b border-slate-200 pb-px hide-scrollbar">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const isActive = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={clsx(
+                  "flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors",
+                  isActive
+                    ? "border-indigo-600 text-indigo-600"
+                    : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content Area */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            {/* My Info */}
+            {tab === "info" && (
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+                <h2 className="mb-6 text-lg font-semibold text-slate-900">
+                  Personal Information
+                </h2>
+                <form onSubmit={handleSaveInfo} className="flex flex-col gap-5">
+                  <Input
+                    label="Username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Email"
+                    value={user.email}
+                    disabled
+                    hint="Email cannot be changed."
+                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Input
+                      label="Phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      maxLength={10}
+                      hint="10 digits"
+                    />
+                    <Input
+                      label="Address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      maxLength={70}
+                      hint="Max 70 characters"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={savingInfo}
+                    className="mt-2 flex w-fit items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    {savingInfo && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {savingInfo ? "Saving Changes..." : "Save Changes"}
+                  </button>
+                </form>
+              </section>
             )}
-          >
-            {t.label}
-          </button>
-        ))}
+
+            {/* Addresses */}
+            {tab === "addresses" && (
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+                <h2 className="mb-6 text-lg font-semibold text-slate-900">
+                  Address Book
+                </h2>
+                <AddressBook />
+              </section>
+            )}
+
+            {/* Wishlist */}
+            {tab === "wishlist" && (
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+                <h2 className="mb-6 text-lg font-semibold text-slate-900">
+                  Your Wishlist
+                </h2>
+                <WishlistGrid />
+              </section>
+            )}
+
+            {/* Change Password */}
+            {tab === "password" && (
+              <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
+                <h2 className="mb-6 text-lg font-semibold text-slate-900">
+                  Security Settings
+                </h2>
+                <form
+                  onSubmit={handleChangePassword}
+                  className="flex flex-col gap-5"
+                >
+                  <Input
+                    label="Current Password"
+                    type="password"
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    required
+                  />
+                  <div className="my-2 border-t border-slate-200" />
+                  <Input
+                    label="New Password"
+                    type="password"
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    required
+                    minLength={8}
+                    hint="Must be at least 8 characters long."
+                  />
+                  <Input
+                    label="Confirm New Password"
+                    type="password"
+                    value={confirmPw}
+                    onChange={(e) => setConfirmPw(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingPw}
+                    className="mt-2 flex w-fit items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    {savingPw && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {savingPw ? "Updating Password..." : "Update Password"}
+                  </button>
+                </form>
+              </section>
+            )}
+          </div>
+        </div>
       </div>
-
-      {/* My Info */}
-      {tab === "info" && (
-        <form
-          onSubmit={handleSaveInfo}
-          className="flex max-w-md flex-col gap-4"
-        >
-          <Input
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-          <Input
-            label="Email"
-            value={user.email}
-            disabled
-            hint="Email cannot be changed."
-          />
-          <Input
-            label="Phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            maxLength={10}
-            hint="10 digits"
-          />
-          <Input
-            label="Address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            maxLength={70}
-            hint="Max 70 characters"
-          />
-          <button
-            type="submit"
-            disabled={savingInfo}
-            className="self-start rounded-lg bg-black px-6 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
-          >
-            {savingInfo ? "Saving…" : "Save Changes"}
-          </button>
-        </form>
-      )}
-
-      {/* Addresses */}
-      {tab === "addresses" && <AddressBook />}
-
-      {/* Wishlist */}
-      {tab === "wishlist" && <WishlistGrid />}
-
-      {/* Change Password */}
-      {tab === "password" && (
-        <form
-          onSubmit={handleChangePassword}
-          className="flex max-w-md flex-col gap-4"
-        >
-          <Input
-            label="Current Password"
-            type="password"
-            value={currentPw}
-            onChange={(e) => setCurrentPw(e.target.value)}
-            required
-          />
-          <Input
-            label="New Password"
-            type="password"
-            value={newPw}
-            onChange={(e) => setNewPw(e.target.value)}
-            required
-            minLength={8}
-          />
-          <Input
-            label="Confirm New Password"
-            type="password"
-            value={confirmPw}
-            onChange={(e) => setConfirmPw(e.target.value)}
-            required
-          />
-          <button
-            type="submit"
-            disabled={savingPw}
-            className="self-start rounded-lg bg-black px-6 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
-          >
-            {savingPw ? "Updating…" : "Update Password"}
-          </button>
-        </form>
-      )}
     </div>
   );
 }

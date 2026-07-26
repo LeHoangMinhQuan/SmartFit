@@ -88,7 +88,7 @@ export default function VoucherInput({
       <button
         onClick={handleApply}
         disabled={loading || !code.trim()}
-        className="self-start rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-40"
+        className="self-start text-indigo-500 rounded-lg border border-indigo-500 px-4 py-2 text-sm hover:bg-gray-50 hover:cursor-pointer disabled:opacity-40"
       >
         {loading ? "…" : "Apply"}
       </button>
