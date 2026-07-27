@@ -111,7 +111,7 @@ export function normalizeIpForVnpay(rawIp: string): string {
   const ipv4MappedMatch = rawIp.match(
     /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
   );
-  if (ipv4MappedMatch) return ipv4MappedMatch[1]!;
+  if (ipv4MappedMatch?.[1]) return ipv4MappedMatch[1];
   const isIpv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(rawIp);
   if (isIpv4) return rawIp;
   // Pure IPv6, no IPv4 form available — fall back rather than send colons.

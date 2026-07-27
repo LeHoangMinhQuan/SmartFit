@@ -5,6 +5,13 @@ import * as OrderModel from "../models/order.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
 import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
 
+// TODO(remove for production): VNPay sandbox merchant account only has the
+// NCB test bank enabled, so we force-select it here to skip the bank-picker
+// page (which was erroring with "bank not supported" / "order not existing"
+// when left to auto-select). Remove this once real banks are enabled, or
+// make it configurable via env if you need to test other banks.
+const HARDCODED_SANDBOX_BANK_CODE = "NCB";
+
 // ─── Create payment URL ───────────────────────────────────────────────────────
 
 export async function createPaymentUrl(
@@ -33,6 +40,7 @@ export async function createPaymentUrl(
     amount,
     orderInfo: `Payment for order ${order_id}`,
     ipAddr: ip,
+    bankCode: HARDCODED_SANDBOX_BANK_CODE,
   });
 
   return { paymentUrl, vnpay_txn_ref };
