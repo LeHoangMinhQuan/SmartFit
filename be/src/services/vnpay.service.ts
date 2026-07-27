@@ -10,7 +10,7 @@ import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
 // page (which was erroring with "bank not supported" / "order not existing"
 // when left to auto-select). Remove this once real banks are enabled, or
 // make it configurable via env if you need to test other banks.
-const HARDCODED_SANDBOX_BANK_CODE = "NCB";
+const HARDCODED_SANDBOX_BANK_CODE = "VNBANK";
 
 // ─── Create payment URL ───────────────────────────────────────────────────────
 
