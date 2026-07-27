@@ -7,6 +7,12 @@ export const createPaymentUrl = catchAsync(
     const { order_id } = req.body;
     const user_id = (req as any).user.user_id;
     const ip = req.ip ?? req.socket.remoteAddress ?? "127.0.0.1";
+    console.log("In vnpay.ts, createPaymentUrl()")
+    console.log("order_id: ", order_id)
+    console.log("user_id: ", user_id)
+    console.log("req.ip: ", req.ip)
+    console.log("req.socket.remoteAddress: ", req.socket.remoteAddress)
+    console.log("ip: ", ip)
     const result = await VNPayService.createPaymentUrl(
       Number(order_id),
       user_id,

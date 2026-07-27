@@ -90,6 +90,9 @@ export const VNPAY_IPN_URL = env.VNPAY_IPN_URL;
  * Must be unique within the same calendar day.
  */
 export function buildTxnRef(orderId: number): string {
+  console.log("In vnpay.ts, buildTxnRef()")
+  console.log("orderId: ", orderId)
+  console.log("Return: ", `${orderId}-${Date.now()}`);
   return `${orderId}-${Date.now()}`;
 }
 
@@ -107,14 +110,25 @@ export function buildTxnRef(orderId: number): string {
  * which is fine for sandbox testing (VNPay doesn't validate the IP is real).
  */
 export function normalizeIpForVnpay(rawIp: string): string {
+  console.log("In vnpay.ts, normalizeIpForVnpay()")
+  console.log("rawIp: ", rawIp)
   if (rawIp === "::1") return "127.0.0.1";
   const ipv4MappedMatch = rawIp.match(
     /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
   );
-  if (ipv4MappedMatch?.[1]) return ipv4MappedMatch[1];
+  console.log("ipv4MappedMatch: ", ipv4MappedMatch)
+  if (ipv4MappedMatch?.[1]) {
+    console.log("Return: ", ipv4MappedMatch[1]);
+    return ipv4MappedMatch[1];
+  }
   const isIpv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(rawIp);
-  if (isIpv4) return rawIp;
+  console.log("isIpv4: ", isIpv4)
+  if (isIpv4) {
+    console.log("Return: ", rawIp);
+    return rawIp
+  };
   // Pure IPv6, no IPv4 form available — fall back rather than send colons.
+  console.log("Return: ", "127.0.0.1");
   return "127.0.0.1";
 }
 
@@ -128,6 +142,9 @@ export function normalizeIpForVnpay(rawIp: string): string {
  * internally when building the URL.
  */
 export function buildPaymentUrl(params: BuildPaymentUrlParams): string {
+  console.log("In vnpay.ts, buildPaymentUrl()")
+  console.log("params: ", params)
+
   return vnpayClient.buildPaymentUrl({
     vnp_Amount: params.amount,
     vnp_TxnRef: params.txnRef,

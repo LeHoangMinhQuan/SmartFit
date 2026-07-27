@@ -10,7 +10,6 @@ import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
 // page (which was erroring with "bank not supported" / "order not existing"
 // when left to auto-select). Remove this once real banks are enabled, or
 // make it configurable via env if you need to test other banks.
-const HARDCODED_SANDBOX_BANK_CODE = "VNBANK";
 
 // ─── Create payment URL ───────────────────────────────────────────────────────
 
@@ -20,11 +19,16 @@ export async function createPaymentUrl(
   ip: string,
 ) {
   const order = await OrderModel.findOrderByIdAndUser(order_id, user_id);
+  console.log("In vnpay.ts, createPaymentUrl()")
+  console.log("order: ", order)
+  console.log("user_id: ", user_id)
+  console.log("ip: ", ip)
   if (!order) throw new ApiError(404, "Order not found");
   if (order.status !== "pending_payment")
     throw new ApiError(400, "Order is not awaiting payment");
 
   const vnpay_txn_ref = buildTxnRef(order_id);
+  console.log("vnpay_txn_ref: ", vnpay_txn_ref)
   const amount = Number(order.total_amount); // raw amount — SDK handles ×100 internally
 
   // Insert pending transaction
@@ -40,8 +44,8 @@ export async function createPaymentUrl(
     amount,
     orderInfo: `Payment for order ${order_id}`,
     ipAddr: ip,
-    bankCode: HARDCODED_SANDBOX_BANK_CODE,
   });
+  console.log("paymentUrl: ", paymentUrl)
 
   return { paymentUrl, vnpay_txn_ref };
 }
@@ -60,13 +64,18 @@ export async function handleIpn(
     body as unknown as ReturnQueryFromVNPay,
   );
 
+  console.log("In vnpay.ts, handleIpn()")
+  console.log("body: ", body)
+
+
   if (!verify.isVerified) {
     return { RspCode: "97", Message: "Invalid signature" };
   }
 
   const vnpay_txn_ref = String(verify.vnp_TxnRef);
+  console.log("vnpay_txn_ref: ", vnpay_txn_ref)
   const existing = await PaymentModel.findTransactionByRef(vnpay_txn_ref);
-
+  console.log("existing: ", existing)
   if (!existing) {
     return { RspCode: "01", Message: "Transaction not found" };
   }
@@ -95,7 +104,7 @@ export async function handleIpn(
             : null,
         vnpay_response_code: String(verify.vnp_ResponseCode),
       });
-
+    console.log("existing.order_id: ", existing.order_id)
     const order_id = existing.order_id;
     const orderStatus = isSuccess ? "paid" : "payment_failed";
     await trx("ORDER")
