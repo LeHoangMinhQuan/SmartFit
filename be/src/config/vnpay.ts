@@ -94,6 +94,31 @@ export function buildTxnRef(orderId: number): string {
 }
 
 /**
+ * VNPay's `vnp_IpAddr` field is spec'd as Alphanumeric and every official
+ * example uses plain IPv4 (e.g. 127.0.0.1). In dev/sandbox, `req.ip` often
+ * comes back as an IPv6 address (e.g. `::1`, `::ffff:127.0.0.1`, or a real
+ * IPv6 address like `2001:ee0:...`). Sending that raw to VNPay causes their
+ * server-side checksum recomputation to diverge from ours (the colons get
+ * stripped/rejected on their end), which surfaces as "Sai chữ ký" even
+ * though our own HMAC is internally correct.
+ *
+ * This normalizes IPv6-mapped IPv4 addresses (`::ffff:x.x.x.x` → `x.x.x.x`)
+ * and falls back to `127.0.0.1` for `::1` or any other pure-IPv6 address,
+ * which is fine for sandbox testing (VNPay doesn't validate the IP is real).
+ */
+export function normalizeIpForVnpay(rawIp: string): string {
+  if (rawIp === "::1") return "127.0.0.1";
+  const ipv4MappedMatch = rawIp.match(
+    /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/,
+  );
+  if (ipv4MappedMatch) return ipv4MappedMatch[1]!;
+  const isIpv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(rawIp);
+  if (isIpv4) return rawIp;
+  // Pure IPv6, no IPv4 form available — fall back rather than send colons.
+  return "127.0.0.1";
+}
+
+/**
  * Build the VNPay payment redirect URL via the SDK.
  *
  * This is the only place that should speak VNPay's `vnp_*` wire format —
@@ -107,7 +132,7 @@ export function buildPaymentUrl(params: BuildPaymentUrlParams): string {
     vnp_Amount: params.amount,
     vnp_TxnRef: params.txnRef,
     vnp_OrderInfo: params.orderInfo,
-    vnp_IpAddr: params.ipAddr,
+    vnp_IpAddr: normalizeIpForVnpay(params.ipAddr),
     vnp_ReturnUrl: VNPAY_RETURN_URL,
     vnp_BankCode: params.bankCode,
     vnp_Locale: params.locale ?? VnpLocale.VN,
