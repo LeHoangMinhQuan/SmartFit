@@ -28,14 +28,16 @@ const CLOTH_TYPE_OPTIONS: { value: ClothType; label: string }[] = [
 export default function TryOnPage({ productId, variantId }: Props) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
 
   const [stage, setStage] = useState<Stage>("upload");
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [clothType, setClothType] = useState<ClothType>("upper");
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!user) router.replace("/");
-  }, [user, router]);
+  }, [hasHydrated, user, router]);
 
   const productQuery = useQuery({
     queryKey: ["product", productId],

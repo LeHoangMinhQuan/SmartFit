@@ -40,8 +40,10 @@ export interface AuthUser {
 
 export interface AuthState {
   user: AuthUser | null;
+  hasHydrated: boolean;
   setAuth: (user: AuthUser) => void;
   clearAuth: () => void;
+  setHasHydrated: (state: boolean) => void;
 }
 
 // Product

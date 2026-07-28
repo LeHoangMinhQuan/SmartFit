@@ -18,7 +18,7 @@ import type { CartItem } from "@/interfaces";
 export default function CartPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
+  const { user, hasHydrated } = useAuthStore();
   const openLogin = useAuthModalStore((s) => s.openLogin);
   const {
     items,
@@ -33,15 +33,19 @@ export default function CartPage() {
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
   // On mount (and whenever the user logs in): sync server cart → local store.
-  const { isLoading: loading } = useQuery({
+  // Gated on hasHydrated so a logged-in user doesn't flash the guest
+  // "sign in to checkout" state on a fresh page load before the auth store
+  // has finished reading `user` back from localStorage.
+  const { isLoading: cartQueryLoading } = useQuery({
     queryKey: ["cart", user?.user_id],
     queryFn: async () => {
       const cart = await cartService.getCart();
       setCartData(cart.items, cart.total);
       return cart;
     },
-    enabled: !!user,
+    enabled: hasHydrated && !!user,
   });
+  const loading = !hasHydrated || cartQueryLoading;
 
   const updateItemMutation = useMutation({
     mutationFn: (vars: {

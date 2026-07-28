@@ -30,7 +30,8 @@ const VNPAY_METHOD_ID = 1;
 export default function CheckoutPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const { items, clearItems } = useCartStore();
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const { clearItems } = useCartStore();
 
   const [step, setStep] = useState<Step>("address");
 
@@ -50,15 +51,23 @@ export default function CheckoutPage() {
   // Payment step state
   const [voucher, setVoucher] = useState<VoucherValidationResult | null>(null);
 
-  // Redirect guests away
+  // Redirect guests away — but only once we know hasHydrated is true.
+  // `user` starts out null on every fresh page load (even for a logged-in
+  // person) until zustand finishes reading it back from localStorage; acting
+  // on that transient null redirects a logged-in user to "/" on refresh.
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!user) {
       router.replace("/");
       return;
     }
-  }, [user, router]);
+  }, [hasHydrated, user, router]);
 
-  // Load cart + addresses on mount
+  // Load cart + addresses on mount. Also gated on hasHydrated so the query
+  // doesn't stay "disabled" (which reports isLoading: false, not "pending")
+  // during the brief window before the auth store rehydrates — otherwise
+  // the page falls through to the "cart is empty" state before it's ever
+  // actually asked the server.
   const { data: checkoutData, isLoading: loading } = useQuery({
     queryKey: ["checkout", user?.user_id],
     queryFn: async () => {
@@ -69,7 +78,7 @@ export default function CheckoutPage() {
       const addressList = Array.isArray(addrs) ? addrs : [];
       return { cart, addresses: addressList };
     },
-    enabled: !!user,
+    enabled: hasHydrated && !!user,
   });
 
   const cartItems: CartItem[] = checkoutData?.cart.items ?? [];
@@ -136,7 +145,7 @@ export default function CheckoutPage() {
   }
 
   // ─── Loading state ────────────────────────────────────────────────────────
-  if (loading) {
+  if (!hasHydrated || loading) {
     return (
       <div className="flex justify-center py-24">
         <Spinner size="lg" />

@@ -12,24 +12,28 @@ import Spinner from "../../../components/ui/Spinner";
 export default function OrdersPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
 
   const [page, setPage] = useState(1);
 
   // Guests can't view order history
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!user) router.replace("/");
-  }, [user, router]);
+  }, [hasHydrated, user, router]);
 
-  const { data, isLoading: loading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["orders", user?.user_id, page],
     queryFn: () => orderService.getOrders({ page, limit: 10 }),
-    enabled: !!user,
+    enabled: hasHydrated && !!user,
     placeholderData: keepPreviousData,
   });
+  const loading = !hasHydrated || isLoading;
 
   const orders = data?.data ?? [];
   const meta = data?.meta ?? null;
 
+  if (!hasHydrated) return null;
   if (!user) return null;
 
   return (

@@ -22,18 +22,20 @@ export default function OrderDetailPage({ params }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!user) router.replace("/");
-  }, [user, router]);
+  }, [hasHydrated, user, router]);
 
   const orderQuery = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => orderService.getOrder(orderId),
-    enabled: !!user,
+    enabled: hasHydrated && !!user,
   });
   const order = orderQuery.data ?? null;
-  const loading = orderQuery.isLoading;
+  const loading = !hasHydrated || orderQuery.isLoading;
 
   useEffect(() => {
     if (orderQuery.isError) toast.error("Failed to load order.");

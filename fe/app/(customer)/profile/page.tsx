@@ -24,12 +24,13 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, setAuth } = useAuthStore();
+  const { user, setAuth, hasHydrated } = useAuthStore();
   const [tab, setTab] = useState<Tab>("info");
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!user) router.replace("/");
-  }, [user, router]);
+  }, [hasHydrated, user, router]);
 
   // ── My Info state ──
   const [username, setUsername] = useState(user?.username ?? "");
