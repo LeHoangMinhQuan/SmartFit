@@ -6,12 +6,16 @@ export default async function PaymentResultPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    responseCode: string;
-    vnpTxnRef: number;
-    orderId: number;
+    vnp_ResponseCode?: string;
+    vnp_TxnRef?: string;
   }>;
 }) {
   const params = await searchParams;
+
+  const responseCode = params.vnp_ResponseCode ?? "";
+  const vnpTxnRef = params.vnp_TxnRef ?? "";
+  // vnp_TxnRef is "{orderId}-{timestamp}" — orderId is the part before the first "-"
+  const orderId = Number(vnpTxnRef.split("-")[0]);
 
   return (
     <Suspense
@@ -22,9 +26,9 @@ export default async function PaymentResultPage({
       }
     >
       <PageContent
-        responseCode={params.responseCode}
-        vnpTxnRef={Number(params.vnpTxnRef)}
-        orderId={Number(params.orderId)}
+        responseCode={responseCode}
+        vnpTxnRef={vnpTxnRef}
+        orderId={orderId}
       />
     </Suspense>
   );

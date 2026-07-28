@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { orderService } from "../../../services/order.service";
 import Spinner from "../../../components/ui/Spinner";
+import { Check, X } from "lucide-react";
 
 // VNPay response codes — '00' = success, everything else = failure
 // Full code list: https://sandbox.vnpayment.vn/apis/docs/bang-ma-loi/
@@ -12,7 +13,7 @@ const SUCCESS_CODE = "00";
 
 interface Props {
   responseCode: string;
-  vnpTxnRef: number;
+  vnpTxnRef: string;
   orderId: number;
 }
 
@@ -46,41 +47,52 @@ export default function PaymentResultPage({
 
   if (polling) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-24">
-        <Spinner size="lg" />
-        <p className="text-sm text-gray-500">Confirming your payment…</p>
+      <div className="min-h-screen bg-slate-50 py-10 flex items-center justify-center">
+        <div className="mx-auto flex max-w-md flex-col items-center justify-center gap-6 rounded-3xl bg-white p-12 shadow-sm border border-slate-200 text-center">
+          <Spinner size="lg" />
+          <p className="text-sm font-medium text-slate-500">
+            Confirming your payment…
+          </p>
+        </div>
       </div>
     );
   }
 
   if (isSuccess) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-6 py-24 text-center px-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl">
-          ✓
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
-          Payment Successful!
-        </h1>
-        <p className="text-sm text-gray-600">
-          Your order has been placed.
-          {orderStatus && ` Status: ${orderStatus}.`}
-        </p>
-        <div className="flex gap-3">
-          {orderId && (
+      <div className="min-h-screen bg-slate-50 py-10 flex items-center justify-center">
+        <div className="mx-auto max-w-md w-full px-6 py-12 text-center rounded-3xl bg-white shadow-sm border border-slate-200">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+            <Check className="h-7 w-7 text-emerald-500" strokeWidth={3} />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Payment Successful!
+          </h1>
+          <p className="mt-2 text-base text-slate-600">
+            Your order has been placed.
+            {orderStatus && (
+              <span className="block mt-1 text-sm font-medium text-slate-500">
+                Status: {orderStatus}
+              </span>
+            )}
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            {orderId && (
+              <button
+                onClick={() => router.push(`/orders/${orderId}`)}
+                className="inline-block rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30"
+              >
+                View Order
+              </button>
+            )}
             <button
-              onClick={() => router.push(`/orders/${orderId}`)}
-              className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:bg-gray-800"
+              onClick={() => router.push("/")}
+              className="inline-block rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900"
             >
-              View Order
+              Continue Shopping
             </button>
-          )}
-          <button
-            onClick={() => router.push("/")}
-            className="rounded-lg border border-gray-300 px-6 py-2 text-sm hover:bg-gray-50"
-          >
-            Continue Shopping
-          </button>
+          </div>
         </div>
       </div>
     );
@@ -106,30 +118,35 @@ export default function PaymentResultPage({
     "Payment was not completed. Please try again.";
 
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center gap-6 py-24 text-center px-4">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-3xl">
-        ✕
-      </div>
-      <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
-        Payment Failed
-      </h1>
-      <p className="text-sm text-gray-600">{errorMsg}</p>
-      {responseCode && (
-        <p className="text-xs text-gray-400">Code: {responseCode}</p>
-      )}
-      <div className="flex gap-3">
-        <button
-          onClick={() => router.push("/checkout")}
-          className="rounded-lg bg-black px-6 py-2 text-sm text-white hover:bg-gray-800"
-        >
-          Try Again
-        </button>
-        <button
-          onClick={() => router.push("/orders")}
-          className="rounded-lg border border-gray-300 px-6 py-2 text-sm hover:bg-gray-50"
-        >
-          My Orders
-        </button>
+    <div className="min-h-screen bg-slate-50 py-10 flex items-center justify-center">
+      <div className="mx-auto max-w-md w-full px-6 py-12 text-center rounded-3xl bg-white shadow-sm border border-slate-200">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+          <X className="h-7 w-7 text-red-500" strokeWidth={3} />
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          Payment Failed
+        </h1>
+        <p className="mt-2 text-base text-slate-600">{errorMsg}</p>
+        {responseCode && (
+          <p className="mt-2 text-xs font-medium text-slate-400">
+            Error Code: {responseCode}
+          </p>
+        )}
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <button
+            onClick={() => router.push("/checkout")}
+            className="inline-block rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30"
+          >
+            Try Again
+          </button>
+          <button
+            onClick={() => router.push("/orders")}
+            className="inline-block rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900"
+          >
+            My Orders
+          </button>
+        </div>
       </div>
     </div>
   );
