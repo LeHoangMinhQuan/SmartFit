@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { ProductCardProps } from "@/interfaces";
+import { formatPrice } from "@/lib/utils";
 
 export default function ProductCard({
   id,
@@ -41,11 +42,13 @@ export default function ProductCard({
 
         {/* Price */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-black text-lg">${price}</span>
+          <span className="font-bold text-black text-lg">
+            {formatPrice(price)}
+          </span>
 
           {originalPrice && (
             <span className="text-gray-400 line-through text-sm">
-              ${originalPrice}
+              {formatPrice(originalPrice)}
             </span>
           )}
 

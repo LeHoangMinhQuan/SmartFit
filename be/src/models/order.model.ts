@@ -87,6 +87,24 @@ export async function updateOrderStatus(order_id: number, status: OrderStatus) {
     .update({ status, updated_at: db.fn.now() });
 }
 
+/**
+ * Orders still sitting in 'pending_payment' past the retry window — the
+ * customer never finished paying (closed the VNPay tab, session expired,
+ * etc.) and no IPN ever arrived to move them to 'paid'/'payment_failed'.
+ * Used by expireStalePendingOrders() to sweep these into 'cancelled' and
+ * release their held stock, instead of leaving them stuck showing
+ * "Pending Payment" forever.
+ */
+export async function findStalePendingOrders(olderThanMinutes: number) {
+  return db("ORDER")
+    .where({ status: "pending_payment" })
+    .andWhere(
+      "created_at",
+      "<",
+      db.raw(`NOW() - (?::text || ' minutes')::interval`, [olderThanMinutes]),
+    );
+}
+
 export async function setOrderShippingId(
   order_id: number,
   shipping_order_id: number,

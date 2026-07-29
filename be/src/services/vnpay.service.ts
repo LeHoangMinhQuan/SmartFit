@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError.js";
 import * as OrderModel from "../models/order.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
 import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
+import { expireStalePendingOrders } from "./order.service.js";
 
 // TODO(remove for production): VNPay sandbox merchant account only has the
 // NCB test bank enabled, so we force-select it here to skip the bank-picker
@@ -13,22 +14,52 @@ import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
 
 // ─── Create payment URL ───────────────────────────────────────────────────────
 
+// Orders in either of these states can (re)generate a payment URL:
+//   - pending_payment: the normal first-attempt case, or the customer came
+//     back to finish a payment they never completed.
+//   - payment_failed: VNPay reported a real decline (wrong OTP, insufficient
+//     balance, bank cancelled, etc.) — the order's stock is still held, so
+//     letting them try again reuses the same order instead of forcing a
+//     fresh checkout.
+// 'cancelled' orders (whether cancelled by the customer or auto-expired by
+// expireStalePendingOrders()) are NOT retryable here — their stock has
+// already been released back to the store.
+const RETRYABLE_STATUSES = ["pending_payment", "payment_failed"];
+
 export async function createPaymentUrl(
   order_id: number,
   user_id: number,
   ip: string,
 ) {
+  // Catch the case where this specific order just crossed the abandon
+  // threshold but the periodic/lazy sweep hasn't run yet — expire it now
+  // rather than handing out a payment URL for stock that's about to be (or
+  // already was) released to someone else.
+  await expireStalePendingOrders();
+
   const order = await OrderModel.findOrderByIdAndUser(order_id, user_id);
-  console.log("In vnpay.ts, createPaymentUrl()")
-  console.log("order: ", order)
-  console.log("user_id: ", user_id)
-  console.log("ip: ", ip)
+  console.log("In vnpay.ts, createPaymentUrl()");
+  console.log("order: ", order);
+  console.log("user_id: ", user_id);
+  console.log("ip: ", ip);
   if (!order) throw new ApiError(404, "Order not found");
-  if (order.status !== "pending_payment")
-    throw new ApiError(400, "Order is not awaiting payment");
+  if (!RETRYABLE_STATUSES.includes(order.status)) {
+    throw new ApiError(
+      400,
+      order.status === "cancelled"
+        ? "This order has expired or was cancelled. Please place a new order."
+        : "Order is not awaiting payment",
+    );
+  }
+
+  // Supersede any dangling 'pending' transaction from a previous attempt
+  // (e.g. the customer opened the VNPay page but never finished, then came
+  // back and retried) so at most one transaction row is ever 'pending' for
+  // this order at a time.
+  await PaymentModel.failPendingTransactionsForOrder(order_id);
 
   const vnpay_txn_ref = buildTxnRef(order_id);
-  console.log("vnpay_txn_ref: ", vnpay_txn_ref)
+  console.log("vnpay_txn_ref: ", vnpay_txn_ref);
   const amount = Number(order.total_amount); // raw amount — SDK handles ×100 internally
 
   // Insert pending transaction
@@ -45,7 +76,7 @@ export async function createPaymentUrl(
     orderInfo: `Payment for order ${order_id}`,
     ipAddr: ip,
   });
-  console.log("paymentUrl: ", paymentUrl)
+  console.log("paymentUrl: ", paymentUrl);
 
   return { paymentUrl, vnpay_txn_ref };
 }
@@ -64,18 +95,17 @@ export async function handleIpn(
     body as unknown as ReturnQueryFromVNPay,
   );
 
-  console.log("In vnpay.ts, handleIpn()")
-  console.log("body: ", body)
-
+  console.log("In vnpay.ts, handleIpn()");
+  console.log("body: ", body);
 
   if (!verify.isVerified) {
     return { RspCode: "97", Message: "Invalid signature" };
   }
 
   const vnpay_txn_ref = String(verify.vnp_TxnRef);
-  console.log("vnpay_txn_ref: ", vnpay_txn_ref)
+  console.log("vnpay_txn_ref: ", vnpay_txn_ref);
   const existing = await PaymentModel.findTransactionByRef(vnpay_txn_ref);
-  console.log("existing: ", existing)
+  console.log("existing: ", existing);
   if (!existing) {
     return { RspCode: "01", Message: "Transaction not found" };
   }
@@ -104,7 +134,7 @@ export async function handleIpn(
             : null,
         vnpay_response_code: String(verify.vnp_ResponseCode),
       });
-    console.log("existing.order_id: ", existing.order_id)
+    console.log("existing.order_id: ", existing.order_id);
     const order_id = existing.order_id;
     const orderStatus = isSuccess ? "paid" : "payment_failed";
     await trx("ORDER")

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orderService } from "../../../../services/order.service";
+import { paymentService } from "../../../../services/payment.service";
 import { productService } from "../../../../services/product.service";
 import { shippingService } from "../../../../services/shipping.service";
 import { useAuthStore } from "../../../../store/useAuthStore";
@@ -88,6 +89,25 @@ export default function OrderDetailPage({ params }: Props) {
   });
   const cancelling = cancelMutation.isPending;
 
+  // Retryable on the backend for 'pending_payment' (never finished paying)
+  // and 'payment_failed' (VNPay declined — wrong OTP, insufficient balance,
+  // etc.) orders, since their stock is still held. Once an order goes
+  // stale it's auto-cancelled and its stock released, so 'cancelled'
+  // orders are intentionally not retryable here.
+  const retryPaymentMutation = useMutation({
+    mutationFn: () => paymentService.createVNPayUrl(order!.order_id),
+    onSuccess: ({ paymentUrl }) => {
+      window.location.href = paymentUrl;
+    },
+    onError: () => toast.error("Failed to start payment. Please try again."),
+  });
+  const retrying = retryPaymentMutation.isPending;
+
+  function handleRetryPayment() {
+    if (!order) return;
+    retryPaymentMutation.mutate();
+  }
+
   async function handleCancel() {
     if (!order) return;
     if (!confirm("Cancel this order? This cannot be undone.")) return;
@@ -111,6 +131,8 @@ export default function OrderDetailPage({ params }: Props) {
   }
 
   const canCancel = order.status === "paid" || order.status === "preparing";
+  const canRetryPayment =
+    order.status === "pending_payment" || order.status === "payment_failed";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -202,15 +224,30 @@ export default function OrderDetailPage({ params }: Props) {
       </section>
 
       {/* Actions */}
-      {canCancel && (
-        <button
-          onClick={handleCancel}
-          disabled={cancelling}
-          className="rounded-lg border border-red-300 px-5 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-        >
-          {cancelling ? "Cancelling…" : "Cancel Order"}
-        </button>
-      )}
+      <div className="flex gap-3">
+        {canRetryPayment && (
+          <button
+            onClick={handleRetryPayment}
+            disabled={retrying}
+            className="rounded-lg bg-black px-5 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
+          >
+            {retrying
+              ? "Redirecting to payment…"
+              : order.status === "payment_failed"
+                ? "Retry Payment"
+                : "Continue to Payment"}
+          </button>
+        )}
+        {canCancel && (
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="rounded-lg border border-red-300 px-5 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {cancelling ? "Cancelling…" : "Cancel Order"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

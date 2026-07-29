@@ -4,13 +4,19 @@ import * as OrderModel from "../models/order.model.js";
 import * as CartModel from "../models/cart.model.js";
 import * as VoucherModel from "../models/voucher.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
+import * as PaymentModel from "../models/payment_transaction.model.js";
 import { DEFAULT_STORE_ID } from "../config/store.js";
-
 
 const SYSTEM_STAFF_ID = 1;
 // Single-store scope (see ecommerce-api-plan.md scope note + §12): GHN has one
 // registered shop, so all orders fulfill from the one seeded `store` row.
 // Swap this for assignFulfillmentStores() (§12.3) if a second store is added.
+
+// How long an order can sit in 'pending_payment' before we treat it as
+// abandoned. VNPay's own payment session defaults to ~15 minutes
+// (vnp_ExpireDate) when we don't set one explicitly — this matches that,
+// so an order won't outlive the VNPay session it was created for.
+const PENDING_PAYMENT_TIMEOUT_MINUTES = 15;
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending_payment: ["paid", "payment_failed", "cancelled"],
@@ -18,7 +24,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   preparing: ["shipping", "cancelled"],
   shipping: ["delivered"],
   delivered: ["refund_requested"],
-  payment_failed: [],
+  payment_failed: ["cancelled"],
   cancelled: [],
   refund_requested: ["refunded"],
   refunded: [],
@@ -133,15 +139,74 @@ export async function createOrder(
   });
 }
 
+/**
+ * Shared by cancelOrder() and expireStalePendingOrders(): releases the
+ * stock that was decremented at order creation and marks the order
+ * 'cancelled'. Must run inside the caller's transaction.
+ */
+async function restoreStockAndCancelOrder(
+  trx: typeof db,
+  order_id: number,
+): Promise<void> {
+  const items = await trx("order_item").where({ order_id });
+  for (const item of items) {
+    await trx("store_product")
+      .where({
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        store_id: DEFAULT_STORE_ID,
+      })
+      .increment("quantity", item.quantity);
+  }
+
+  await trx("ORDER")
+    .where({ order_id })
+    .update({ status: "cancelled", updated_at: db.fn.now() });
+}
+
+/**
+ * Sweeps orders that have been sitting in 'pending_payment' past
+ * PENDING_PAYMENT_TIMEOUT_MINUTES — the customer abandoned checkout (closed
+ * the VNPay tab, session timed out, etc.) and no IPN ever arrived to move
+ * them to 'paid' or 'payment_failed'. Without this they'd show "Pending
+ * Payment" in the app forever while quietly holding stock hostage.
+ *
+ * Each stale order is: (a) moved to 'cancelled', (b) its held stock
+ * restored, (c) any dangling 'pending' payment_transaction row for it
+ * marked 'failed' too, so the transaction log doesn't disagree with the
+ * order it belongs to.
+ *
+ * Called lazily wherever orders are read (see getUserOrders/getOrderDetail
+ * below) and on a periodic interval (see server.ts) so it doesn't depend on
+ * a customer happening to look at their orders to actually run.
+ */
+export async function expireStalePendingOrders(): Promise<number> {
+  const staleOrders = await OrderModel.findStalePendingOrders(
+    PENDING_PAYMENT_TIMEOUT_MINUTES,
+  );
+  if (!staleOrders.length) return 0;
+
+  await db.transaction(async (trx) => {
+    for (const order of staleOrders) {
+      await restoreStockAndCancelOrder(trx, order.order_id);
+      await PaymentModel.failPendingTransactionsForOrder(order.order_id, trx);
+    }
+  });
+
+  return staleOrders.length;
+}
+
 export async function getUserOrders(
   user_id: number,
   page?: number,
   limit?: number,
 ) {
+  await expireStalePendingOrders();
   return OrderModel.findOrdersByUser(user_id, page, limit);
 }
 
 export async function getOrderDetail(order_id: number, user_id: number) {
+  await expireStalePendingOrders();
   const order = await OrderModel.findOrderByIdAndUser(order_id, user_id);
   if (!order) throw new ApiError(404, "Order not found");
 
@@ -170,23 +235,7 @@ export async function cancelOrder(order_id: number, user_id: number) {
     );
   }
 
-  return db.transaction(async (trx) => {
-    // Restore stock
-    const items = await trx("order_item").where({ order_id });
-    for (const item of items) {
-      await trx("store_product")
-        .where({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          store_id: DEFAULT_STORE_ID,
-        })
-        .increment("quantity", item.quantity);
-    }
-
-    await trx("ORDER")
-      .where({ order_id })
-      .update({ status: "cancelled", updated_at: db.fn.now() });
-  });
+  return db.transaction((trx) => restoreStockAndCancelOrder(trx, order_id));
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
@@ -194,6 +243,7 @@ export async function cancelOrder(order_id: number, user_id: number) {
 export async function adminListOrders(
   filters: Parameters<typeof OrderModel.findAllOrders>[0],
 ) {
+  await expireStalePendingOrders();
   return OrderModel.findAllOrders(filters);
 }
 
@@ -213,6 +263,7 @@ export async function adminUpdateStatus(order_id: number, newStatus: string) {
 }
 
 export async function adminGetOrderDetail(order_id: number) {
+  await expireStalePendingOrders();
   const order = await OrderModel.findOrderById(order_id);
   if (!order) throw new ApiError(404, "Order not found");
   const items = await OrderModel.findOrderItems(order_id);

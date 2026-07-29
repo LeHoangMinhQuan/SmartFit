@@ -35,6 +35,23 @@ export async function findTransactionByOrderId(order_id: number) {
 }
 
 /**
+ * Marks any still-'pending' transaction rows for an order as 'failed'.
+ * Used when: (a) a stale pending_payment order is auto-cancelled — its
+ * dangling pending transaction (if VNPay's IPN never arrived) shouldn't
+ * stay 'pending' forever either; (b) a retry supersedes a previous
+ * incomplete attempt before inserting the new one, so at most one
+ * transaction row is ever actually 'pending' for a given order at a time.
+ */
+export async function failPendingTransactionsForOrder(
+  order_id: number,
+  trx: typeof db = db,
+) {
+  return trx("payment_transaction")
+    .where({ order_id, status: "pending" })
+    .update({ status: "failed" });
+}
+
+/**
  * Idempotent IPN update — only writes if status is still 'pending'.
  * Returns number of rows affected (0 = already processed).
  */
