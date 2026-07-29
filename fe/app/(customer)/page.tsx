@@ -1,82 +1,10 @@
-import Carousel from "@/components/Carousel";
 import Image from "next/image";
-import { ProductCardProps, ProductSummary, Category } from "@/interfaces";
 import Link from "next/link";
-import { categoryService } from "@/services/category.service";
-import { productService } from "@/services/product.service";
+import NewArrivalsSection from "@/components/landing/NewArrivalsSection";
+import TopSellingSection from "@/components/landing/TopSellingSection";
+import FeaturedCategoriesSection from "@/components/landing/FeaturedCategoriesSection";
 
-// Maps the backend's ProductSummary shape to what Carousel/ProductCard expect.
-// originalPrice/discount are omitted since list endpoints never return
-// discount info (see ProductSummary's discountActive comment) — the card
-// component already treats both as optional and simply omits the
-// strikethrough/badge when absent.
-function toCardProps(p: ProductSummary): ProductCardProps {
-  return {
-    id: p.product_id,
-    name: p.name,
-    price: p.price ?? 0,
-    rating: p.avg_rating ?? 0,
-    imageUrl: p.image ?? undefined,
-  };
-}
-
-const STYLES = [
-  {
-    name: "Casual",
-    imageUrl: "/images/style-casual.png",
-    colSpan: "col-span-1 md:col-span-4",
-  },
-  {
-    name: "Formal",
-    imageUrl: "/images/style-formal.png",
-    colSpan: "col-span-1 md:col-span-8",
-  },
-  {
-    name: "Party",
-    imageUrl: "/images/style-party.png",
-    colSpan: "col-span-1 md:col-span-8",
-  },
-  {
-    name: "Gym",
-    imageUrl: "/images/style-gym.png",
-    colSpan: "col-span-1 md:col-span-4",
-  },
-];
-
-export default async function Home() {
-  let featuredCategories: Category[] = [];
-  let newArrivals: ProductSummary[] = [];
-  let topSelling: ProductSummary[] = [];
-
-  const [categoriesResult, newArrivalsResult, topSellingResult] =
-    await Promise.allSettled([
-      categoryService.getFeaturedCategories(),
-      productService.getNewArrivals(8),
-      productService.getTopSelling(8),
-    ]);
-
-  // Each section falls back to an empty array independently — e.g. if the
-  // backend is offline during 'npm run build', or if one endpoint fails,
-  // the rest of the landing page still renders with real data.
-  if (categoriesResult.status === "fulfilled") {
-    featuredCategories = categoriesResult.value;
-  } else {
-    console.warn(
-      "Failed to load featured categories:",
-      categoriesResult.reason,
-    );
-  }
-  if (newArrivalsResult.status === "fulfilled") {
-    newArrivals = newArrivalsResult.value;
-  } else {
-    console.warn("Failed to load new arrivals:", newArrivalsResult.reason);
-  }
-  if (topSellingResult.status === "fulfilled") {
-    topSelling = topSellingResult.value;
-  } else {
-    console.warn("Failed to load top selling:", topSellingResult.reason);
-  }
-
+export default function Home() {
   return (
     <div className="w-full">
       {/* HERO SECTION */}
@@ -150,60 +78,14 @@ export default async function Home() {
       </div>
 
       {/* NEW ARRIVALS */}
-      {newArrivals.length > 0 && (
-        <Carousel title="New Arrivals" data={newArrivals.map(toCardProps)} />
-      )}
+      <NewArrivalsSection />
 
       {/* TOP SELLINGS */}
-      {topSelling.length > 0 && (
-        <Carousel title="Top Selling" data={topSelling.map(toCardProps)} />
-      )}
+      <TopSellingSection />
 
       {/* BROWSE BY CATEGORY (was "Browse By dress style") */}
-      <section className="max-w-7xl mx-auto px-4 py-16">
-        <div className="bg-[#F0F0F0] rounded-[40px] p-8 md:p-16">
-          <h2 className="text-3xl text-black md:text-5xl font-black text-center uppercase mb-12">
-            Browse By Category
-          </h2>
+      <FeaturedCategoriesSection />
 
-          {featuredCategories.length ===
-          0 ? // render rather than showing broken/placeholder tiles. // No categories marked featured yet — section simply doesn't
-          null : (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 h-auto md:h-[600px]">
-              {featuredCategories.map((category, i) => (
-                <Link
-                  key={category.category_id}
-                  href={`/category/${encodeURIComponent(category.name)}`}
-                  className={`relative bg-white rounded-3xl overflow-hidden group cursor-pointer ${
-                    i % 3 === 2
-                      ? "col-span-1 md:col-span-8"
-                      : "col-span-1 md:col-span-4"
-                  }`}
-                >
-                  <div className="absolute top-6 left-8 z-10">
-                    <h3 className="text-2xl text-black font-bold">
-                      {category.name}
-                    </h3>
-                  </div>
-                  {category.image_url && (
-                    <Image
-                      src={category.image_url}
-                      alt={category.name}
-                      fill
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                      className="object-cover object-right-top transition-transform group-hover:scale-105"
-                    />
-                  )}
-                  {/* bg-gray-200 placeholder overlay removed — it was
-                      stacking on top of the image, not behind it, and is
-                      no longer needed now that image_url is always a real
-                      uploaded S3 asset for any category that reaches here. */}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
       {/* REST OF PAGE (Top Selling, etc.) */}
       {/* ... Add grids for ProductCards here ... */}
     </div>
