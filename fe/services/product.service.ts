@@ -49,21 +49,22 @@ export const productService = {
       attribute_id?: number;
     } = {},
   ): Promise<PaginatedResponse<ProductSummary>> {
+    // Fixed: Expect { rows, total } from the backend response
     const { data } = await api.get<{
-      data: RawProductListItem[];
-      meta: { page: number; limit: number; total: number };
+      rows: RawProductListItem[];
+      total: number;
     }>("/products", { params });
 
     const page = params.page ?? 1;
     const limit = params.limit ?? 20;
 
     return {
-      data: data.data.map(toSummary),
+      data: data.rows.map(toSummary),
       meta: {
-        page: data.meta.page,
-        limit: data.meta.limit,
-        total: data.meta.total,
-        totalPages: Math.ceil(data.meta.total / limit),
+        page,
+        limit,
+        total: data.total,
+        totalPages: Math.ceil(data.total / limit),
       },
     };
   },
@@ -72,41 +73,46 @@ export const productService = {
     q: string,
     params: { page?: number; limit?: number } = {},
   ): Promise<PaginatedResponse<ProductSummary>> {
+    // Fixed: Expect { rows, total } from the backend response
     const { data } = await api.get<{
-      data: RawProductListItem[];
-      meta: { page: number; limit: number; total: number };
+      rows: RawProductListItem[];
+      total: number;
     }>("/products/search", { params: { q, ...params } });
 
     const page = params.page ?? 1;
     const limit = params.limit ?? 20;
 
     return {
-      data: data.data.map(toSummary),
+      data: data.rows.map(toSummary),
       meta: {
-        page: data.meta.page ?? page,
-        limit: data.meta.limit ?? limit,
-        total: data.meta.total,
-        totalPages: Math.ceil(data.meta.total / limit),
+        page,
+        limit,
+        total: data.total,
+        totalPages: Math.ceil(data.total / limit),
       },
     };
   },
 
   /** Newest products first — for the landing page's "New Arrivals" carousel. */
   async getNewArrivals(limit = 8): Promise<ProductSummary[]> {
-    const { data } = await api.get<{ data: RawProductListItem[] }>(
+    // Fixed: Match the type with what we are accessing (rows)
+    const { data } = await api.get<{ rows: RawProductListItem[] }>(
       "/products",
       { params: { sort: "p.product_id", order: "desc", limit } },
     );
-    return data.data.map(toSummary);
+    // Fixed: Access data.rows
+    return data.rows.map(toSummary);
   },
 
   /** Ranked by real units sold — for the landing page's "Top Selling" carousel. */
   async getTopSelling(limit = 8): Promise<ProductSummary[]> {
-    const { data } = await api.get<{ data: RawProductListItem[] }>(
+    // Fixed: Match the type with what we are accessing (rows)
+    const { data } = await api.get<{ rows: RawProductListItem[] }>(
       "/products/top-selling",
       { params: { limit } },
     );
-    return data.data.map(toSummary);
+    // Fixed: Access data.rows instead of data.data
+    return data.rows.map(toSummary);
   },
 
   async getProduct(id: number): Promise<Product> {

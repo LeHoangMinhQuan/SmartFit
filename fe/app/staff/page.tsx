@@ -92,15 +92,19 @@ export default function StaffDashboardPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase text-gray-500">
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3 text-right">Units Sold</th>
+                <th className="px-4 py-3 text-slate-800">Product</th>
+                <th className="px-4 py-3 text-right text-slate-800">
+                  Units Sold
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {(stats?.top_products ?? []).map((p) => (
                 <tr key={p.product_id}>
-                  <td className="px-4 py-3">{p.name}</td>
-                  <td className="px-4 py-3 text-right font-medium">{p.sold}</td>
+                  <td className="px-4 py-3 text-slate-800">{p.name}</td>
+                  <td className="px-4 py-3 text-right font-medium text-slate-800">
+                    {p.sold}
+                  </td>
                 </tr>
               ))}
             </tbody>
