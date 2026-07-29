@@ -65,7 +65,7 @@ export default function ProductCard({
         <Button
           label="View Details"
           variant="primary"
-          className="text-sm px-4 py-2"
+          className="text-sm px-4 py-2 hover:cursor-pointer"
         ></Button>
       </div>
     </Link>
