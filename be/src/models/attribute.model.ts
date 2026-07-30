@@ -72,3 +72,19 @@ export async function findAttributesByVariant(
     .where({ "pa.product_id": product_id, "pa.variant_id": variant_id })
     .select("pa.attribute_id", "a.name", "pa.value");
 }
+
+/**
+ * Distinct attribute values across ALL variants of a product (not scoped to
+ * one variant). Used by the chatbot's embedding content builder to answer
+ * "what sizes/colors does this come in" from the product-level embedding —
+ * see ecommerce-api-plan.md §11.
+ */
+export async function findAttributeValuesByProduct(
+  product_id: number,
+): Promise<string[]> {
+  const rows = await db("product_attribute")
+    .where({ product_id })
+    .distinct("value")
+    .orderBy("value");
+  return rows.map((r: { value: string }) => r.value);
+}

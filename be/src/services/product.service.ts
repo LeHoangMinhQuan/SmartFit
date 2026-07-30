@@ -5,6 +5,25 @@ import * as AttributeModel from "../models/attribute.model.js";
 import * as CategoryModel from "../models/category.model.js";
 import * as ReviewModel from "../models/review.model.js";
 import { Category } from "../models/category.model.js";
+import * as EmbeddingService from "./embedding.service.js";
+
+/**
+ * Re-embeds a product after any write that could change its embedded
+ * content (name/description/category/attributes/price). Swallows errors —
+ * a transient Gemini API hiccup shouldn't turn a routine catalog edit into
+ * a 500; the admin reindex endpoint (Phase 2, POST /api/admin/chat/reindex)
+ * exists precisely to catch up anything that fails here.
+ */
+async function reindexEmbeddingSafely(product_id: number): Promise<void> {
+  try {
+    await EmbeddingService.upsertProductEmbedding(product_id);
+  } catch (err) {
+    console.error(
+      `[product.service] embedding upsert failed for product ${product_id}:`,
+      err,
+    );
+  }
+}
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +70,7 @@ export async function createProduct(data: {
   if (data.category_ids?.length) {
     await ProductModel.setProductCategories(product_id, data.category_ids);
   }
+  await reindexEmbeddingSafely(product_id);
   return { product_id };
 }
 
@@ -69,13 +89,15 @@ export async function updateProduct(
   if (data.category_ids)
     await ProductModel.setProductCategories(product_id, data.category_ids);
 
+  await reindexEmbeddingSafely(product_id);
   return ProductModel.findProductById(product_id);
 }
 
 export async function deleteProduct(product_id: number) {
   const product = await ProductModel.findProductById(product_id);
   if (!product) throw new ApiError(404, "Product not found");
-  return ProductModel.deleteProduct(product_id);
+  const result = await ProductModel.deleteProduct(product_id);
+  return result;
 }
 
 // ─── Variants ─────────────────────────────────────────────────────────────────
@@ -105,6 +127,7 @@ export async function createVariant(
     variant_id: data.variant_id,
     name: data.name,
   });
+  await reindexEmbeddingSafely(product_id);
   return { product_id, variant_id: data.variant_id };
 }
 
@@ -122,6 +145,7 @@ export async function deleteVariant(product_id: number, variant_id: number) {
   const variant = await ProductModel.findVariant(product_id, variant_id);
   if (!variant) throw new ApiError(404, "Variant not found");
   await ProductModel.deleteVariant(product_id, variant_id);
+  await reindexEmbeddingSafely(product_id);
 }
 
 export async function upsertVariantPrice(
@@ -137,6 +161,7 @@ export async function upsertVariantPrice(
   }
 
   await PriceModel.upsertProductPrice({ product_id, variant_id, ...data });
+  await reindexEmbeddingSafely(product_id);
 }
 
 // ─── Attributes ───────────────────────────────────────────────────────────────
@@ -176,6 +201,7 @@ export async function attachAttribute(
     product_id,
     variant_id,
   });
+  await reindexEmbeddingSafely(product_id);
 }
 
 export async function updateAttributeValue(
@@ -196,6 +222,7 @@ export async function updateAttributeValue(
     variant_id,
     value,
   );
+  await reindexEmbeddingSafely(product_id);
 }
 
 export async function removeAttribute(
@@ -214,6 +241,7 @@ export async function removeAttribute(
     product_id,
     variant_id,
   );
+  await reindexEmbeddingSafely(product_id);
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import voucherRoutes from "./routes/voucher.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import tryonRoutes from "./routes/tryon.routes.js";
 import adminTryonRoutes from "./routes/admin/tryon.routes.js";
+import adminChatRoutes from "./routes/admin/chat.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import supplierRoutes from "./routes/supplier.routes.js";
 
@@ -80,6 +81,7 @@ app.use("/api/vouchers", voucherRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/tryon", tryonRoutes);
 app.use("/api/admin/tryon", adminTryonRoutes);
+app.use("/api/admin/chat", adminChatRoutes);
 app.use("/api/admin/suppliers", supplierRoutes);
 app.use("/api/admin", adminRoutes);
 

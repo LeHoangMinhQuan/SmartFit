@@ -50,15 +50,8 @@ const required = [
   "GHN_FROM_DISTRICT",
   "GHN_FROM_WARD",
 
-  // TODO: Remove to test without Try-on
-  // "TRYON_API_KEY",
-  // "TRYON_BASE_URL",
-
-  // NOTE: FIREBASE_* and SMTP_* are deliberately NOT in this required list.
-  // They only back the "forgot password" feature (config/firebase.ts,
-  // config/mailer.ts) — the rest of the app must still boot without them.
-  // Calling forgot-password without them configured throws a clear 500
-  // instead of crashing the whole process at startup.
+  // Gemini (AI shopping assistant — chat + embeddings)
+  "GEMINI_API_KEY",
 ] as const;
 
 const missing = required.filter((key) => !process.env[key]);
@@ -100,9 +93,11 @@ export const env = {
   GHN_FROM_DISTRICT: process.env["GHN_FROM_DISTRICT"]!,
   GHN_FROM_WARD: process.env["GHN_FROM_WARD"]!,
 
-  // TODO: Remove these two env vars to test MVP
-  // TRYON_API_KEY: process.env["TRYON_API_KEY"]!,
-  // TRYON_BASE_URL: process.env["TRYON_BASE_URL"]!,
+  // Gemini
+  GEMINI_API_KEY: process.env["GEMINI_API_KEY"]!,
+  GEMINI_CHAT_MODEL: process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-pro",
+  GEMINI_EMBEDDING_MODEL:
+    process.env["GEMINI_EMBEDDING_MODEL"] ?? "gemini-embedding-001",
 
   // ─── Firebase (forgot-password only — optional, see note above) ───────────
   FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],

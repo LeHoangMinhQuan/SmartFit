@@ -29,3 +29,14 @@ export const logoutService = async (): Promise<void> => {
     clearAuth();
   }
 };
+
+export const requestPasswordReset = async (email: string): Promise<void> => {
+  await api.post("/auth/forgot-password", { email });
+};
+
+export const confirmPasswordReset = async (
+  oobCode: string,
+  newPassword: string,
+): Promise<void> => {
+  await api.post("/auth/reset-password", { oobCode, newPassword });
+};
