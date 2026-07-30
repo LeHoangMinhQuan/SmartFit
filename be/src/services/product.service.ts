@@ -75,7 +75,7 @@ export async function updateProduct(
 export async function deleteProduct(product_id: number) {
   const product = await ProductModel.findProductById(product_id);
   if (!product) throw new ApiError(404, "Product not found");
-  await ProductModel.deleteProduct(product_id);
+  return ProductModel.deleteProduct(product_id);
 }
 
 // ─── Variants ─────────────────────────────────────────────────────────────────

@@ -1,13 +1,25 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync.js";
 import { ApiError } from "../utils/ApiError.js";
-import { register, login, refresh, logout } from "../services/auth.service.js";
+import {
+  register,
+  login,
+  refresh,
+  logout,
+  forgotPassword,
+  resetPassword,
+} from "../services/auth.service.js";
 import {
   setAuthCookies,
   setAccessTokenCookie,
   clearAuthCookies,
 } from "../utils/cookies.js";
-import type { RegisterBody, LoginBody } from "../schemas/auth.schema.js";
+import type {
+  RegisterBody,
+  LoginBody,
+  ForgotPasswordBody,
+  ResetPasswordBody,
+} from "../schemas/auth.schema.js";
 
 /**
  * controllers/auth.controller.ts
@@ -114,5 +126,42 @@ export const logoutController = catchAsync(
 
     clearAuthCookies(res);
     res.status(204).send();
+  },
+);
+
+/**
+ * POST /api/auth/forgot-password
+ *
+ * Body (validated by forgotPasswordSchema): { email }
+ *
+ * Always responds 200 with the same generic message whether or not the
+ * email is registered — prevents account enumeration. See
+ * auth.service.ts#forgotPassword for the Firebase link + SMTP send.
+ */
+export const forgotPasswordController = catchAsync(
+  async (req: Request, res: Response) => {
+    const { email } = req.body as ForgotPasswordBody;
+    await forgotPassword(email);
+    res.status(200).json({
+      message:
+        "If an account exists for that email, a password reset link has been sent.",
+    });
+  },
+);
+
+/**
+ * POST /api/auth/reset-password
+ *
+ * Body (validated by resetPasswordSchema): { oobCode, newPassword }
+ * `oobCode` comes from the query string of the link emailed by
+ * forgotPassword — see app/reset-password/page.tsx on the frontend.
+ */
+export const resetPasswordController = catchAsync(
+  async (req: Request, res: Response) => {
+    const { oobCode, newPassword } = req.body as ResetPasswordBody;
+    await resetPassword(oobCode, newPassword);
+    res
+      .status(200)
+      .json({ message: "Password reset successful. You can now log in." });
   },
 );

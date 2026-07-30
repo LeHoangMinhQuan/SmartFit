@@ -2,12 +2,19 @@ import { Router } from "express";
 import { validate } from "../middleware/validate.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { authLimiter } from "../middleware/rateLimiter.js";
-import { registerSchema, loginSchema } from "../schemas/auth.schema.js";
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "../schemas/auth.schema.js";
 import {
   registerController,
   loginController,
   refreshController,
   logoutController,
+  forgotPasswordController,
+  resetPasswordController,
 } from "../controllers/auth.controller.js";
 
 /**
@@ -57,5 +64,25 @@ router.post("/refresh", authLimiter, refreshController);
 // POST /api/auth/logout
 // authenticate first — user_id needed to delete the correct token row.
 router.post("/logout", authenticate, logoutController);
+
+// POST /api/auth/forgot-password
+// Public. Generates a Firebase password-reset link and emails it out.
+// See controllers/auth.controller.js + services/auth.service.js.
+router.post(
+  "/forgot-password",
+  authLimiter,
+  validate(forgotPasswordSchema),
+  forgotPasswordController,
+);
+
+// POST /api/auth/reset-password
+// Public — the oobCode itself (not a session) is the credential here,
+// and it's redeemed server-side against Google's Identity Toolkit API.
+router.post(
+  "/reset-password",
+  authLimiter,
+  validate(resetPasswordSchema),
+  resetPasswordController,
+);
 
 export default router;

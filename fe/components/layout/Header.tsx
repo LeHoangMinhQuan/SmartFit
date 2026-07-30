@@ -4,19 +4,23 @@ import { useCartStore } from "@/store/useCartStore";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import LoginModal from "@/components/auth/LoginModal";
 import RegisterModal from "@/components/auth/RegisterModal";
+import ForgotPasswordModal from "@/components/auth/ForgotPasswordModal";
 import UserMenu from "@/components/UserMenu";
 
 export default function Header() {
   const cartItems = useCartStore((state) => state.items ?? []);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  
+
   const {
     loginOpen,
     registerOpen,
+    forgotPasswordOpen,
     openLogin,
     openRegister,
+    openForgotPassword,
     closeLogin,
     closeRegister,
+    closeForgotPassword,
   } = useAuthModalStore();
 
   return (
@@ -82,11 +86,18 @@ export default function Header() {
         isOpen={loginOpen}
         onClose={closeLogin}
         onSwitchToRegister={openRegister}
+        onSwitchToForgotPassword={openForgotPassword}
       />
 
       <RegisterModal
         isOpen={registerOpen}
         onClose={closeRegister}
+        onSwitchToLogin={openLogin}
+      />
+
+      <ForgotPasswordModal
+        isOpen={forgotPasswordOpen}
+        onClose={closeForgotPassword}
         onSwitchToLogin={openLogin}
       />
     </>

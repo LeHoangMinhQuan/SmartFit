@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../../services/staff/admin.service";
 import { orderService } from "../../../../services/order.service";
@@ -23,11 +23,8 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "refunded",
 ];
 
-export default function StaffOrderDetailPage({
-  params,
-}: {
-  params: { order_id: string };
-}) {
+export default function StaffOrderDetailPage() {
+  const params = useParams<{ order_id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const orderId = Number(params.order_id);

@@ -17,6 +17,7 @@ interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSwitchToRegister: () => void;
+  onSwitchToForgotPassword: () => void;
 }
 
 const initialState = {
@@ -28,6 +29,7 @@ export default function LoginModal({
   isOpen,
   onClose,
   onSwitchToRegister,
+  onSwitchToForgotPassword,
 }: LoginModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -214,9 +216,16 @@ export default function LoginModal({
               />
               Remember me
             </label>
-            <a href="#" className="font-medium hover:text-gray-700 text-black">
+            <button
+              type="button"
+              onClick={() => {
+                handleClose();
+                onSwitchToForgotPassword();
+              }}
+              className="font-medium hover:text-gray-700 text-black"
+            >
               Forgot password?
-            </a>
+            </button>
           </div>
 
           <Button

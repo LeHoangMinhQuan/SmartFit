@@ -53,6 +53,12 @@ const required = [
   // TODO: Remove to test without Try-on
   // "TRYON_API_KEY",
   // "TRYON_BASE_URL",
+
+  // NOTE: FIREBASE_* and SMTP_* are deliberately NOT in this required list.
+  // They only back the "forgot password" feature (config/firebase.ts,
+  // config/mailer.ts) — the rest of the app must still boot without them.
+  // Calling forgot-password without them configured throws a clear 500
+  // instead of crashing the whole process at startup.
 ] as const;
 
 const missing = required.filter((key) => !process.env[key]);
@@ -97,4 +103,20 @@ export const env = {
   // TODO: Remove these two env vars to test MVP
   // TRYON_API_KEY: process.env["TRYON_API_KEY"]!,
   // TRYON_BASE_URL: process.env["TRYON_BASE_URL"]!,
+
+  // ─── Firebase (forgot-password only — optional, see note above) ───────────
+  FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],
+  FIREBASE_CLIENT_EMAIL: process.env["FIREBASE_CLIENT_EMAIL"],
+  FIREBASE_PRIVATE_KEY: process.env["FIREBASE_PRIVATE_KEY"],
+  // Web API key (public by design — same one used by Firebase JS SDKs).
+  // Used server-side to call the Identity Toolkit REST API directly, so
+  // we never need a Firebase client SDK in the browser at all.
+  FIREBASE_WEB_API_KEY: process.env["FIREBASE_WEB_API_KEY"],
+
+  // ─── SMTP (forgot-password only — optional, see note above) ────────────────
+  SMTP_HOST: process.env["SMTP_HOST"],
+  SMTP_PORT: process.env["SMTP_PORT"],
+  SMTP_USER: process.env["SMTP_USER"],
+  SMTP_PASS: process.env["SMTP_PASS"],
+  SMTP_FROM: process.env["SMTP_FROM"],
 } as const;

@@ -1,5 +1,9 @@
+import axios from "axios";
 import bcrypt from "bcryptjs";
 import { ApiError } from "../utils/ApiError.js";
+import { env } from "../config/env.js";
+import { firebaseAuth } from "../config/firebase.js";
+import { sendMail } from "../config/mailer.js";
 import {
   signUserAccessToken,
   generateRefreshToken,
@@ -13,7 +17,10 @@ import {
   insertRefreshToken,
   findRefreshTokenByHash,
   deleteRefreshToken,
+  deleteAllUserRefreshTokens,
   emailExists,
+  updateUserFirebaseUid,
+  updateUserPasswordByEmail,
 } from "../models/user.model.js";
 import type { RegisterBody, LoginBody } from "../schemas/auth.schema.js";
 
@@ -81,6 +88,24 @@ export const register = async (body: RegisterBody): Promise<RegisterResult> => {
 
   if (!user) {
     throw new ApiError(500, "Failed to create user");
+  }
+
+  // 3b. Best-effort mirror into Firebase Auth — only backs the
+  // forgot-password flow (see forgotPassword() below), so a failure here
+  // (e.g. Firebase not configured in this environment) must never block
+  // registration itself.
+  try {
+    const fbUser = await firebaseAuth().createUser({
+      email: user.email,
+      password: body.password,
+      displayName: user.username,
+    });
+    await updateUserFirebaseUid(user.user_id, fbUser.uid);
+  } catch (err) {
+    console.warn(
+      `[auth] Could not create Firebase user for ${user.email}:`,
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // 4. Issue tokens
@@ -206,4 +231,115 @@ export const logout = async (
 ): Promise<void> => {
   const token_hash = hashRefreshToken(rawRefreshToken);
   await deleteRefreshToken(user_id, token_hash);
+};
+
+// ─── Forgot / Reset password (Firebase-backed) ───────────────────────────────
+//
+// Login itself stays entirely on Postgres + our own JWTs — Firebase is used
+// purely as a secure "prove you own this email" mechanism:
+//
+//   1. forgotPassword(email) generates a Firebase password-reset link
+//      (Firebase mints + signs an oobCode, and will expire/consume it for
+//      us) and emails it out ourselves via SMTP.
+//   2. The link points at our own /reset-password page (not a Firebase-
+//      hosted one), so the user never leaves our UI.
+//   3. resetPassword(oobCode, newPassword) posts straight to Google's
+//      Identity Toolkit REST API to redeem the oobCode server-side. This
+//      both verifies the code (correct signature, not expired, not
+//      already used) AND updates the password on the Firebase side, and
+//      hands back the email address it belonged to — so this call can't
+//      be spoofed into resetting an arbitrary account. We then hash the
+//      same new password into Postgres's password_hash, since that's what
+//      login() actually checks.
+
+/**
+ * Requests a password reset email. Always resolves without throwing when
+ * the email simply isn't registered — same anti-enumeration reasoning as
+ * login(). Only throws if the reset mechanism itself is broken (Firebase/
+ * SMTP not configured, or the send failed), which is worth surfacing.
+ */
+export const forgotPassword = async (email: string): Promise<void> => {
+  const user = await findUserByEmail(email);
+  if (!user) return;
+
+  let resetLink: string;
+  try {
+    resetLink = await firebaseAuth().generatePasswordResetLink(email, {
+      // handleCodeInApp means the link points straight at our own page
+      // with ?mode=resetPassword&oobCode=... in the query string, instead
+      // of a Firebase-hosted confirmation page.
+      url: `${env.FRONTEND_URL}/reset-password`,
+      handleCodeInApp: true,
+    });
+  } catch (err) {
+    console.error(
+      `[auth] Failed to generate a Firebase reset link for ${email}:`,
+      err instanceof Error ? err.message : err,
+    );
+    throw new ApiError(
+      500,
+      "Could not start password reset right now. Please try again later.",
+    );
+  }
+
+  try {
+    await sendMail({
+      to: email,
+      subject: "Reset your SmartFit password",
+      html: `
+        <p>Hi ${user.username},</p>
+        <p>We received a request to reset your SmartFit password. This link expires in 1 hour and can only be used once.</p>
+        <p><a href="${resetLink}">Reset your password</a></p>
+        <p>If you didn't request this, you can safely ignore this email — your password won't change.</p>
+      `,
+    });
+  } catch (err) {
+    console.error(
+      `[auth] Failed to send reset email to ${email}:`,
+      err instanceof Error ? err.message : err,
+    );
+    throw new ApiError(
+      500,
+      "Could not send the reset email right now. Please try again later.",
+    );
+  }
+};
+
+/**
+ * Completes a password reset. `oobCode` is redeemed directly against
+ * Google's Identity Toolkit REST API (server-side, using the public Web
+ * API key) — this is the step that actually validates the code, so an
+ * invalid/expired/already-used code throws a 400 here rather than us
+ * having to reimplement that verification ourselves.
+ */
+export const resetPassword = async (
+  oobCode: string,
+  newPassword: string,
+): Promise<void> => {
+  const apiKey = env.FIREBASE_WEB_API_KEY;
+  if (!apiKey) {
+    throw new ApiError(500, "Password reset is not configured.");
+  }
+
+  let email: string;
+  try {
+    const { data } = await axios.post<{ email: string }>(
+      `https://identitytoolkit.googleapis.com/v1/accounts:resetPassword?key=${apiKey}`,
+      { oobCode, newPassword },
+    );
+    email = data.email;
+  } catch {
+    throw new ApiError(
+      400,
+      "This reset link is invalid or has expired. Request a new one.",
+    );
+  }
+
+  const password_hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await updateUserPasswordByEmail(email, password_hash);
+
+  // Force re-login everywhere — a leaked/old session shouldn't survive a
+  // password reset.
+  const user = await findUserByEmail(email);
+  if (user) await deleteAllUserRefreshTokens(user.user_id);
 };

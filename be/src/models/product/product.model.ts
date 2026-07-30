@@ -7,6 +7,7 @@ export interface Product {
   product_id?: number;
   name: string;
   description: string;
+  is_active?: boolean;
 }
 
 export async function createProduct(
@@ -65,7 +66,8 @@ export async function findAllProducts(filters: {
     .leftJoin("product_image as pi", function () {
       this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
     })
-    .leftJoin("product_price as pp", "p.product_id", "pp.product_id");
+    .leftJoin("product_price as pp", "p.product_id", "pp.product_id")
+    .where("p.is_active", true);
 
   if (category_id) {
     query = query
@@ -90,7 +92,9 @@ export async function findAllProducts(filters: {
     .limit(limit)
     .offset(offset);
 
-  const countQuery = db("product as p").countDistinct("p.product_id as total");
+  const countQuery = db("product as p")
+    .countDistinct("p.product_id as total")
+    .where("p.is_active", true);
   if (category_id) {
     countQuery
       .join("product_category as pc", "p.product_id", "pc.product_id")
@@ -112,7 +116,7 @@ export async function findAllProducts(filters: {
   const countResult = (await countQuery) as { total: string | number }[];
   const total = countResult[0]?.total ?? 0;
   const rows = await query;
-  console.log("rows returned from findAllProducts: ",rows);
+  console.log("rows returned from findAllProducts: ", rows);
 
   return { rows, total: Number(total) };
 }
@@ -138,6 +142,7 @@ export async function findTopSellingProducts(limit = 8) {
     })
     .leftJoin("product_price as pp", "p.product_id", "pp.product_id")
     .leftJoin("order_item as oi", "p.product_id", "oi.product_id")
+    .where("p.is_active", true)
     .groupBy("p.product_id", "p.name", "p.description", "pi.s3_url")
     .orderBy("sold_count", "desc")
     .limit(limit);
@@ -147,10 +152,12 @@ export async function searchProducts(query: string, page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   const rows = await db("product")
     .whereILike("name", `%${query}%`)
+    .andWhere("is_active", true)
     .limit(limit)
     .offset(offset);
   const countResult = (await db("product")
     .whereILike("name", `%${query}%`)
+    .andWhere("is_active", true)
     .count("product_id as total")) as { total: string | number }[];
   const total = countResult[0]?.total ?? 0;
   return { rows, total: Number(total) };
@@ -163,8 +170,32 @@ export async function updateProduct(
   return db("product").where({ product_id }).update(data);
 }
 
-export async function deleteProduct(product_id: number) {
-  return db("product").where({ product_id }).delete();
+/**
+ * Deletes a product. Products that have ever appeared in an order_item are
+ * protected by ON DELETE RESTRICT (order_item -> store_product -> product),
+ * so a hard delete on those would throw a Postgres FK-violation (23503).
+ * Rather than surface that as a 500 to staff, fall back to a soft delete
+ * (is_active = false) — the product disappears from every customer-facing
+ * listing but its order history stays intact.
+ *
+ * Returns which path was taken so the controller can report it.
+ */
+export async function deleteProduct(
+  product_id: number,
+): Promise<{ hard_deleted: boolean }> {
+  try {
+    await db("product").where({ product_id }).delete();
+    return { hard_deleted: true };
+  } catch (err: unknown) {
+    const pgCode = (err as { code?: string })?.code;
+    if (pgCode === "23503") {
+      // Foreign key violation — this product (or one of its variants) is
+      // referenced by existing order_item rows. Soft-delete instead.
+      await db("product").where({ product_id }).update({ is_active: false });
+      return { hard_deleted: false };
+    }
+    throw err;
+  }
 }
 
 // ─── Product Variant ─────────────────────────────────────────────────────────
@@ -296,7 +327,8 @@ export async function findProductsByCategory(
       this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
     })
     .leftJoin("product_price as pp", "p.product_id", "pp.product_id")
-    .where("pc.category_id", category_id);
+    .where("pc.category_id", category_id)
+    .andWhere("p.is_active", true);
 
   if (minPrice !== undefined)
     query = query.where("pp.base_price", ">=", minPrice);
@@ -330,7 +362,8 @@ export async function findProductsByCategory(
   // variant; a plain count would over-count any product with 2+ variants.
   let countQuery = db("product as p")
     .join("product_category as pc", "p.product_id", "pc.product_id")
-    .where("pc.category_id", category_id);
+    .where("pc.category_id", category_id)
+    .andWhere("p.is_active", true);
   if (minPrice !== undefined || maxPrice !== undefined) {
     countQuery = countQuery.join(
       "product_price as pp",

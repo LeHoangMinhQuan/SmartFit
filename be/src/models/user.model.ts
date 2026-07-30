@@ -10,6 +10,7 @@ export interface UserRow {
   phone: string; // CHAR(10) NOT NULL
   avatar_url: string | null;
   google_id: string | null;
+  firebase_uid: string | null;
   created_at: Date;
 }
 
@@ -45,6 +46,25 @@ export const insertUser = (user: {
   password_hash: string;
   phone: string; // CHAR(10) NOT NULL
 }): Promise<UserRow[]> => db<UserRow>("USER").insert(user).returning("*");
+
+// firebase_uid is populated best-effort at registration time (see
+// auth.service.ts#register) and by the one-off backfill script for
+// pre-existing users (scripts/backfill-firebase-users.ts).
+export const updateUserFirebaseUid = (
+  user_id: number,
+  firebase_uid: string,
+): Promise<number> =>
+  db<UserRow>("USER").where({ user_id }).update({ firebase_uid });
+
+// Used by resetPassword() once the Identity Toolkit REST call has already
+// verified the oobCode and confirmed the email on Firebase's side — we
+// still own password_hash ourselves since login goes through Postgres +
+// our own JWTs, not Firebase sessions.
+export const updateUserPasswordByEmail = (
+  email: string,
+  password_hash: string,
+): Promise<number> =>
+  db<UserRow>("USER").where({ email }).update({ password_hash });
 
 // ─── refresh_token queries ────────────────────────────────────────────────────
 

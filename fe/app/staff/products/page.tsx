@@ -38,8 +38,16 @@ export default function StaffProductsPage() {
   async function handleDelete(product_id: number) {
     if (!confirm("Delete this product? This cannot be undone.")) return;
     try {
-      await adminService.deleteProduct(product_id);
-      toast.success("Product deleted.");
+      const result = (await adminService.deleteProduct(product_id)) as
+        | { hard_deleted?: boolean }
+        | undefined;
+      if (result?.hard_deleted === false) {
+        toast.success(
+          "This product has existing orders, so it was archived (hidden from the store) instead of permanently deleted.",
+        );
+      } else {
+        toast.success("Product deleted.");
+      }
       queryClient.setQueriesData<
         { data: ProductSummary[]; meta: unknown } | undefined
       >(
@@ -121,6 +129,24 @@ export default function StaffProductsPage() {
         <DataTable
           columns={[
             { key: "product_id", header: "ID", className: "w-16" },
+            {
+              key: "image",
+              header: "Image",
+              className: "w-20",
+              render: (row) =>
+                row.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={row.image as string}
+                    alt=""
+                    className="h-12 w-12 rounded-lg border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-slate-200 text-[10px] text-slate-400">
+                    No image
+                  </div>
+                ),
+            },
             { key: "name", header: "Name" },
             { key: "description", header: "Description" },
             {

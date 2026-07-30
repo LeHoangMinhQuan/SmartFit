@@ -395,9 +395,12 @@ export default function ProductForm({
                 images={product.images.filter((img) => img.variant_id == null)}
               />
               {(product?.variants ?? []).map((v) => {
-                const variantImages = product.images.filter(
-                  (img) => img.variant_id === v.variant_id,
-                );
+                // NOTE: product.images only ever holds general (variant_id
+                // IS NULL) images — the API deliberately excludes
+                // variant-specific ones from that array (see
+                // findImagesByProduct). Each variant carries its own
+                // images via v.images instead.
+                const variantImages = v.images ?? [];
                 if (!variantImages.length) return null;
                 return (
                   <ImageGroup

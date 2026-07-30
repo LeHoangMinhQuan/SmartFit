@@ -39,6 +39,22 @@ export const loginSchema = z.object({
 // as an httpOnly cookie (see controllers/auth.controller.ts), so there's
 // nothing left to validate here.
 
+export const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z.email().trim().toLowerCase(),
+  }),
+});
+
+export const resetPasswordSchema = z.object({
+  body: z.object({
+    // The oobCode Firebase embeds in the reset link's query string.
+    oobCode: z.string().min(1),
+    newPassword: z.string().min(8).max(72),
+  }),
+});
+
 // Update types
 export type RegisterBody = z.infer<typeof registerSchema>["body"];
 export type LoginBody = z.infer<typeof loginSchema>["body"];
+export type ForgotPasswordBody = z.infer<typeof forgotPasswordSchema>["body"];
+export type ResetPasswordBody = z.infer<typeof resetPasswordSchema>["body"];

@@ -80,8 +80,11 @@ export const updateProduct = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const deleteProduct = catchAsync(async (req: Request, res: Response) => {
-  await ProductService.deleteProduct(Number(req.params["id"]));
-  res.status(204).send();
+  const result = await ProductService.deleteProduct(Number(req.params["id"]));
+  // 200 (not 204) — the body tells the caller whether this was a real
+  // delete or a soft delete (is_active = false) fallback because the
+  // product has existing order_item history.
+  res.status(200).json({ data: result });
 });
 
 export const uploadProductImage = catchAsync(

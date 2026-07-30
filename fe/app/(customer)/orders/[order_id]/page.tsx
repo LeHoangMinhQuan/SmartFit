@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { orderService } from "../../../../services/order.service";
 import { paymentService } from "../../../../services/payment.service";
@@ -14,11 +14,8 @@ import Spinner from "../../../../components/ui/Spinner";
 import OrderStatusBadge from "../../../../components/order/OrderStatusBadge";
 import type { Product } from "../../../../interfaces";
 
-interface Props {
-  params: { order_id: string };
-}
-
-export default function OrderDetailPage({ params }: Props) {
+export default function OrderDetailPage() {
+  const params = useParams<{ order_id: string }>();
   const orderId = Number(params.order_id);
   const router = useRouter();
   const queryClient = useQueryClient();
