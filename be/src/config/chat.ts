@@ -3,7 +3,7 @@
  *
  * Central config for the AI shopping assistant (chatbot build plan, Phase 2+).
  * Model names come from env (see .env.example) rather than being hardcoded,
- * so swapping gemini-2.5-pro -> gemini-2.5-flash under rate-limit pressure
+ * so swapping gemini-2.5-flash-lite -> gemini-2.5-flash under rate-limit pressure
  * mid-demo is a one-line env var change, not a code change.
  */
 import { env } from "./env.js";

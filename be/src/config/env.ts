@@ -95,7 +95,8 @@ export const env = {
 
   // Gemini
   GEMINI_API_KEY: process.env["GEMINI_API_KEY"]!,
-  GEMINI_CHAT_MODEL: process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-pro",
+  GEMINI_CHAT_MODEL:
+    process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-flash-lite",
   GEMINI_EMBEDDING_MODEL:
     process.env["GEMINI_EMBEDDING_MODEL"] ?? "gemini-embedding-001",
 

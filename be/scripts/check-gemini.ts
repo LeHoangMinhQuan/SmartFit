@@ -2,7 +2,7 @@
  * scripts/check-gemini.ts
  *
  * Phase 0 acceptance check for the chatbot build plan: confirms GEMINI_API_KEY
- * in .env is valid and gemini-2.5-pro is reachable for this key.
+ * in .env is valid and gemini-2.5-flash-lite is reachable for this key.
  *
  * Run with: npm run check:gemini
  */
@@ -12,7 +12,7 @@ config();
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 
-const model = process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-pro";
+const model = process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-flash-lite";
 
 async function main() {
   if (!process.env["GEMINI_API_KEY"]) {
