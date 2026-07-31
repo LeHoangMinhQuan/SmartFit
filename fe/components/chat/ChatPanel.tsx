@@ -134,7 +134,7 @@ export default function ChatPanel() {
       }`}
     >
       <div className="border-b border-gray-100 px-4 py-3">
-        <h2 className="text-sm font-semibold">SmartFit Assistant</h2>
+        <h2 className="text-sm font-semibold text-slate-900">SmartFit Assistant</h2>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -166,7 +166,7 @@ export default function ChatPanel() {
           </p>
           <button
             onClick={openLogin}
-            className="rounded-full bg-black px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800"
+            className="rounded-full bg-black px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800 hover:cursor-pointer"
           >
             Log in
           </button>
@@ -181,7 +181,7 @@ export default function ChatPanel() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about a product…"
             disabled={isBusy}
-            className="flex-1 rounded-full border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black/20"
+            className="flex-1 rounded-full border border-gray-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-black/20"
           />
           <button
             type="submit"

@@ -1,23 +1,5 @@
 import { Knex } from "knex";
 
-/**
- * Optional demo seed for local development.
- * Creates 5 top-level categories (4 featured, for the landing page's
- * "Browse By Category" section) plus 1 nested category, and 12 demo products
- * spread across them with variants, attributes, prices, and inventory — so
- * cart/order/category-browsing/homepage flows can all be exercised without
- * manual setup.
- *
- * Safe to re-run: guards on both the demo product name and (since
- * category.name is now case-insensitively unique — category_name_unique_ci)
- * on each category/attribute name individually, rather than bailing out
- * entirely on a single check.
- *
- * NOTE: store_product inserts are skipped if no store row exists yet.
- * None of the seed files 01–06 create a store — if you need inventory
- * populated, seed a store first (not included here since it wasn't part
- * of the provided seed set).
- */
 export async function seed(knex: Knex): Promise<void> {
   const existing = await knex("product")
     .whereRaw("LOWER(name) = 'demo shirt'")
@@ -105,6 +87,13 @@ export async function seed(knex: Knex): Promise<void> {
   const sizeAttr = await getOrCreateAttribute("Size");
 
   // ── Products (name ≤ 20 chars, description ≤ 100 chars) ───────────────────
+  // weight_grams/length_cm/width_cm/height_cm feed the real GHN shipping
+  // fee/service calculation (see ghn.service.ts#getParcelForItems) —
+  // folded-and-bagged packaging estimates per garment type, not exact
+  // product specs. Deliberately varied (light shirts vs a boxed shoe) so
+  // the auto-select flow actually exercises both GHN service tiers
+  // ("Hàng nhẹ"/light vs "Hàng nặng"/heavy) instead of only ever hitting
+  // one path.
   const start_date = new Date("2025-01-01").toISOString();
   const end_date = new Date("2027-12-31").toISOString();
   await knex("price_history")
@@ -120,6 +109,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Blue",
       size: "M",
       price: 299000,
+      weight_grams: 250,
+      length_cm: 30,
+      width_cm: 25,
+      height_cm: 3,
     },
     {
       name: "Striped Shirt",
@@ -128,6 +121,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "White",
       size: "L",
       price: 349000,
+      weight_grams: 260,
+      length_cm: 30,
+      width_cm: 25,
+      height_cm: 3,
     },
     {
       name: "Formal White Shirt",
@@ -137,6 +134,10 @@ export async function seed(knex: Knex): Promise<void> {
       size: "M",
       price: 399000,
       isBrand: true,
+      weight_grams: 280,
+      length_cm: 32,
+      width_cm: 26,
+      height_cm: 3,
     },
     {
       name: "Slim Fit Jeans",
@@ -146,6 +147,10 @@ export async function seed(knex: Knex): Promise<void> {
       size: "32",
       price: 459000,
       isBrand: true,
+      weight_grams: 600,
+      length_cm: 35,
+      width_cm: 28,
+      height_cm: 4,
     },
     {
       name: "Chino Pants",
@@ -154,6 +159,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Khaki",
       size: "32",
       price: 379000,
+      weight_grams: 450,
+      length_cm: 35,
+      width_cm: 28,
+      height_cm: 4,
     },
     {
       name: "Denim Jacket",
@@ -163,6 +172,10 @@ export async function seed(knex: Knex): Promise<void> {
       size: "L",
       price: 599000,
       isBrand: true,
+      weight_grams: 850,
+      length_cm: 40,
+      width_cm: 32,
+      height_cm: 6,
     },
     {
       name: "Bomber Jacket",
@@ -172,6 +185,10 @@ export async function seed(knex: Knex): Promise<void> {
       size: "M",
       price: 649000,
       isBrand: true,
+      weight_grams: 700,
+      length_cm: 38,
+      width_cm: 30,
+      height_cm: 6,
     },
     {
       name: "Windbreaker",
@@ -180,6 +197,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Green",
       size: "L",
       price: 529000,
+      weight_grams: 400,
+      length_cm: 36,
+      width_cm: 28,
+      height_cm: 4,
     },
     // New Arrivals Products
     {
@@ -189,6 +210,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "White",
       size: "L",
       price: 320000,
+      weight_grams: 180,
+      length_cm: 28,
+      width_cm: 22,
+      height_cm: 2,
     },
     {
       name: "Arrival Hoodie",
@@ -197,6 +222,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Grey",
       size: "XL",
       price: 750000,
+      weight_grams: 650,
+      length_cm: 36,
+      width_cm: 30,
+      height_cm: 5,
     },
     // On Sale Products
     {
@@ -206,6 +235,10 @@ export async function seed(knex: Knex): Promise<void> {
       color: "Black",
       size: "OS",
       price: 150000,
+      weight_grams: 120,
+      length_cm: 25,
+      width_cm: 20,
+      height_cm: 12,
     },
     {
       name: "Sale Sneakers",
@@ -214,6 +247,13 @@ export async function seed(knex: Knex): Promise<void> {
       color: "White",
       size: "42",
       price: 890000,
+      // Boxed footwear: notably heavier/bulkier than the folded-garment
+      // items above — this is the one most likely to tip a multi-item
+      // cart from GHN's "light goods" service into "heavy goods".
+      weight_grams: 1200,
+      length_cm: 33,
+      width_cm: 20,
+      height_cm: 13,
     },
   ];
 

@@ -1,5 +1,4 @@
-import { rateLimit } from "express-rate-limit";
-
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 /**
  * express-rate-limit v8.5.2
  *
@@ -81,7 +80,11 @@ export const chatLimiter = rateLimit({
   limit: 15,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.user_id.toString() ?? req.ip ?? "unknown",
+
+  keyGenerator: (req) => {
+    return req.user?.user_id.toString() ?? ipKeyGenerator(req.ip ?? "");
+  },
+
   message: {
     status: "error",
     statusCode: 429,

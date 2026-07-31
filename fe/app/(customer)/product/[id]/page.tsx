@@ -224,7 +224,7 @@ export default function ProductPage() {
                 >
                   −
                 </button>
-                <span className="w-8 text-center text-sm font-medium">
+                <span className="w-8 text-center text-sm text-slate-900 font-medium">
                   {quantity}
                 </span>
                 <button
@@ -241,7 +241,7 @@ export default function ProductPage() {
               <button
                 onClick={handleAddToCart}
                 disabled={cartBusy || !selected}
-                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-40"
+                className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:pointer-events-none disabled:opacity-40"
               >
                 {cartBusy ? "Adding…" : "Add to Cart"}
               </button>
@@ -249,14 +249,22 @@ export default function ProductPage() {
               <button
                 onClick={handleWishlist}
                 disabled={wishBusy}
-                aria-label={wishlisted ? "Wishlisted" : "Add to wishlist"}
-                className="rounded-xl border border-gray-300 px-4 py-3 text-xl hover:bg-gray-50 disabled:opacity-40"
+                aria-label={
+                  wishlisted ? "Remove from wishlist" : "Add to wishlist"
+                }
+                className={`flex items-center justify-center rounded-xl border px-4 py-3 transition-all duration-200 disabled:opacity-40 ${
+                  wishlisted
+                    ? "border-rose-200 bg-rose-50 text-rose-500 hover:border-rose-300 hover:bg-rose-100"
+                    : "border-slate-200 bg-white text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500"
+                }`}
               >
-                {wishlisted ? (
-                  <Heart className="bg-rose-500 text-white border-rose-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
-                ) : (
-                  <Heart className="border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200" />
-                )}
+                <Heart
+                  className={`h-6 w-6 transition-transform duration-200 active:scale-90 ${
+                    wishlisted
+                      ? "fill-rose-500 text-rose-500"
+                      : "fill-transparent"
+                  }`}
+                />
               </button>
             </div>
 

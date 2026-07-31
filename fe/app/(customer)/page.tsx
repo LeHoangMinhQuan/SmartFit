@@ -85,9 +85,6 @@ export default function Home() {
 
       {/* BROWSE BY CATEGORY (was "Browse By dress style") */}
       <FeaturedCategoriesSection />
-
-      {/* REST OF PAGE (Top Selling, etc.) */}
-      {/* ... Add grids for ProductCards here ... */}
     </div>
   );
 }

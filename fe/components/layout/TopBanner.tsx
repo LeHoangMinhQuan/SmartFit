@@ -1,12 +1,18 @@
 "use client";
 import { useState } from "react";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function TopBanner() {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isDismissed, setIsDismissed] = useState(false);
   const openRegister = useAuthModalStore((s) => s.openRegister);
+  const user = useAuthStore((s) => s.user);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
 
-  if (!isVisible) return null;
+  // Don't render anything until we know the real auth state (avoids a
+  // flash of the banner for logged-in users on first paint), and never
+  // show it to a signed-in user — the offer is for new signups only.
+  if (!hasHydrated || user || isDismissed) return null;
 
   return (
     <div className="bg-black text-white py-2 px-4 relative flex items-center justify-center text-xs md:text-sm">
@@ -20,7 +26,7 @@ export default function TopBanner() {
         </button>
       </p>
       <button
-        onClick={() => setIsVisible(false)}
+        onClick={() => setIsDismissed(true)}
         className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:text-gray-300 hidden md:block"
         aria-label="Close banner"
       >
