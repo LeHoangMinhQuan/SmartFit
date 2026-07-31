@@ -10,6 +10,12 @@ export interface AddressFormValues {
   province_id: number;
   district_id: number;
   ward_id: number;
+  // Captured alongside their ids below so the parent (checkout, address
+  // book) can build a full concatenated address without a second lookup —
+  // see lib/utils.ts#formatFullAddress.
+  province_name?: string;
+  district_name?: string;
+  ward_name?: string;
   label: string; // VARCHAR(20) — max 20 chars
   is_default: boolean;
 }
@@ -59,14 +65,20 @@ export default function AddressForm({
   // change and ward on district change.
   useEffect(() => {
     if (value.district_id !== undefined || value.ward_id !== undefined) {
-      onChange({ ...value, district_id: undefined, ward_id: undefined });
+      onChange({
+        ...value,
+        district_id: undefined,
+        district_name: undefined,
+        ward_id: undefined,
+        ward_name: undefined,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.province_id]);
 
   useEffect(() => {
     if (value.ward_id !== undefined) {
-      onChange({ ...value, ward_id: undefined });
+      onChange({ ...value, ward_id: undefined, ward_name: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.district_id]);
@@ -94,7 +106,15 @@ export default function AddressForm({
           </label>
           <select
             value={value.province_id ?? ""}
-            onChange={(e) => set("province_id", Number(e.target.value))}
+            onChange={(e) => {
+              const id = Number(e.target.value);
+              const match = provinces.find((p) => p.province_id === id);
+              onChange({
+                ...value,
+                province_id: id,
+                province_name: match?.province_name,
+              });
+            }}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             required
           >
@@ -117,7 +137,15 @@ export default function AddressForm({
           </label>
           <select
             value={value.district_id ?? ""}
-            onChange={(e) => set("district_id", Number(e.target.value))}
+            onChange={(e) => {
+              const id = Number(e.target.value);
+              const match = districts.find((d) => d.district_id === id);
+              onChange({
+                ...value,
+                district_id: id,
+                district_name: match?.district_name,
+              });
+            }}
             disabled={!value.province_id || !districts.length}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
             required
@@ -139,7 +167,15 @@ export default function AddressForm({
           <label className="text-sm font-semibold text-slate-900">Ward</label>
           <select
             value={value.ward_id ?? ""}
-            onChange={(e) => set("ward_id", Number(e.target.value))}
+            onChange={(e) => {
+              const id = Number(e.target.value);
+              const match = wards.find((w) => w.ward_id === id);
+              onChange({
+                ...value,
+                ward_id: id,
+                ward_name: match?.ward_name,
+              });
+            }}
             disabled={!value.district_id || !wards.length}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
             required

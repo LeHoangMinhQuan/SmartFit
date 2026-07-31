@@ -12,6 +12,7 @@ router.get("/wards/:district_id", ShippingController.getWards);
 // Fee / service estimation (requires login)
 router.post("/services", authenticate, ShippingController.getAvailableServices);
 router.post("/fee", authenticate, ShippingController.estimateFee);
+router.post("/auto-select", authenticate, ShippingController.autoSelectService);
 
 // Tracking (requires login)
 router.get(

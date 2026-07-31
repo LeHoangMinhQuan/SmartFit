@@ -7,6 +7,7 @@ import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
 import AddressForm, { type AddressFormValues } from "../checkout/AddressForm";
 import type { UserAddress } from "../../interfaces";
+import { formatFullAddress } from "../../lib/utils";
 import { Plus, Star, Trash2, Loader2, MapPin } from "lucide-react";
 
 export default function AddressBook() {
@@ -110,7 +111,7 @@ export default function AddressBook() {
               {a.label && (
                 <p className="font-semibold text-slate-900">{a.label}</p>
               )}
-              <p className="mt-0.5 text-slate-600">{a.address_line}</p>
+              <p className="mt-0.5 text-slate-600">{formatFullAddress(a)}</p>
               {a.is_default && (
                 <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
                   <Star className="h-3 w-3 fill-emerald-700" />

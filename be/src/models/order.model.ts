@@ -15,7 +15,7 @@ export interface CreateOrderData {
   user_id: number;
   staff_id: number; // always 1 (system account) for customer orders
   payment_method_id: number;
-  shipping_address: string; // VARCHAR(70) denormalized
+  shipping_address: string; // VARCHAR(255) denormalized — full concatenated address (address_line, ward, district, province)
   total_amount: number;
   status: OrderStatus;
 }
@@ -150,6 +150,10 @@ export async function findOrderItems(order_id: number) {
       "p.name as product_name",
       "pv.name as variant_name",
       "pi.s3_url as image_url",
+      "p.weight_grams",
+      "p.length_cm",
+      "p.width_cm",
+      "p.height_cm",
     )
     .distinct("oi.product_id", "oi.variant_id");
 }

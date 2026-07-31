@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
+    "ai": "^5.0.223",
+    "@ai-sdk/react": "^2.0.225",
     "axios": "^1.18.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.25.0",
@@ -34,6 +36,7 @@
   },
   "overrides": {
     "postcss": "^8.5.22",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "brace-expansion": "^5.0.8"
   }
 }

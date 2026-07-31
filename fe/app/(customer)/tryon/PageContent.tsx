@@ -33,6 +33,7 @@ export default function TryOnPage({ productId, variantId }: Props) {
   const [stage, setStage] = useState<Stage>("upload");
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [clothType, setClothType] = useState<ClothType>("upper");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -87,11 +88,21 @@ export default function TryOnPage({ productId, variantId }: Props) {
   const submitting = submitPhotoMutation.isPending;
 
   async function handlePhoto(file: File) {
-    submitPhotoMutation.mutate(file);
+    setSelectedFile(file);
+  }
+
+  function handleClearPhoto() {
+    setSelectedFile(null);
+  }
+
+  function handleConfirm() {
+    if (!selectedFile) return;
+    submitPhotoMutation.mutate(selectedFile);
   }
 
   function handleReset() {
     setSessionId(null);
+    setSelectedFile(null);
     setStage("upload");
   }
 
@@ -169,7 +180,20 @@ export default function TryOnPage({ productId, variantId }: Props) {
                   ))}
                 </div>
               </div>
-              <PhotoUpload onFile={handlePhoto} disabled={submitting} />
+              <PhotoUpload
+                onFile={handlePhoto}
+                onClear={handleClearPhoto}
+                disabled={submitting}
+              />
+
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={!selectedFile || submitting}
+                className="rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {submitting ? "Generating…" : "Confirm & Generate"}
+              </button>
             </div>
           ) : (
             sessionId && (

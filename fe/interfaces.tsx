@@ -54,6 +54,13 @@ export interface Product {
   images: ProductImage[];
   variants: ProductVariant[];
   categories: Category[];
+  // Used for real GHN shipping fee/service calculation instead of a
+  // hardcoded placeholder parcel. Nullable — falls back to a placeholder
+  // parcel per item when unset.
+  weight_grams?: number | null;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
 }
 
 export interface ProductSummary {
@@ -363,4 +370,47 @@ export interface PaginationMeta {
 export interface PaginatedResponse<T> {
   data: T[];
   meta: PaginationMeta;
+}
+
+// ── Chat (AI Shopping Assistant) ────────────────────────────────────────────
+// Mirrors backend services/retrieval.service.ts's ProductCard and
+// models/chat-session.model.ts's ChatMessageRow. Duplicated by hand rather
+// than shared across the fe/be boundary (separate packages) — same as
+// every other API-shape type in this file.
+
+export interface ChatProductCardData {
+  product_id: number;
+  variant_id: number | null;
+  name: string;
+  price: number | null;
+  image_url: string | null;
+  url: string;
+}
+
+export interface ChatAddToCartOutput {
+  cart_url: string;
+}
+
+export interface ChatToolError {
+  error: string;
+}
+
+// Attached to the assistant message via the backend's messageMetadata
+// callback (chat.controller.ts) — read in ChatPanel's useChat onFinish.
+export interface ChatMessageMetadata {
+  session_id: number;
+}
+
+export interface ChatMessageHistoryItem {
+  message_id: number;
+  session_id: number;
+  role: "user" | "assistant";
+  content: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ChatSessionHistoryResponse {
+  session_id: number;
+  messages: ChatMessageHistoryItem[];
 }

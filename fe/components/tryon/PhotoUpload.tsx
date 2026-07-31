@@ -8,10 +8,15 @@ const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 interface PhotoUploadProps {
   onFile: (file: File) => void;
+  onClear?: () => void;
   disabled?: boolean;
 }
 
-export default function PhotoUpload({ onFile, disabled }: PhotoUploadProps) {
+export default function PhotoUpload({
+  onFile,
+  onClear,
+  disabled,
+}: PhotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -36,6 +41,7 @@ export default function PhotoUpload({ onFile, disabled }: PhotoUploadProps) {
     setPreview(null);
     setError("");
     if (inputRef.current) inputRef.current.value = "";
+    onClear?.();
   }
 
   return (

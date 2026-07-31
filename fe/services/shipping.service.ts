@@ -26,6 +26,18 @@ interface FeeEstimate {
   service_fee: number;
 }
 
+interface AutoSelectBody {
+  to_district_id: number;
+  to_ward_code: string;
+}
+
+interface AutoSelectResult {
+  service_id: number;
+  short_name: string;
+  fee: number;
+  parcel: { weight: number; length: number; width: number; height: number };
+}
+
 // Every endpoint below wraps its payload in { data: result } on the
 // backend (see controllers/shipping.controller.ts). These calls were
 // previously resolving with `r.data` (the whole { data: ... } envelope
@@ -66,6 +78,14 @@ export const shippingService = {
   estimateFee: (body: FeeBody) =>
     api
       .post<{ data: FeeEstimate }>("/shipping/fee", body)
+      .then((r) => r.data.data),
+
+  // Picks the GHN service tier (light vs heavy goods) for the caller's
+  // current cart automatically — see services/ghn.service.ts on the
+  // backend for why this isn't a manual customer choice.
+  autoSelectService: (body: AutoSelectBody) =>
+    api
+      .post<{ data: AutoSelectResult }>("/shipping/auto-select", body)
       .then((r) => r.data.data),
 
   // Latest row from shipping_logs for a given tracking code

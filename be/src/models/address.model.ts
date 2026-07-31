@@ -8,7 +8,17 @@ export interface Address {
   ward_id: number;
 }
 
-export interface UserAddress extends Address {
+export interface AddressWithNames extends Address {
+  // address_line only ever holds the house number/street (VARCHAR(20) —
+  // see AddressForm.tsx). These give the frontend everything it needs to
+  // render/store the actual full address without a second round-trip to
+  // the province/district/ward lookup endpoints.
+  province_name: string;
+  district_name: string;
+  ward_name: string;
+}
+
+export interface UserAddress extends AddressWithNames {
   is_default: boolean;
   label: string | null;
 }
@@ -35,6 +45,9 @@ export async function findUserAddresses(
 ): Promise<UserAddress[]> {
   return db("user_address as ua")
     .join("address as a", "ua.address_id", "a.address_id")
+    .join("province as pr", "a.province_id", "pr.province_id")
+    .join("district as d", "a.district_id", "d.district_id")
+    .join("ward as w", "a.ward_id", "w.ward_id")
     .where("ua.user_id", user_id)
     .select(
       "a.address_id",
@@ -42,6 +55,9 @@ export async function findUserAddresses(
       "a.province_id",
       "a.district_id",
       "a.ward_id",
+      "pr.province_name",
+      "d.district_name",
+      "w.ward_name",
       "ua.is_default",
       "ua.label",
     );
@@ -56,6 +72,9 @@ export async function findAddressByIdAndUser(
 ): Promise<UserAddress | undefined> {
   return db("user_address as ua")
     .join("address as a", "ua.address_id", "a.address_id")
+    .join("province as pr", "a.province_id", "pr.province_id")
+    .join("district as d", "a.district_id", "d.district_id")
+    .join("ward as w", "a.ward_id", "w.ward_id")
     .where({ "ua.address_id": address_id, "ua.user_id": user_id })
     .first(
       "a.address_id",
@@ -63,6 +82,9 @@ export async function findAddressByIdAndUser(
       "a.province_id",
       "a.district_id",
       "a.ward_id",
+      "pr.province_name",
+      "d.district_name",
+      "w.ward_name",
       "ua.is_default",
       "ua.label",
     );
@@ -100,10 +122,11 @@ export async function updateAddress(
   data: UpdateAddressInput,
 ): Promise<number> {
   const updates: Record<string, unknown> = {};
-  if (data.address_line !== undefined) updates['address_line'] = data.address_line;
-  if (data.province_id !== undefined) updates['province_id'] = data.province_id;
-  if (data.district_id !== undefined) updates['district_id'] = data.district_id;
-  if (data.ward_id !== undefined) updates['ward_id'] = data.ward_id;
+  if (data.address_line !== undefined)
+    updates["address_line"] = data.address_line;
+  if (data.province_id !== undefined) updates["province_id"] = data.province_id;
+  if (data.district_id !== undefined) updates["district_id"] = data.district_id;
+  if (data.ward_id !== undefined) updates["ward_id"] = data.ward_id;
 
   return db("address").where({ address_id }).update(updates);
 }

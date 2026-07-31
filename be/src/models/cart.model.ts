@@ -40,6 +40,10 @@ export async function getCartWithItems(user_id: number) {
       "p.name as product_name",
       "pv.name as variant_name",
       "pi.s3_url as image_url",
+      "p.weight_grams",
+      "p.length_cm",
+      "p.width_cm",
+      "p.height_cm",
     )
     .distinct("ci.product_id", "ci.variant_id");
 

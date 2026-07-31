@@ -10,7 +10,7 @@ import { paymentService } from "../../../services/payment.service";
 import { userService } from "../../../services/user.service";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { useCartStore } from "../../../store/useCartStore";
-import { formatPrice } from "../../../lib/utils";
+import { formatPrice, formatFullAddress } from "../../../lib/utils";
 import { toast } from "../../../components/ui/Toast";
 import Spinner from "../../../components/ui/Spinner";
 import AddressForm, {
@@ -110,7 +110,7 @@ export default function CheckoutPage() {
       const addr = activeAddress ?? newAddress;
       const { order_id } = await orderService.createOrder({
         payment_method_id: VNPAY_METHOD_ID,
-        shipping_address: addr.address_line!,
+        shipping_address: formatFullAddress(addr),
         ward_id: addr.ward_id!,
         ...(voucher ? { voucher_id: voucher.voucher_id } : {}),
       });
@@ -234,7 +234,7 @@ export default function CheckoutPage() {
                           </span>
                         )}
                         <span className="text-sm text-slate-600">
-                          {a.address_line}
+                          {formatFullAddress(a)}
                         </span>
                       </div>
                     </label>
@@ -289,7 +289,7 @@ export default function CheckoutPage() {
                         {activeAddress.label} —{" "}
                       </span>
                     )}
-                    {activeAddress.address_line}
+                    {formatFullAddress(activeAddress)}
                   </div>
                 )
               )}
@@ -337,7 +337,9 @@ export default function CheckoutPage() {
                     <button
                       onClick={() => {
                         if (!shippingServiceId) {
-                          toast.error("Select a shipping method to continue.");
+                          toast.error(
+                            "Please wait for the shipping method to finish calculating.",
+                          );
                           return;
                         }
                         setStep("payment");

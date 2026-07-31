@@ -35,10 +35,9 @@ export default function ProfilePage() {
   // ── My Info state ──
   const [username, setUsername] = useState(user?.username ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
-  const [address, setAddress] = useState(user?.address ?? "");
 
   const saveInfoMutation = useMutation({
-    mutationFn: () => userService.updateProfile({ username, phone, address }),
+    mutationFn: () => userService.updateProfile({ username, phone }),
     onSuccess: (updated) => {
       // Keep the session, just refresh the cached user object
       if (user) {
@@ -164,13 +163,6 @@ export default function ProfilePage() {
                       onChange={(e) => setPhone(e.target.value)}
                       maxLength={10}
                       hint="10 digits"
-                    />
-                    <Input
-                      label="Address"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      maxLength={70}
-                      hint="Max 70 characters"
                     />
                   </div>
                   <button

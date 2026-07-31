@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useChatUiStore } from "@/store/useChatUiStore";
 import { logoutService } from "@/services/auth.client.service";
 import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
 
@@ -50,6 +51,11 @@ export default function UserMenu({
     if (session) {
       await nextAuthSignOut({ redirect: false });
     }
+
+    // 3. Reset chat UI state — closes the panel and drops sessionId, so
+    // the next open starts a fresh conversation rather than trying to
+    // continue one tied to a session that's no longer authenticated.
+    useChatUiStore.getState().reset();
   };
 
   // Close when clicking outside

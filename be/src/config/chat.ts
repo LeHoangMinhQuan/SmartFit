@@ -23,4 +23,10 @@ export const chatConfig = {
     // literature (Cormack et al.), also cited in ecommerce-api-plan.md §11.
     rrfK: 60,
   },
+
+  // How many past chat_message rows to load as conversation history
+  // (Phase 4). 20 rows ≈ 10 user/assistant turns — enough for the model to
+  // resolve "the first one" / "that jacket" style references without
+  // ballooning the prompt on a long-running session.
+  historyLimit: 20,
 };

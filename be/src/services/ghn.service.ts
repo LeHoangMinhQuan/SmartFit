@@ -1,8 +1,69 @@
 import { ApiError } from "../utils/ApiError.js";
 import * as OrderModel from "../models/order.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
+import * as CartModel from "../models/cart.model.js";
 import { ghnClient } from "../config/ghn.js";
 import { env } from "../config/env.js";
+
+// ─── Parcel sizing (real product dimensions, not a hardcoded guess) ───────────
+//
+// Falls back to this per-item placeholder for products that haven't had
+// their real weight/dimensions configured yet (product.weight_grams/
+// length_cm/width_cm/height_cm — nullable, see product.schema.ts).
+const PLACEHOLDER_ITEM_PARCEL = {
+  weight_grams: 500,
+  length_cm: 20,
+  width_cm: 20,
+  height_cm: 10,
+};
+
+interface ParcelItemInput {
+  quantity: number;
+  weight_grams?: number | string | null;
+  length_cm?: number | string | null;
+  width_cm?: number | string | null;
+  height_cm?: number | string | null;
+}
+
+/**
+ * Computes one combined parcel (weight + box dimensions) for a set of
+ * cart/order line items, using each product's real configured shipping
+ * dimensions where available. Used for both fee/service estimation
+ * (estimateFee, autoSelectService) and actual shipment creation
+ * (createShipmentForOrder) — they must agree, or GHN could charge
+ * differently than what was quoted at checkout.
+ *
+ * Heuristic (not true bin-packing — plenty for a thesis-scale catalog):
+ * items are assumed to stack in a single box, so weight sums across all
+ * items, height sums (stacked), and length/width take the largest single
+ * item's footprint.
+ */
+export function getParcelForItems(items: ParcelItemInput[]) {
+  let weight = 0;
+  let length = 0;
+  let width = 0;
+  let height = 0;
+
+  for (const item of items) {
+    const w = Number(item.weight_grams) || PLACEHOLDER_ITEM_PARCEL.weight_grams;
+    const l = Number(item.length_cm) || PLACEHOLDER_ITEM_PARCEL.length_cm;
+    const wd = Number(item.width_cm) || PLACEHOLDER_ITEM_PARCEL.width_cm;
+    const h = Number(item.height_cm) || PLACEHOLDER_ITEM_PARCEL.height_cm;
+
+    weight += w * item.quantity;
+    length = Math.max(length, l);
+    width = Math.max(width, wd);
+    height += h * item.quantity;
+  }
+
+  // GHN rejects zero/undersized parcels — clamp to sane minimums.
+  return {
+    weight: Math.max(Math.round(weight), 1),
+    length: Math.max(Math.round(length), 1),
+    width: Math.max(Math.round(width), 1),
+    height: Math.max(Math.round(height), 1),
+  };
+}
 
 // ─── Simple in-memory location cache (daily TTL) ──────────────────────────────
 const cache = new Map<string, { data: any; expires: number }>();
@@ -24,6 +85,7 @@ export async function createShipmentForOrder(order_id: number) {
   if (!order) throw new Error(`Order ${order_id} not found`);
 
   const items = await OrderModel.findOrderItems(order_id);
+  const parcel = getParcelForItems(items);
 
   const payload = {
     payment_type_id: 2, // recipient pays
@@ -36,10 +98,10 @@ export async function createShipmentForOrder(order_id: number) {
     to_address: order.shipping_address,
     to_ward_code: String(order.ward_id ?? ""),
     to_district_id: order.district_id ?? 0,
-    weight: 500, // default 500g — extend with product weight later
-    length: 20,
-    width: 20,
-    height: 10,
+    weight: parcel.weight,
+    length: parcel.length,
+    width: parcel.width,
+    height: parcel.height,
     service_type_id: 2, // standard
     items: items.map((i: any) => ({
       name: i.product_name ?? `Product ${i.product_id}`,
@@ -99,15 +161,68 @@ export async function estimateFee(body: {
 // ─── Available services ───────────────────────────────────────────────────────
 
 export async function getAvailableServices(to_district: number) {
-  const { data } = await ghnClient.post(
-    "/shipping-order/available-services",
-    {
-      shop_id: Number(env.GHN_SHOP_ID),
-      from_district: Number(env.GHN_FROM_DISTRICT),
-      to_district,
-    },
-  );
+  const { data } = await ghnClient.post("/shipping-order/available-services", {
+    shop_id: Number(env.GHN_SHOP_ID),
+    from_district: Number(env.GHN_FROM_DISTRICT),
+    to_district,
+  });
   return data.data;
+}
+
+/**
+ * Auto-selects a shipping service for the current user's cart, instead of
+ * asking the customer to manually pick between GHN's tiers — those tiers
+ * ("Hàng nhẹ" / light vs "Hàng nặng" / heavy, see the sample response in
+ * getAvailableServices) are a weight/size classification GHN enforces
+ * server-side, not a delivery-speed preference like "standard vs express".
+ * A customer has no real basis to choose between them.
+ *
+ * Computes the real parcel size from the cart's product dimensions
+ * (getParcelForItems), then tries each service GHN offers for this route
+ * and returns the first one that actually accepts/quotes that parcel.
+ */
+export async function autoSelectService(
+  user_id: number,
+  to_district_id: number,
+  to_ward_code: string,
+) {
+  const { items } = await CartModel.getCartWithItems(user_id);
+  if (!items.length) {
+    throw new ApiError(400, "Your cart is empty.");
+  }
+
+  const parcel = getParcelForItems(items);
+  const services = await getAvailableServices(to_district_id);
+
+  for (const svc of services) {
+    try {
+      const fee = await estimateFee({
+        service_id: svc.service_id,
+        to_district_id,
+        to_ward_code,
+        weight: parcel.weight,
+        length: parcel.length,
+        width: parcel.width,
+        height: parcel.height,
+      });
+      return {
+        service_id: svc.service_id,
+        short_name: svc.short_name,
+        fee: fee.total,
+        parcel,
+      };
+    } catch {
+      // GHN rejected this tier for this parcel/route (e.g. the "light
+      // goods" service can't carry this weight) — fall through and try
+      // the next tier rather than failing the whole request.
+      continue;
+    }
+  }
+
+  throw new ApiError(
+    422,
+    "No shipping service is available for this address and order.",
+  );
 }
 
 // ─── Tracking ─────────────────────────────────────────────────────────────────

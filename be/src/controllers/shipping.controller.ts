@@ -10,6 +10,24 @@ export const getAvailableServices = catchAsync(
   },
 );
 
+/**
+ * POST /api/shipping/auto-select
+ * Body: { to_district_id, to_ward_code }
+ * Replaces manual "pick a shipping tier" — see GhnService.autoSelectService.
+ */
+export const autoSelectService = catchAsync(
+  async (req: Request, res: Response) => {
+    const user_id = (req as any).user.user_id;
+    const { to_district_id, to_ward_code } = req.body;
+    const data = await GhnService.autoSelectService(
+      user_id,
+      Number(to_district_id),
+      String(to_ward_code),
+    );
+    res.json({ data });
+  },
+);
+
 export const estimateFee = catchAsync(async (req: Request, res: Response) => {
   const data = await GhnService.estimateFee(req.body);
   res.json({ data });

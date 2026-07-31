@@ -9,15 +9,7 @@ import * as WishlistModel from "../models/wishlist.model.js";
 export async function getProfile(user_id: number) {
   const user = await db("USER")
     .where({ user_id })
-    .select(
-      "user_id",
-      "username",
-      "email",
-      "phone",
-      "address",
-      "avatar_url",
-      "created_at",
-    )
+    .select("user_id", "username", "email", "phone", "avatar_url", "created_at")
     .first();
   if (!user) throw new ApiError(404, "User not found");
   return user;
@@ -28,7 +20,6 @@ export async function updateProfile(
   data: {
     username?: string;
     phone?: string;
-    address?: string;
     avatar_url?: string;
   },
 ) {

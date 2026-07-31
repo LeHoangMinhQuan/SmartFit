@@ -5,6 +5,13 @@ export const createProductSchema = z.object({
     name: z.string().min(1).max(20),
     description: z.string().min(1).max(100),
     category_ids: z.array(z.number().int().positive()).optional(),
+    // Used for real GHN shipping fee/service calculation — see
+    // services/ghn.service.ts#getParcelForItems. Optional: falls back to
+    // a placeholder parcel size per item when not set.
+    weight_grams: z.number().int().positive().max(50000).optional(),
+    length_cm: z.number().positive().max(200).optional(),
+    width_cm: z.number().positive().max(200).optional(),
+    height_cm: z.number().positive().max(200).optional(),
   }),
 });
 
@@ -14,6 +21,10 @@ export const updateProductSchema = z.object({
     name: z.string().min(1).max(20).optional(),
     description: z.string().min(1).max(100).optional(),
     category_ids: z.array(z.number().int().positive()).optional(),
+    weight_grams: z.number().int().positive().max(50000).optional(),
+    length_cm: z.number().positive().max(200).optional(),
+    width_cm: z.number().positive().max(200).optional(),
+    height_cm: z.number().positive().max(200).optional(),
   }),
 });
 

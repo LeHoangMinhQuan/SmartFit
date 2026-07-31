@@ -56,6 +56,14 @@ export default function ProductForm({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [savingInfo, setSavingInfo] = useState(false);
+  // Used for real GHN shipping fee/service calculation (see
+  // services/ghn.service.ts#getParcelForItems on the backend) instead of
+  // a hardcoded placeholder parcel. Kept as strings so the input can be
+  // empty ("not set yet") rather than forced to 0.
+  const [weightGrams, setWeightGrams] = useState("");
+  const [lengthCm, setLengthCm] = useState("");
+  const [widthCm, setWidthCm] = useState("");
+  const [heightCm, setHeightCm] = useState("");
 
   // Tab 3 — Images
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -73,6 +81,10 @@ export default function ProductForm({
     if (product) {
       setName(product.name);
       setDescription(product.description);
+      setWeightGrams(product.weight_grams?.toString() ?? "");
+      setLengthCm(product.length_cm?.toString() ?? "");
+      setWidthCm(product.width_cm?.toString() ?? "");
+      setHeightCm(product.height_cm?.toString() ?? "");
       setSelectedCategoryIds(
         (product.categories ?? []).map((c) => c.category_id),
       );
@@ -105,14 +117,25 @@ export default function ProductForm({
     }
     setSavingInfo(true);
     try {
+      const dims = {
+        weight_grams: weightGrams ? Number(weightGrams) : undefined,
+        length_cm: lengthCm ? Number(lengthCm) : undefined,
+        width_cm: widthCm ? Number(widthCm) : undefined,
+        height_cm: heightCm ? Number(heightCm) : undefined,
+      };
       if (savedProductId) {
-        await adminService.updateProduct(savedProductId, { name, description });
+        await adminService.updateProduct(savedProductId, {
+          name,
+          description,
+          ...dims,
+        });
         toast.success("Product updated.");
         invalidateProduct();
       } else {
         const { product_id } = await adminService.createProduct({
           name,
           description,
+          ...dims,
         });
 
         // Update the state (React handles this asynchronously)
@@ -272,6 +295,47 @@ export default function ProductForm({
             maxLength={100}
             hint="Max 100 characters"
           />
+
+          <div>
+            <p className="mb-1 text-xs font-medium text-gray-500">
+              Shipping dimensions
+            </p>
+            <p className="mb-2 text-xs text-gray-400">
+              Used to calculate real shipping fees. Leave blank to use a default
+              placeholder parcel.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Weight (g)"
+                type="number"
+                min={1}
+                value={weightGrams}
+                onChange={(e) => setWeightGrams(e.target.value)}
+              />
+              <Input
+                label="Length (cm)"
+                type="number"
+                min={1}
+                value={lengthCm}
+                onChange={(e) => setLengthCm(e.target.value)}
+              />
+              <Input
+                label="Width (cm)"
+                type="number"
+                min={1}
+                value={widthCm}
+                onChange={(e) => setWidthCm(e.target.value)}
+              />
+              <Input
+                label="Height (cm)"
+                type="number"
+                min={1}
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="flex gap-2">
             <button
               type="submit"

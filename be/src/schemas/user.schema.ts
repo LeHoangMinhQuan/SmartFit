@@ -8,7 +8,6 @@ export const updateProfileSchema = z.object({
       .length(10)
       .regex(/^\d+$/, "Phone must be digits only")
       .optional(),
-    address: z.string().max(70).optional(),
     avatar_url: z.string().url().optional(),
   }),
 });

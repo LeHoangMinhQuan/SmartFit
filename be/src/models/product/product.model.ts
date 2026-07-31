@@ -8,6 +8,13 @@ export interface Product {
   name: string;
   description: string;
   is_active?: boolean;
+  // Used for real GHN fee/service calculation instead of a hardcoded
+  // placeholder parcel (see services/ghn.service.ts#getParcelForItems).
+  // Nullable — falls back to PLACEHOLDER_PARCEL per item when unset.
+  weight_grams?: number | null;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
 }
 
 export async function createProduct(
@@ -15,12 +22,6 @@ export async function createProduct(
 ): Promise<number> {
   const [row] = await db("product").insert(data).returning("product_id");
   return row.product_id;
-}
-
-/** All product_ids, unpaginated — used by the chatbot's reindexAll bulk job. */
-export async function findAllProductIds(): Promise<number[]> {
-  const rows = await db("product").select("product_id").orderBy("product_id");
-  return rows.map((r: { product_id: number }) => r.product_id);
 }
 
 export async function findProductById(product_id: number) {

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createOrderSchema = z.object({
   body: z.object({
     payment_method_id: z.number().int().positive(),
-    shipping_address: z.string().min(1).max(70),
+    shipping_address: z.string().min(1).max(255),
     ward_id: z.number().int().positive(),
     voucher_code: z.string().optional(),
   }),

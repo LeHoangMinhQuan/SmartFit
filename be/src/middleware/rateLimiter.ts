@@ -66,3 +66,25 @@ export const passwordResetLimiter = rateLimit({
     message: "Too many password reset requests. Please try again in an hour.",
   },
 });
+
+/**
+ * Chatbot limiter — 15 messages per 10 minutes, keyed by user_id rather
+ * than IP (the default). This runs after `authenticate` in the route
+ * chain, so req.user is always populated by the time this middleware
+ * executes — what's being rate-limited is per-account Gemini spend, not
+ * per-IP request volume, so IP would be the wrong key even if a user
+ * switched networks. Runs before the controller starts streaming, so a
+ * 429 is a normal pre-stream JSON response, never a mid-stream cutoff.
+ */
+export const chatLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  limit: 15,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.user_id.toString() ?? req.ip ?? "unknown",
+  message: {
+    status: "error",
+    statusCode: 429,
+    message: "Too many chat messages. Please wait a few minutes.",
+  },
+});

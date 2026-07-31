@@ -29,6 +29,8 @@ tags:
   - name: Inventory
   - name: Admin
   - name: TryOn
+  - name: Chat
+  - name: Chat Admin
   - name: Uploads
 
 # ─── Reusable components ────────────────────────────────────────────────────────
@@ -228,6 +230,30 @@ components:
           nullable: true
           description: "Present only when status=failed"
           enum: [endpoint_not_registered, endpoint_offline, inference_error, timeout]
+
+    ChatMessage:
+      type: object
+      properties:
+        message_id: { type: integer }
+        session_id: { type: integer }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        metadata:
+          type: object
+          nullable: true
+          description: >
+            Assistant messages only. { tool_calls: [{ tool, input, output }] } —
+            present when search_products and/or add_to_cart were called this turn.
+        created_at: { type: string, format: date-time }
+
+    ChatSessionHistory:
+      type: object
+      description: Response of GET /chat/session/{session_id}. Returned directly, no `data` envelope.
+      properties:
+        session_id: { type: integer }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/ChatMessage" }
 
 # ─── Paths ──────────────────────────────────────────────────────────────────────
 paths:
@@ -2422,6 +2448,115 @@ paths:
                 $ref: "#/components/schemas/TryonPollResult"
         "403": { description: Not your try-on session }
         "404": { description: Try-on session not found }
+
+  # ── Chat (AI Shopping Assistant) ────────────────────────────────────────────
+  /chat/message:
+    post:
+      tags: [Chat]
+      summary: Send a message to the AI shopping assistant (JWT) — rate limited 15/10min per user
+      description: >
+        **Response is a stream, not a single JSON body** — this is the one
+        endpoint in this API that breaks from the plain-JSON convention.
+        The body follows the AI SDK's UI-message data-stream protocol (an
+        SSE-formatted sequence of chunks: text deltas, tool-call/tool-result
+        events, finish events). Consume it with `@ai-sdk/react`'s `useChat`
+        on the frontend, or a raw SSE-aware client for testing (Postman can
+        display streamed bodies incrementally). The resolved `session_id` —
+        a newly created one, if the request omitted it — comes back in the
+        `X-Chat-Session-Id` response header, not the stream body.
+      security: [{ userAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                session_id:
+                  type: integer
+                  description: Omit to start a new session
+                message: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200":
+          description: >
+            UI-message data stream (SSE-formatted). See description above —
+            not representable as a single application/json schema.
+          headers:
+            X-Chat-Session-Id:
+              schema: { type: integer }
+              description: The session this message belongs to (new or existing)
+        "403": { description: Not your chat session (session_id belongs to another user) }
+        "404": { description: Chat session not found }
+        "422": { description: Validation failed — message missing/empty/too long }
+        "429": { description: Rate limit — 15 messages per 10 minutes per user }
+
+  /chat/session/{session_id}:
+    get:
+      tags: [Chat]
+      summary: Get a chat session's recent message history (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: session_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "200":
+          {
+            description: "Response body is ChatSessionHistory directly, no `data` envelope",
+            content:
+              {
+                application/json:
+                  { schema: { $ref: "#/components/schemas/ChatSessionHistory" } },
+              },
+          }
+        "403": { description: Not your chat session }
+        "404": { description: Chat session not found }
+    delete:
+      tags: [Chat]
+      summary: Delete a chat session and its message history (JWT)
+      security: [{ userAuth: [] }]
+      parameters:
+        - {
+            name: session_id,
+            in: path,
+            required: true,
+            schema: { type: integer },
+          }
+      responses:
+        "204": { description: Deleted }
+        "403": { description: Not your chat session }
+        "404": { description: Chat session not found }
+
+  /admin/chat/reindex:
+    post:
+      tags: [Chat Admin]
+      summary: Re-embed every product in the catalog (Staff, admin role only)
+      description: >
+        Bulk backfill/refresh of product_embedding. Needed once at bootstrap
+        and after any manual DB edits or seed script runs, since normal
+        catalog writes already keep embeddings current on their own.
+      security: [{ staffAuth: [] }]
+      responses:
+        "200":
+          {
+            description: Reindex complete,
+            content:
+              {
+                application/json:
+                  {
+                    schema:
+                      {
+                        type: object,
+                        properties: { reindexed_count: { type: integer } },
+                      },
+                  },
+              },
+          }
+        "403": { description: Staff role is not admin }
 
   # ── Health ───────────────────────────────────────────────────────────────────
   /health:

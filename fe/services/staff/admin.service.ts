@@ -39,6 +39,12 @@ export interface DashboardStats {
 interface CreateProductBody {
   name: string; // VARCHAR(20)
   description: string; // VARCHAR(100)
+  // Used for real GHN shipping fee/service calculation — optional, falls
+  // back to a placeholder parcel per item when unset.
+  weight_grams?: number;
+  length_cm?: number;
+  width_cm?: number;
+  height_cm?: number;
 }
 
 interface CreateVariantBody {
