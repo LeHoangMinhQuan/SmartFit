@@ -24,6 +24,13 @@ export async function createProduct(
   return row.product_id;
 }
 
+/** All product_ids, unpaginated — used by the chatbot's reindexAll bulk job. */
+export async function findAllProductIds(): Promise<number[]> {
+  const rows = await db("product").select("product_id").orderBy("product_id");
+  return rows.map((r: { product_id: number }) => r.product_id);
+}
+
+
 export async function findProductById(product_id: number) {
   return db("product").where({ product_id }).first();
 }
