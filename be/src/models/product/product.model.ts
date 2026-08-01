@@ -129,7 +129,6 @@ export async function findAllProducts(filters: {
   const countResult = (await countQuery) as { total: string | number }[];
   const total = countResult[0]?.total ?? 0;
   const rows = await query;
-  console.log("rows returned from findAllProducts: ", rows);
 
   return { rows, total: Number(total) };
 }
