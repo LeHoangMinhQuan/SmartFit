@@ -96,6 +96,7 @@ export default function StaffDashboardPage() {
                 <th className="px-4 py-3 text-right text-slate-800">
                   Units Sold
                 </th>
+                <th className="px-4 py-3 text-right text-slate-800">Revenue</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -104,6 +105,9 @@ export default function StaffDashboardPage() {
                   <td className="px-4 py-3 text-slate-800">{p.name}</td>
                   <td className="px-4 py-3 text-right font-medium text-slate-800">
                     {p.sold}
+                  </td>
+                  <td className="px-4 py-3 text-right font-medium text-slate-800">
+                    {formatPrice(p.revenue)}
                   </td>
                 </tr>
               ))}

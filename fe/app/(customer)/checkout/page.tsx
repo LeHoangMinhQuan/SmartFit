@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cartService } from "../../../services/cart.service";
 import { orderService } from "../../../services/order.service";
 import { paymentService } from "../../../services/payment.service";
@@ -32,6 +32,8 @@ export default function CheckoutPage() {
   const user = useAuthStore((s) => s.user);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const { clearItems } = useCartStore();
+  const queryClient = useQueryClient();
+  const checkoutQueryKey = ["checkout", user?.user_id];
 
   const [step, setStep] = useState<Step>("address");
 
@@ -69,7 +71,7 @@ export default function CheckoutPage() {
   // the page falls through to the "cart is empty" state before it's ever
   // actually asked the server.
   const { data: checkoutData, isLoading: loading } = useQuery({
-    queryKey: ["checkout", user?.user_id],
+    queryKey: checkoutQueryKey,
     queryFn: async () => {
       const [cart, addrs] = await Promise.all([
         cartService.getCart(),
@@ -104,6 +106,39 @@ export default function CheckoutPage() {
   const subtotal = cartTotal;
   const discount = voucher?.discount_amount ?? 0;
   const total = Math.max(0, subtotal + shippingFee - discount);
+
+  // Previously, an address typed into the "new address" form here only
+  // ever lived in local component state (newAddress) — it was used to
+  // place this one order and then discarded, so it never showed up in
+  // the AddressBook and had to be re-typed on every future checkout. This
+  // persists it via the same POST /users/me/addresses AddressBook.tsx
+  // already uses, the moment the customer confirms it and moves on to
+  // the shipping step (not just at final order placement), so it's saved
+  // even if they abandon checkout after this step.
+  const saveNewAddressMutation = useMutation({
+    mutationFn: (addr: AddressFormValues) => userService.addAddress(addr),
+    onSuccess: (result) => {
+      // Switch over to the now-saved address (so formatFullAddress etc.
+      // read from the authoritative server copy, with province/district/
+      // ward names included) instead of continuing to use the local,
+      // name-less newAddress object.
+      setSelectedAddressId(result.address_id);
+      setUseNew(false);
+      setNewAddress({});
+      queryClient.invalidateQueries({ queryKey: checkoutQueryKey });
+      setStep("shipping");
+    },
+    onError: () => {
+      // Non-blocking — the customer already has a complete address in
+      // `newAddress` and checkout can proceed with it as before; only the
+      // "save for next time" part failed, and re-typing it on the next
+      // visit is the worst case, not a broken checkout.
+      toast.error(
+        "Couldn't save this address for next time, but you can continue checkout.",
+      );
+      setStep("shipping");
+    },
+  });
 
   const placeOrderMutation = useMutation({
     mutationFn: async () => {
@@ -275,22 +310,40 @@ export default function CheckoutPage() {
                         toast.error("Select an address to continue.");
                         return;
                       }
+                      if (useNew) {
+                        if (
+                          !newAddress.address_line ||
+                          !newAddress.province_id ||
+                          !newAddress.district_id ||
+                          !newAddress.ward_id
+                        ) {
+                          toast.error("Fill in the full address first.");
+                          return;
+                        }
+                        saveNewAddressMutation.mutate(
+                          newAddress as AddressFormValues,
+                        );
+                        return;
+                      }
                       setStep("shipping");
                     }}
-                    className="mt-2 self-end rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    disabled={saveNewAddressMutation.isPending}
+                    className="mt-2 self-end rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
                   >
-                    Continue to Shipping
+                    {saveNewAddressMutation.isPending
+                      ? "Saving address…"
+                      : "Continue to Shipping"}
                   </button>
                 </div>
               ) : (
-                activeAddress && (
+                (activeAddress || (useNew && newAddress.address_line)) && (
                   <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                    {activeAddress.label && (
+                    {activeAddress?.label && (
                       <span className="font-semibold text-slate-900">
                         {activeAddress.label} —{" "}
                       </span>
                     )}
-                    {formatFullAddress(activeAddress)}
+                    {formatFullAddress(activeAddress ?? newAddress)}
                   </div>
                 )
               )}

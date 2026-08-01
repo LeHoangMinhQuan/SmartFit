@@ -81,6 +81,55 @@ export async function createPaymentUrl(
   return { paymentUrl, vnpay_txn_ref };
 }
 
+// ─── Shared: apply a verified/queried VNPay result ─────────────────────────────
+// Used by both handleIpn (server-to-server push) and reconcilePendingOrder
+// (pull-based fallback, see below) so "what happens when we learn a
+// transaction succeeded or failed" only exists in one place.
+async function applyPaymentResult(
+  existing: { order_id: number; vnpay_txn_ref: string },
+  isSuccess: boolean,
+  fields: {
+    bankCode?: string | null;
+    payDate?: string | null;
+    transactionNo?: string | null;
+    responseCode?: string | null;
+  },
+): Promise<void> {
+  const newStatus: "success" | "failed" = isSuccess ? "success" : "failed";
+
+  await db.transaction(async (trx) => {
+    await trx("payment_transaction")
+      .where({ vnpay_txn_ref: existing.vnpay_txn_ref, status: "pending" })
+      .update({
+        status: newStatus,
+        vnpay_bank_code: fields.bankCode ?? null,
+        vnpay_pay_date: fields.payDate ?? null,
+        vnpay_transaction_no: fields.transactionNo ?? null,
+        vnpay_response_code: fields.responseCode ?? null,
+      });
+    const order_id = existing.order_id;
+    const orderStatus = isSuccess ? "paid" : "payment_failed";
+    await trx("ORDER")
+      .where({ order_id })
+      .update({ status: orderStatus, updated_at: db.fn.now() });
+  });
+
+  if (isSuccess) {
+    const order_id = existing.order_id;
+    setImmediate(async () => {
+      try {
+        const { createShipmentForOrder } = await import("./ghn.service.js");
+        await createShipmentForOrder(order_id);
+      } catch (err) {
+        console.error(
+          `[payment] GHN shipment creation failed for order ${order_id}:`,
+          err,
+        );
+      }
+    });
+  }
+}
+
 // ─── IPN Handler ─────────────────────────────────────────────────────────────
 // MUST respond with { RspCode, Message } — never call next(err) here.
 
@@ -116,47 +165,119 @@ export async function handleIpn(
   }
 
   const isSuccess = verify.isSuccess; // SDK checks vnp_ResponseCode === "00"
-  const newStatus: "success" | "failed" = isSuccess ? "success" : "failed";
 
-  // 3. Update transaction + order — translate the verified vnp_* wire fields
-  //    into our internal vnpay_* storage convention
-  await db.transaction(async (trx) => {
-    await trx("payment_transaction")
-      .where({ vnpay_txn_ref, status: "pending" })
-      .update({
-        status: newStatus,
-        vnpay_bank_code: verify.vnp_BankCode ?? null,
-        vnpay_pay_date:
-          verify.vnp_PayDate != null ? String(verify.vnp_PayDate) : null,
-        vnpay_transaction_no:
-          verify.vnp_TransactionNo != null
-            ? String(verify.vnp_TransactionNo)
-            : null,
-        vnpay_response_code: String(verify.vnp_ResponseCode),
-      });
-    console.log("existing.order_id: ", existing.order_id);
-    const order_id = existing.order_id;
-    const orderStatus = isSuccess ? "paid" : "payment_failed";
-    await trx("ORDER")
-      .where({ order_id })
-      .update({ status: orderStatus, updated_at: db.fn.now() });
+  // 3. Update transaction + order (shared with reconcilePendingOrder below)
+  await applyPaymentResult(existing, isSuccess, {
+    bankCode: verify.vnp_BankCode,
+    payDate: verify.vnp_PayDate != null ? String(verify.vnp_PayDate) : null,
+    transactionNo:
+      verify.vnp_TransactionNo != null
+        ? String(verify.vnp_TransactionNo)
+        : null,
+    responseCode: String(verify.vnp_ResponseCode),
   });
 
-  // 4. If paid, trigger GHN shipment creation asynchronously (non-blocking)
-  if (isSuccess) {
-    const order_id = existing.order_id;
-    setImmediate(async () => {
-      try {
-        const { createShipmentForOrder } = await import("./ghn.service.js");
-        await createShipmentForOrder(order_id);
-      } catch (err) {
-        console.error(
-          `[IPN] GHN shipment creation failed for order ${order_id}:`,
-          err,
-        );
-      }
-    });
-  }
-
   return { RspCode: "00", Message: "Confirmed" };
+}
+
+// ─── Reconciliation (pull-based fallback for missed/undelivered IPNs) ────────
+//
+// NOTE (2026-08-01): added after tracing "order stuck in pending_payment /
+// shows cancelled despite being paid" back to two compounding issues:
+//   1. IPN is the *only* path that ever marks an order 'paid' — it's a
+//      server-to-server callback VNPay makes to a URL registered in
+//      VNPay's merchant portal (VNPAY_IPN_URL is defined in env/config
+//      purely as documentation of what should be registered there — it
+//      was never actually passed to any VNPay API call in this codebase,
+//      so if that portal registration is wrong/stale/unreachable, VNPay
+//      simply never calls back and nothing here would ever know).
+//   2. expireStalePendingOrders() (order.service.ts) cancels + restores
+//      stock for anything still 'pending_payment' after
+//      PENDING_PAYMENT_TIMEOUT_MINUTES, purely on elapsed time — it has no
+//      way to distinguish "customer abandoned checkout" from "customer
+//      paid, but the IPN never arrived" before now.
+//
+// This calls VNPay's own transaction-query API (queryDr) — the officially
+// documented fallback for exactly this scenario — to actually check
+// before assuming (1) failed. Called from expireStalePendingOrders() for
+// each stale order, just before it would otherwise be cancelled.
+//
+// IMPORTANT — verify against your sandbox before trusting this in
+// production: I don't have the `vnpay` package's installed type
+// definitions or network access to its docs site in this environment, so
+// the exact field/response shape below is built from the SDK's own
+// published example (github.com/lehuygiang28/vnpay, example/index.ts) and
+// its verifyIpnCall's `.isSuccess`/`.isVerified` convention for the return
+// shape, not a confirmed-working call. It's wrapped so a wrong assumption
+// here fails safe: any error, or any response shape that doesn't clearly
+// say "success", leaves the transaction alone and lets
+// expireStalePendingOrders() fall through to its existing
+// cancel-on-timeout behavior — exactly what happens today without this
+// function. It cannot make things worse than the current behavior, only
+// better once confirmed working. Log output during your first real test
+// (a payment where you deliberately block/delay the IPN) will show the
+// raw queryDr response — adjust the field reads below to match if they
+// don't line up.
+export async function reconcilePendingOrder(order_id: number): Promise<void> {
+  try {
+    const transaction = await PaymentModel.findTransactionByOrderId(order_id);
+    if (!transaction || transaction.status !== "pending") return;
+
+    const createDate = new Date(transaction.created_at ?? Date.now());
+    const queryResult = await vnpayClient.queryDr({
+      vnp_RequestId: `reconcile-${transaction.transaction_id}-${Date.now()}`,
+      vnp_TxnRef: transaction.vnpay_txn_ref,
+      vnp_OrderInfo: `Reconcile order ${order_id}`,
+      vnp_TransactionDate: createDate.getTime(),
+      vnp_CreateDate: createDate.getTime(),
+      vnp_IpAddr: "127.0.0.1",
+      vnp_TransactionNo: Number(transaction.vnpay_transaction_no) || 0,
+    } as any);
+
+    console.log(
+      `[reconcile] order ${order_id} queryDr raw response:`,
+      queryResult,
+    );
+
+    const result = queryResult as any;
+    // Prefer the SDK's normalized flag if it provides one (matching
+    // verifyIpnCall's .isSuccess elsewhere in this file); fall back to
+    // VNPay's raw vnp_TransactionStatus ("00" = success per VNPay's spec).
+    const isSuccess =
+      result?.isSuccess === true || result?.vnp_TransactionStatus === "00";
+    const isDefinitiveFailure =
+      result?.isSuccess === false ||
+      (typeof result?.vnp_TransactionStatus === "string" &&
+        result.vnp_TransactionStatus !== "00" &&
+        result.vnp_TransactionStatus !== "01"); // "01" = VNPay's own "not yet completed"
+
+    if (!isSuccess && !isDefinitiveFailure) {
+      // VNPay itself doesn't have a definitive answer yet either — leave
+      // it 'pending' and let the timeout sweep's existing cancel-on-
+      // timeout behavior handle it as before.
+      return;
+    }
+
+    await applyPaymentResult(transaction, isSuccess, {
+      bankCode: result?.vnp_BankCode ?? null,
+      payDate: result?.vnp_PayDate != null ? String(result.vnp_PayDate) : null,
+      transactionNo:
+        result?.vnp_TransactionNo != null
+          ? String(result.vnp_TransactionNo)
+          : null,
+      responseCode:
+        result?.vnp_ResponseCode != null
+          ? String(result.vnp_ResponseCode)
+          : null,
+    });
+
+    console.log(
+      `[reconcile] order ${order_id} recovered via queryDr — marked ${isSuccess ? "paid" : "payment_failed"} instead of being cancelled by the timeout sweep`,
+    );
+  } catch (err) {
+    // Fails safe — see the function doc comment. Never throw: the caller
+    // (expireStalePendingOrders) must still proceed to its existing
+    // cancel-on-timeout behavior for this order.
+    console.error(`[reconcile] queryDr failed for order ${order_id}:`, err);
+  }
 }
