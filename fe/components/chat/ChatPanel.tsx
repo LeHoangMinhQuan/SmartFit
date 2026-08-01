@@ -42,61 +42,62 @@ export default function ChatPanel() {
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { messages, sendMessage, status, error } = useChat<ChatUIMessage>({
-    transport: new DefaultChatTransport<ChatUIMessage>({
-      api: `${API_BASE_URL}/chat/message`,
-      // Auth is httpOnly-cookie based (see lib/axios.ts) — this transport
-      // bypasses the axios instance entirely (useChat manages its own
-      // fetch), so credentials have to be opted into here separately or
-      // the session cookie never gets sent.
-      credentials: "include",
-      // The backend's POST /chat/message expects { session_id?, message },
-      // not the AI SDK's default full-messages-array body — translate here
-      // rather than changing the backend's plain-REST contract to match
-      // the SDK's own protocol.
-      prepareSendMessagesRequest: ({ messages: allMessages }) => {
-        const last = allMessages[allMessages.length - 1];
-        const text =
-          last?.parts
-            .filter(
-              (p): p is { type: "text"; text: string } => p.type === "text",
-            )
-            .map((p) => p.text)
-            .join("") ?? "";
-        // Read live rather than closing over it, since this transport is
-        // constructed once but sessionId changes after the first reply.
-        const currentSessionId = useChatUiStore.getState().sessionId;
-        console.log("[ChatPanel] sending request", {
-          text,
-          currentSessionId,
+  const { messages, sendMessage, status, error, setMessages } =
+    useChat<ChatUIMessage>({
+      transport: new DefaultChatTransport<ChatUIMessage>({
+        api: `${API_BASE_URL}/chat/message`,
+        // Auth is httpOnly-cookie based (see lib/axios.ts) — this transport
+        // bypasses the axios instance entirely (useChat manages its own
+        // fetch), so credentials have to be opted into here separately or
+        // the session cookie never gets sent.
+        credentials: "include",
+        // The backend's POST /chat/message expects { session_id?, message },
+        // not the AI SDK's default full-messages-array body — translate here
+        // rather than changing the backend's plain-REST contract to match
+        // the SDK's own protocol.
+        prepareSendMessagesRequest: ({ messages: allMessages }) => {
+          const last = allMessages[allMessages.length - 1];
+          const text =
+            last?.parts
+              .filter(
+                (p): p is { type: "text"; text: string } => p.type === "text",
+              )
+              .map((p) => p.text)
+              .join("") ?? "";
+          // Read live rather than closing over it, since this transport is
+          // constructed once but sessionId changes after the first reply.
+          const currentSessionId = useChatUiStore.getState().sessionId;
+          console.log("[ChatPanel] sending request", {
+            text,
+            currentSessionId,
+          });
+          return {
+            body: {
+              message: text,
+              ...(currentSessionId ? { session_id: currentSessionId } : {}),
+            },
+          };
+        },
+      }),
+      onFinish: ({ message }) => {
+        console.log("[ChatPanel] onFinish fired", {
+          message_id: message.id,
+          role: message.role,
+          parts_count: message.parts.length,
+          metadata: message.metadata,
         });
-        return {
-          body: {
-            message: text,
-            ...(currentSessionId ? { session_id: currentSessionId } : {}),
-          },
-        };
+        const newSessionId = message.metadata?.session_id;
+        if (newSessionId) setSessionId(newSessionId);
       },
-    }),
-    onFinish: ({ message }) => {
-      console.log("[ChatPanel] onFinish fired", {
-        message_id: message.id,
-        role: message.role,
-        parts_count: message.parts.length,
-        metadata: message.metadata,
-      });
-      const newSessionId = message.metadata?.session_id;
-      if (newSessionId) setSessionId(newSessionId);
-    },
-    onError: (err) => {
-      // DEBUG: useChat's onError only fires for transport-level failures
-      // (non-ok HTTP response, network error, stream-parse error) — it
-      // does NOT fire just because the stream is slow/stalled. If nothing
-      // logs here AND onFinish above never fires either, the stream is
-      // genuinely hanging server-side (check backend logs), not erroring.
-      console.error("[ChatPanel] onError fired", err);
-    },
-  });
+      onError: (err) => {
+        // DEBUG: useChat's onError only fires for transport-level failures
+        // (non-ok HTTP response, network error, stream-parse error) — it
+        // does NOT fire just because the stream is slow/stalled. If nothing
+        // logs here AND onFinish above never fires either, the stream is
+        // genuinely hanging server-side (check backend logs), not erroring.
+        console.error("[ChatPanel] onError fired", err);
+      },
+    });
 
   // DEBUG: status is the single source of truth for "is the UI stuck
   // loading" — trace every transition so you can see exactly which state

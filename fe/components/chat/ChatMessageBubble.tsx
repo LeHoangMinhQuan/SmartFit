@@ -45,8 +45,15 @@ export default function ChatMessageBubble({ message }: ChatMessageBubbleProps) {
                 </p>
               );
             }
-            const cards = part.output as ChatProductCardData[];
-            if (!cards.length) {
+            const output = part.output as ChatProductCardData[] | ChatToolError;
+            if ("error" in output) {
+              return (
+                <p key={i} className="text-xs text-red-600">
+                  {output.error}
+                </p>
+              );
+            }
+            if (!output.length) {
               return (
                 <p key={i} className="text-xs text-gray-500">
                   No matching products found.
@@ -55,7 +62,7 @@ export default function ChatMessageBubble({ message }: ChatMessageBubbleProps) {
             }
             return (
               <div key={i} className="space-y-2">
-                {cards.map((card) => (
+                {output.map((card) => (
                   <ChatProductCard key={card.product_id} {...card} />
                 ))}
               </div>
