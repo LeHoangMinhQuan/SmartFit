@@ -135,7 +135,9 @@ export async function vectorSearch(
   const vectorLiteral = `[${queryEmbedding.join(",")}]`;
 
   let qb = db("product_embedding as pe")
+    .join("product as p", "pe.product_id", "p.product_id")
     .select("pe.product_id")
+    .where("p.is_active", true)
     .orderByRaw("pe.embedding <=> ?::vector", [vectorLiteral])
     .limit(k);
 
@@ -158,7 +160,9 @@ export async function keywordSearch(
   filters?: SearchFilters,
 ): Promise<RankedRow[]> {
   let qb = db("product_embedding as pe")
+    .join("product as p", "pe.product_id", "p.product_id")
     .select("pe.product_id")
+    .where("p.is_active", true)
     .whereRaw("pe.content_tsv @@ websearch_to_tsquery('simple', ?)", [query])
     .orderByRaw(
       "ts_rank(pe.content_tsv, websearch_to_tsquery('simple', ?)) DESC",

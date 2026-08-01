@@ -198,14 +198,34 @@ export async function expireStalePendingOrders(): Promise<number> {
   );
   if (!staleOrders.length) return 0;
 
+  // NOTE (2026-08-01): reconcilePendingOrder() (vnpay.service.ts) existed
+  // since the last session but was never actually called from here — the
+  // doc comment on it claimed this wiring already existed; it didn't. That
+  // gap is why a payment VNPay itself confirms as successful could still
+  // end up auto-cancelled by the block below: nothing ever checked VNPay's
+  // own record of the transaction before assuming "timed out" meant
+  // "failed". Dynamic import avoids a circular import — vnpay.service.ts
+  // already imports expireStalePendingOrders from this file.
+  const { reconcilePendingOrder } = await import("./vnpay.service.js");
+  const stillStale: typeof staleOrders = [];
+  for (const order of staleOrders) {
+    await reconcilePendingOrder(order.order_id);
+    // Re-check status — reconcilePendingOrder may have just marked this
+    // order 'paid'/'payment_failed' itself, in which case it's no longer
+    // pending_payment and must NOT be swept into 'cancelled' below.
+    const refreshed = await OrderModel.findOrderById(order.order_id);
+    if (refreshed?.status === "pending_payment") stillStale.push(order);
+  }
+  if (!stillStale.length) return 0;
+
   await db.transaction(async (trx) => {
-    for (const order of staleOrders) {
+    for (const order of stillStale) {
       await restoreStockAndCancelOrder(trx, order.order_id);
       await PaymentModel.failPendingTransactionsForOrder(order.order_id, trx);
     }
   });
 
-  return staleOrders.length;
+  return stillStale.length;
 }
 
 export async function getUserOrders(
@@ -219,8 +239,23 @@ export async function getUserOrders(
 
 export async function getOrderDetail(order_id: number, user_id: number) {
   await expireStalePendingOrders();
-  const order = await OrderModel.findOrderByIdAndUser(order_id, user_id);
+  let order = await OrderModel.findOrderByIdAndUser(order_id, user_id);
   if (!order) throw new ApiError(404, "Order not found");
+
+  // NOTE (2026-08-01): previously, an order only ever got reconciled
+  // against VNPay's own record once it turned 15 minutes old (the sweep
+  // above) — and even that never actually ran until the fix in
+  // expireStalePendingOrders() just above. A customer polling this
+  // endpoint right after returning from VNPay (see PageContent.tsx's
+  // retry logic) was polling a value nothing was updating in between,
+  // for up to 15 minutes. Reconciling the specific order being looked at,
+  // regardless of its age, is what makes that polling actually converge
+  // quickly instead of only ever resolving via the slow sweep.
+  if (order.status === "pending_payment") {
+    const { reconcilePendingOrder } = await import("./vnpay.service.js");
+    await reconcilePendingOrder(order_id);
+    order = (await OrderModel.findOrderByIdAndUser(order_id, user_id)) ?? order;
+  }
 
   const [items, shipping] = await Promise.all([
     OrderModel.findOrderItems(order_id),
@@ -276,8 +311,15 @@ export async function adminUpdateStatus(order_id: number, newStatus: string) {
 
 export async function adminGetOrderDetail(order_id: number) {
   await expireStalePendingOrders();
-  const order = await OrderModel.findOrderById(order_id);
+  let order = await OrderModel.findOrderById(order_id);
   if (!order) throw new ApiError(404, "Order not found");
+
+  if (order.status === "pending_payment") {
+    const { reconcilePendingOrder } = await import("./vnpay.service.js");
+    await reconcilePendingOrder(order_id);
+    order = (await OrderModel.findOrderById(order_id)) ?? order;
+  }
+
   const items = await OrderModel.findOrderItems(order_id);
   const shipping = await ShippingModel.findShippingOrderByOrderId(order_id);
   return { ...order, items, shipping };

@@ -5,6 +5,35 @@ import * as AttributeModel from "../models/attribute.model.js";
 import * as CategoryModel from "../models/category.model.js";
 import * as ReviewModel from "../models/review.model.js";
 import { Category } from "../models/category.model.js";
+import * as EmbeddingService from "./embedding.service.js";
+
+/**
+ * NOTE (2026-08-01): embedding.service.ts's own doc comment has claimed
+ * since Phase 3 that upsertProductEmbedding is "hooked into
+ * product.service.ts's create/update paths (product, variant, attribute,
+ * category, price)" — but no such hook ever actually existed anywhere in
+ * this file. product_embedding was therefore only ever populated by
+ * explicitly calling POST /api/admin/chat/reindex, which is why
+ * search_products returned zero results for every query regardless of
+ * model choice: the table was empty (or missing every product added/
+ * edited since the last manual reindex).
+ *
+ * Fails safe like the VNPay reconciliation fix — a re-embed failure
+ * (budget exhausted, Gemini down, etc.) must never fail the product
+ * mutation the staff member is actually trying to do. Worst case, that
+ * one product's embedding goes stale until the next manual reindex,
+ * exactly like before this fix existed.
+ */
+async function reembedProductSafely(product_id: number): Promise<void> {
+  try {
+    await EmbeddingService.upsertProductEmbedding(product_id);
+  } catch (err) {
+    console.error(
+      `[product.service] Failed to re-embed product ${product_id} after a catalog edit — it will show stale/missing in chatbot search until the next POST /api/admin/chat/reindex:`,
+      err,
+    );
+  }
+}
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +88,7 @@ export async function createProduct(data: {
   if (data.category_ids?.length) {
     await ProductModel.setProductCategories(product_id, data.category_ids);
   }
+  await reembedProductSafely(product_id);
   return { product_id };
 }
 
@@ -89,6 +119,7 @@ export async function updateProduct(
   if (data.category_ids)
     await ProductModel.setProductCategories(product_id, data.category_ids);
 
+  await reembedProductSafely(product_id);
   return ProductModel.findProductById(product_id);
 }
 
@@ -157,6 +188,7 @@ export async function upsertVariantPrice(
   }
 
   await PriceModel.upsertProductPrice({ product_id, variant_id, ...data });
+  await reembedProductSafely(product_id);
 }
 
 // ─── Attributes ───────────────────────────────────────────────────────────────
@@ -196,6 +228,7 @@ export async function attachAttribute(
     product_id,
     variant_id,
   });
+  await reembedProductSafely(product_id);
 }
 
 export async function updateAttributeValue(
@@ -216,6 +249,7 @@ export async function updateAttributeValue(
     variant_id,
     value,
   );
+  await reembedProductSafely(product_id);
 }
 
 export async function removeAttribute(
@@ -234,6 +268,7 @@ export async function removeAttribute(
     product_id,
     variant_id,
   );
+  await reembedProductSafely(product_id);
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────

@@ -16,8 +16,11 @@ type Tab = "stock" | "history";
 
 interface InventoryRow {
   product_id: number;
+  product_name: string;
   variant_id: number;
+  variant_name: string;
   store_id: number;
+  store_name: string;
   quantity: number;
 }
 
@@ -304,8 +307,8 @@ export default function StaffInventoryPage() {
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <DataTable
               columns={[
-                { key: "product_id", header: "Product ID" },
-                { key: "variant_id", header: "Variant ID" },
+                { key: "product_name", header: "Product" },
+                { key: "variant_name", header: "Variant" },
                 { key: "quantity", header: "Current Stock" },
               ]}
               rows={stock as unknown as Record<string, unknown>[]}

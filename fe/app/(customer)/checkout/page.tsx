@@ -384,24 +384,17 @@ export default function CheckoutPage() {
                         onSelect={(id, fee) => {
                           setShippingServiceId(id);
                           setShippingFee(fee);
+                          // Shipping is auto-selected (see ShippingSelector —
+                          // GHN's tiers are a weight/size classification, not
+                          // a customer choice like "standard vs express"),
+                          // so there's nothing left for the customer to
+                          // decide here — advance straight to payment
+                          // instead of making them click a button to
+                          // confirm a choice they didn't actually make.
+                          setStep("payment");
                         }}
                       />
                     </div>
-
-                    <button
-                      onClick={() => {
-                        if (!shippingServiceId) {
-                          toast.error(
-                            "Please wait for the shipping method to finish calculating.",
-                          );
-                          return;
-                        }
-                        setStep("payment");
-                      }}
-                      className="mt-2 self-end rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-                    >
-                      Continue to Payment
-                    </button>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">

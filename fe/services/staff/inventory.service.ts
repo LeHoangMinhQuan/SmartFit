@@ -8,8 +8,11 @@ interface ApiResponse<T> {
 
 interface InventoryRow {
   product_id: number;
+  product_name: string;
   variant_id: number;
+  variant_name: string;
   store_id: number;
+  store_name: string;
   quantity: number;
 }
 
@@ -51,7 +54,7 @@ export const inventoryService = {
   ) =>
     staffApi
       .patch<
-        ApiResponse<InventoryRow>
+        ApiResponse<{ message: string }>
       >(`/admin/inventory/${product_id}/${variant_id}/${store_id}`, body)
       .then((r) => r.data.data),
 
