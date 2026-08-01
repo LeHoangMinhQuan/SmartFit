@@ -9,10 +9,9 @@
  */
 import type { Knex } from "knex";
 import { embed } from "ai";
-import { google } from "@ai-sdk/google";
 import type { GoogleGenerativeAIEmbeddingProviderOptions } from "@ai-sdk/google";
 import db from "../config/db.js";
-import { chatConfig } from "../config/chat.js";
+import { chatConfig, geminiProvider } from "../config/chat.js";
 import * as ProductModel from "../models/product/product.model.js";
 
 export interface SearchFilters {
@@ -47,7 +46,7 @@ async function embedQuery(query: string): Promise<number[]> {
   });
   const startedAt = Date.now();
   const { embedding } = await embed({
-    model: google.textEmbeddingModel(chatConfig.embeddingModel),
+    model: geminiProvider.textEmbeddingModel(chatConfig.embeddingModel),
     value: query,
     providerOptions: {
       google: {

@@ -7,10 +7,9 @@
  * here. See ecommerce-api-plan.md §11 for the design rationale.
  */
 import { streamText, tool, type ModelMessage } from "ai";
-import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { env } from "../config/env.js";
-import { chatConfig } from "../config/chat.js";
+import { chatConfig, geminiProvider } from "../config/chat.js";
 import { ApiError } from "../utils/ApiError.js";
 import * as ChatSessionModel from "../models/chat-session.model.js";
 import type { ChatMessageRow } from "../models/chat-session.model.js";
@@ -256,7 +255,7 @@ export async function sendMessage(
   });
 
   const result = streamText({
-    model: google(env.GEMINI_CHAT_MODEL),
+    model: geminiProvider(env.GEMINI_CHAT_MODEL),
     system: CHAT_SYSTEM_PROMPT,
     messages: modelMessages,
     tools: buildTools(user_id, validPairs),

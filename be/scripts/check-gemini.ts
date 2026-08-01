@@ -10,9 +10,9 @@ import { config } from "dotenv";
 config();
 
 import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 
-const model = process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-flash-lite";
+const model = process.env["GEMINI_CHAT_MODEL"] || "gemini-2.5-flash-lite";
 
 async function main() {
   if (!process.env["GEMINI_API_KEY"]) {
@@ -21,6 +21,16 @@ async function main() {
   }
 
   console.log(`[check-gemini] calling ${model}...`);
+
+  // NOT the bare `google` import — that singleton only ever reads
+  // process.env.GOOGLE_GENERATIVE_AI_API_KEY, not our custom
+  // GEMINI_API_KEY name, and throws LoadAPIKeyError regardless of a real
+  // key being present. This exact mistake shipped to production once
+  // already (see CHATBOT_BUILD_PLAN.md Phase 4 debugging notes) — this
+  // script exists specifically to catch it before that happens again.
+  const google = createGoogleGenerativeAI({
+    apiKey: process.env["GEMINI_API_KEY"],
+  });
 
   const { text } = await generateText({
     model: google(model),

@@ -7,10 +7,9 @@
  * template, and the inline-on-write + bulk-reindex trigger strategy.
  */
 import { embed } from "ai";
-import { google } from "@ai-sdk/google";
 import type { GoogleGenerativeAIEmbeddingProviderOptions } from "@ai-sdk/google";
 import db from "../config/db.js";
-import { chatConfig } from "../config/chat.js";
+import { chatConfig, geminiProvider } from "../config/chat.js";
 import * as ProductModel from "../models/product/product.model.js";
 import * as AttributeModel from "../models/attribute.model.js";
 import * as PriceModel from "../models/product/product_price.model.js";
@@ -78,7 +77,7 @@ export async function upsertProductEmbedding(
   const content = await buildProductContent(product_id);
 
   const { embedding } = await embed({
-    model: google.textEmbeddingModel(chatConfig.embeddingModel),
+    model: geminiProvider.textEmbeddingModel(chatConfig.embeddingModel),
     value: content,
     providerOptions: {
       google: {
