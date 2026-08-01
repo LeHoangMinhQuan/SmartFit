@@ -283,6 +283,15 @@ export const adminService = {
       .get<PaginatedResponse<Order>>("/admin/orders", { params })
       .then((r) => r.data),
 
+  // GET /admin/orders/:order_id — staff-scoped, no customer ownership check
+  // (unlike orderService.getOrder, which is gated by the customer's
+  // cookie-based `authenticate` and 401s under staff's separate
+  // Bearer-token auth regardless of order status).
+  getOrder: (order_id: number) =>
+    api
+      .get<ApiResponse<Order>>(`/admin/orders/${order_id}`)
+      .then((r) => r.data.data),
+
   updateOrderStatus: (order_id: number, status: OrderStatus) =>
     api
       .patch<

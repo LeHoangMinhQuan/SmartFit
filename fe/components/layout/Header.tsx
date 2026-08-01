@@ -34,7 +34,7 @@ export default function Header() {
               href="/"
               className="text-3xl font-black uppercase tracking-tighter text-black"
             >
-              SHOP.CO
+              SMARTFIT
             </Link>
           </div>
 
@@ -44,8 +44,13 @@ export default function Header() {
               href="/category/all"
               className="flex items-center gap-1 text-black"
             >
-              Shop
-              <span className="text-xs text-black">▼</span>
+              All Products
+            </Link>
+            <Link
+              href="/categories"
+              className="flex items-center gap-1 text-black"
+            >
+              Categories
             </Link>
             <Link href="/category/on-sale" className="text-black">
               On Sale
@@ -60,7 +65,7 @@ export default function Header() {
 
           {/* Search & Icons */}
           <div className="flex items-center gap-4 flex-1 justify-end md:flex-none">
-            <div className="hidden lg:flex items-center bg-[#F0F0F0] rounded-full px-4 py-2 w-[400px]">
+            <div className="hidden lg:flex items-center bg-[#F0F0F0] rounded-full px-4 py-2 w-[300px]">
               <span className="text-gray-400 mr-2">🔍</span>
               <input
                 type="text"

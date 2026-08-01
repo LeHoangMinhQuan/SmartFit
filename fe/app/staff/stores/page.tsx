@@ -117,6 +117,19 @@ export default function StaffStoresPage() {
       </div>
 
       {adding && (
+        <div className="max-w-lg rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <p className="font-medium">Heads up — single-store limitation</p>
+          <p className="mt-1 text-amber-700">
+            Our GHN (shipping) account is currently registered under one store
+            address only. Orders shipped from any store other than that one
+            won&rsquo;t get real GHN shipping-fee/service quotes. Only add a
+            second store if you&rsquo;ve also registered it with GHN, or if
+            it&rsquo;s a pickup-only / non-shipping location.
+          </p>
+        </div>
+      )}
+
+      {adding && (
         <form
           onSubmit={handleCreate}
           className="flex flex-wrap gap-4 items-end rounded-2xl border border-slate-200 bg-white p-6 shadow-sm max-w-lg"

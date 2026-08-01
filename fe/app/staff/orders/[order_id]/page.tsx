@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../../services/staff/admin.service";
-import { orderService } from "../../../../services/order.service";
 import { formatDate, formatPrice } from "../../../../lib/utils";
 import { toast } from "../../../../components/ui/Toast";
 import Spinner from "../../../../components/ui/Spinner";
@@ -31,7 +30,7 @@ export default function StaffOrderDetailPage() {
 
   const orderQuery = useQuery({
     queryKey: ["staff-order", orderId],
-    queryFn: () => orderService.getOrder(orderId),
+    queryFn: () => adminService.getOrder(orderId),
   });
   const order = orderQuery.data ?? null;
   const loading = orderQuery.isLoading;
