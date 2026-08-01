@@ -12,7 +12,9 @@ import { embed } from "ai";
 import type { GoogleGenerativeAIEmbeddingProviderOptions } from "@ai-sdk/google";
 import db from "../config/db.js";
 import { chatConfig, geminiProvider } from "../config/chat.js";
+import { ApiError } from "../utils/ApiError.js";
 import * as ProductModel from "../models/product/product.model.js";
+import * as GeminiBudget from "./gemini-budget.service.js";
 
 export interface SearchFilters {
   category_id?: number;
@@ -40,26 +42,57 @@ interface RankedRow {
  * quality even though both still return a same-shaped vector.
  */
 async function embedQuery(query: string): Promise<number[]> {
+  const model = chatConfig.embeddingModel;
   console.log("[retrieval.service] embedQuery calling Gemini", {
-    model: chatConfig.embeddingModel,
+    model,
     query,
   });
+
+  // Previously this call had zero budget/RPM accounting at all — every
+  // search_products turn hit Gemini's embedding model directly, so it
+  // could silently exhaust the embedding model's free-tier quota (with
+  // nothing tracked in gemini_usage_counter) and/or blow through its RPM
+  // ceiling independent of the chat model budgets. Same reserve/refund
+  // path as model-router.service.ts uses for chat models.
+  const reserved = await GeminiBudget.tryReserve(
+    model,
+    chatConfig.budgets.embedding,
+    chatConfig.rpm.embedding,
+  );
+  if (!reserved.ok) {
+    throw new ApiError(
+      503,
+      reserved.reason === "rpm"
+        ? "Product search is handling a lot of requests right now."
+        : "Product search has reached today's usage limit.",
+    );
+  }
+
   const startedAt = Date.now();
-  const { embedding } = await embed({
-    model: geminiProvider.textEmbeddingModel(chatConfig.embeddingModel),
-    value: query,
-    providerOptions: {
-      google: {
-        outputDimensionality: chatConfig.embeddingDimensions,
-        taskType: "RETRIEVAL_QUERY",
-      } satisfies GoogleGenerativeAIEmbeddingProviderOptions,
-    },
-  });
-  console.log("[retrieval.service] embedQuery resolved", {
-    duration_ms: Date.now() - startedAt,
-    dimensions: embedding.length,
-  });
-  return embedding;
+  try {
+    const { embedding } = await embed({
+      model: geminiProvider.textEmbeddingModel(model),
+      value: query,
+      providerOptions: {
+        google: {
+          outputDimensionality: chatConfig.embeddingDimensions,
+          taskType: "RETRIEVAL_QUERY",
+        } satisfies GoogleGenerativeAIEmbeddingProviderOptions,
+      },
+    });
+    console.log("[retrieval.service] embedQuery resolved", {
+      duration_ms: Date.now() - startedAt,
+      dimensions: embedding.length,
+    });
+    return embedding;
+  } catch (err) {
+    console.error("[retrieval.service] embedQuery failed — refunding budget", {
+      model,
+      err,
+    });
+    await GeminiBudget.refund(reserved.reservation);
+    throw err;
+  }
 }
 
 /**

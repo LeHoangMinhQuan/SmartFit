@@ -74,6 +74,15 @@ export const passwordResetLimiter = rateLimit({
  * per-IP request volume, so IP would be the wrong key even if a user
  * switched networks. Runs before the controller starts streaming, so a
  * 429 is a normal pre-stream JSON response, never a mid-stream cutoff.
+ *
+ * This is a PER-USER spam throttle only — it does not protect Gemini's
+ * actual per-minute quota, which is shared across every user of this app
+ * (one GEMINI_API_KEY project). That's enforced separately and
+ * app-wide by services/rpm-limiter.service.ts, consulted by
+ * services/gemini-budget.service.ts before any chat or embedding call
+ * reaches Gemini. Both layers matter: this one stops one user from
+ * spamming; that one stops many well-behaved users from collectively
+ * exceeding the shared quota.
  */
 export const chatLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes

@@ -15,6 +15,7 @@ import type { ChatMessageRow } from "../models/chat-session.model.js";
 import * as RetrievalService from "./retrieval.service.js";
 import * as CartService from "./cart.service.js";
 import * as ModelRouter from "./model-router.service.js";
+import * as GeminiBudget from "./gemini-budget.service.js";
 
 const CHAT_SYSTEM_PROMPT = `You are the SmartFit shopping assistant. You help customers find products in the SmartFit catalog and add items to their cart.
 
@@ -112,10 +113,33 @@ function buildTools(user_id: number, validPairs: Set<string>) {
           max_price,
         });
         const startedAt = Date.now();
-        const cards = await RetrievalService.hybridSearch(query, {
-          category_id,
-          max_price,
-        });
+        let cards;
+        try {
+          cards = await RetrievalService.hybridSearch(query, {
+            category_id,
+            max_price,
+          });
+        } catch (err) {
+          // Most likely cause: the embedding model's daily budget/RPM is
+          // exhausted (gemini-budget.service.ts, via retrieval.service.ts's
+          // embedQuery) — a recoverable, tool-scoped failure, not a reason
+          // to fail the whole chat turn. Same pattern as add_to_cart below.
+          if (err instanceof ApiError) {
+            console.warn(
+              "[chat.service] search_products failed with ApiError",
+              { message: err.message },
+            );
+            return {
+              error:
+                "Product search is temporarily unavailable — please try again in a moment.",
+            };
+          }
+          console.error(
+            "[chat.service] search_products failed with unexpected error",
+            err,
+          );
+          throw err;
+        }
         console.log("[chat.service] search_products tool resolved", {
           result_count: cards.length,
           duration_ms: Date.now() - startedAt,
@@ -249,10 +273,11 @@ export async function sendMessage(
     { role: "user", content: message },
   ];
 
-  const { model: selectedModel, ...routing } = await ModelRouter.selectModel(
-    message,
-    history,
-  );
+  const {
+    model: selectedModel,
+    reservation,
+    ...routing
+  } = await ModelRouter.selectModel(message, history);
   console.log("[chat.service] model routing decision", routing, {
     model: selectedModel,
   });
@@ -267,6 +292,22 @@ export async function sendMessage(
     system: CHAT_SYSTEM_PROMPT,
     messages: modelMessages,
     tools: buildTools(user_id, validPairs),
+    // Fires for errors during the model call/stream itself (network
+    // failure, provider error response, etc.) — this promise resolves
+    // BEFORE any of that happens (streamText returns immediately and
+    // streams asynchronously), so this is the only place a failed call
+    // is observable server-side. Without this, model-router.service.ts's
+    // reservation for `selectedModel` would have already incremented
+    // gemini_usage_counter for a call that never produced a response —
+    // permanently spending budget on nothing. Refunding it here means a
+    // failed call doesn't count.
+    onError: (event) => {
+      console.error("[chat.service] streamText onError — refunding budget", {
+        model: selectedModel,
+        error: event.error,
+      });
+      void GeminiBudget.refund(reservation);
+    },
     onFinish: async (event) => {
       // DEBUG: this whole callback is invoked by ai's internal notify()
       // helper, which SILENTLY SWALLOWS any thrown error (empty catch

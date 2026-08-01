@@ -10,9 +10,11 @@ import { embed } from "ai";
 import type { GoogleGenerativeAIEmbeddingProviderOptions } from "@ai-sdk/google";
 import db from "../config/db.js";
 import { chatConfig, geminiProvider } from "../config/chat.js";
+import { ApiError } from "../utils/ApiError.js";
 import * as ProductModel from "../models/product/product.model.js";
 import * as AttributeModel from "../models/attribute.model.js";
 import * as PriceModel from "../models/product/product_price.model.js";
+import * as GeminiBudget from "./gemini-budget.service.js";
 
 /**
  * Builds the exact text that gets embedded for a product:
@@ -75,17 +77,48 @@ export async function upsertProductEmbedding(
   product_id: number,
 ): Promise<void> {
   const content = await buildProductContent(product_id);
+  const model = chatConfig.embeddingModel;
 
-  const { embedding } = await embed({
-    model: geminiProvider.textEmbeddingModel(chatConfig.embeddingModel),
-    value: content,
-    providerOptions: {
-      google: {
-        outputDimensionality: chatConfig.embeddingDimensions,
-        taskType: "RETRIEVAL_DOCUMENT",
-      } satisfies GoogleGenerativeAIEmbeddingProviderOptions,
-    },
-  });
+  // Same accounting as retrieval.service.ts's embedQuery — this call site
+  // (product writes + admin bulk reindex) shares the SAME daily budget
+  // and RPM ceiling as query-time embedding, since they're both hitting
+  // the same Gemini embedding model/quota. A bulk reindex over a large
+  // catalog is exactly the kind of burst that could otherwise blow
+  // through the embedding model's RPM in seconds.
+  const reserved = await GeminiBudget.tryReserve(
+    model,
+    chatConfig.budgets.embedding,
+    chatConfig.rpm.embedding,
+  );
+  if (!reserved.ok) {
+    throw new ApiError(
+      503,
+      reserved.reason === "rpm"
+        ? `Embedding is being rate-limited right now — retry product ${product_id} shortly.`
+        : `Today's embedding budget is exhausted — product ${product_id} was not (re)indexed. Try again after the daily reset.`,
+    );
+  }
+
+  let embedding: number[];
+  try {
+    ({ embedding } = await embed({
+      model: geminiProvider.textEmbeddingModel(model),
+      value: content,
+      providerOptions: {
+        google: {
+          outputDimensionality: chatConfig.embeddingDimensions,
+          taskType: "RETRIEVAL_DOCUMENT",
+        } satisfies GoogleGenerativeAIEmbeddingProviderOptions,
+      },
+    }));
+  } catch (err) {
+    console.error(
+      "[embedding.service] upsertProductEmbedding failed — refunding budget",
+      { product_id, model, err },
+    );
+    await GeminiBudget.refund(reserved.reservation);
+    throw err;
+  }
 
   // pgvector accepts a bracketed literal string cast to ::vector — knex has
   // no native vector type binding, so this stays a raw query.
@@ -110,14 +143,54 @@ export async function upsertProductEmbedding(
  * — catalog is thesis-scale, and staying well under embedding RPM matters
  * more here than shaving seconds off a reindex that runs rarely.
  */
-export async function reindexAll(): Promise<{ reindexed_count: number }> {
+export async function reindexAll(): Promise<{
+  reindexed_count: number;
+  skipped_count: number;
+  stopped_early: boolean;
+}> {
   const productIds = await ProductModel.findAllProductIds();
 
   let reindexed_count = 0;
+  let skipped_count = 0;
+
   for (const product_id of productIds) {
-    await upsertProductEmbedding(product_id);
-    reindexed_count++;
+    try {
+      await upsertProductEmbedding(product_id);
+      reindexed_count++;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 503) {
+        // RPM stalls clear within a minute — wait it out and keep going
+        // rather than aborting a bulk job over a transient 60s window.
+        // A real daily-budget exhaustion won't clear until tomorrow, so
+        // there's no point burning through the rest of the catalog
+        // retrying that one — stop and report what was actually done.
+        if (err.message.includes("rate-limited")) {
+          console.warn(
+            "[embedding.service] reindexAll: RPM stall, waiting 60s",
+            { product_id },
+          );
+          await new Promise((resolve) => setTimeout(resolve, 60_000));
+          try {
+            await upsertProductEmbedding(product_id);
+            reindexed_count++;
+            continue;
+          } catch (retryErr) {
+            console.error(
+              "[embedding.service] reindexAll: retry after RPM stall also failed, stopping",
+              { product_id, retryErr },
+            );
+          }
+        }
+        skipped_count = productIds.length - reindexed_count;
+        console.error(
+          "[embedding.service] reindexAll: stopping early — embedding budget exhausted",
+          { reindexed_count, skipped_count, stoppedAt: product_id },
+        );
+        return { reindexed_count, skipped_count, stopped_early: true };
+      }
+      throw err;
+    }
   }
 
-  return { reindexed_count };
+  return { reindexed_count, skipped_count, stopped_early: false };
 }

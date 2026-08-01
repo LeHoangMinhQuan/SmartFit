@@ -18,7 +18,8 @@
  */
 import { ApiError } from "../utils/ApiError.js";
 import { chatConfig } from "../config/chat.js";
-import * as ModelUsageModel from "../models/model-usage.model.js";
+import * as GeminiBudget from "./gemini-budget.service.js";
+import type { ReserveFailureReason } from "./gemini-budget.service.js";
 import type { ChatMessageRow } from "../models/chat-session.model.js";
 
 export type ChatComplexity = "light" | "heavy";
@@ -31,6 +32,8 @@ export interface ModelSelection {
   usedComplexity: ChatComplexity;
   /** True if budget pressure forced a different tier than requested. */
   degraded: boolean;
+  /** Pass to GeminiBudget.refund() if the actual Gemini call fails. */
+  reservation: GeminiBudget.BudgetReservation;
 }
 
 // Cart/purchase-intent — getting the (product_id, variant_id) pair right
@@ -94,49 +97,56 @@ export function classifyComplexity(
  *     still exists)
  *   - both exhausted                         -> throws ApiError(503)
  *
- * Increments gemini_usage_counter for whichever model is actually chosen.
- * Check-then-increment (not a single atomic decision query) — see
- * model-usage.model.ts's doc comment for the accepted race-window
- * trade-off at this project's traffic scale.
+ * Reserves gemini_usage_counter budget (and an RPM slot) for whichever
+ * model is actually chosen via GeminiBudget.tryReserve — a single atomic
+ * operation, not a separate check-then-write, so two simultaneous
+ * requests landing on the last unit of budget can't both succeed (see
+ * model-usage.model.ts's tryIncrement doc comment).
+ *
+ * The returned selection carries a `reservation` — if the actual Gemini
+ * call this was reserved for ends up failing, the caller MUST call
+ * GeminiBudget.refund(selection.reservation) so that failed call doesn't
+ * permanently count against today's budget.
  */
 export async function selectModel(
   message: string,
   history: ChatMessageRow[],
 ): Promise<ModelSelection> {
   const requestedComplexity = classifyComplexity(message, history);
-  const { chatModel: heavyModel, liteModel, budgets } = chatConfig;
+  const { chatModel: heavyModel, liteModel, budgets, rpm } = chatConfig;
 
   const tryUse = async (
     model: string,
     tier: ChatComplexity,
     budget: number,
-  ): Promise<ModelSelection | null> => {
-    const count = await ModelUsageModel.getTodayCount(model);
-    if (count >= budget) return null;
-    await ModelUsageModel.incrementAndGetCount(model);
+    rpmLimit: number,
+  ): Promise<ModelSelection | ReserveFailureReason> => {
+    const result = await GeminiBudget.tryReserve(model, budget, rpmLimit);
+    if (!result.ok) return result.reason;
     return {
       model,
       requestedComplexity,
       usedComplexity: tier,
       degraded: tier !== requestedComplexity,
+      reservation: result.reservation,
     };
   };
 
   const primary =
     requestedComplexity === "heavy"
-      ? await tryUse(heavyModel, "heavy", budgets.heavy)
-      : await tryUse(liteModel, "light", budgets.lite);
-  if (primary) {
+      ? await tryUse(heavyModel, "heavy", budgets.heavy, rpm.heavy)
+      : await tryUse(liteModel, "light", budgets.lite, rpm.lite);
+  if (typeof primary !== "string") {
     console.log("[model-router] selected", primary);
     return primary;
   }
 
-  // Primary tier's budget is gone — fall back to the other tier.
+  // Primary tier's budget/RPM is gone — fall back to the other tier.
   const fallback =
     requestedComplexity === "heavy"
-      ? await tryUse(liteModel, "light", budgets.lite)
-      : await tryUse(heavyModel, "heavy", budgets.heavy);
-  if (fallback) {
+      ? await tryUse(liteModel, "light", budgets.lite, rpm.lite)
+      : await tryUse(heavyModel, "heavy", budgets.heavy, rpm.heavy);
+  if (typeof fallback !== "string") {
     console.warn("[model-router] budget fallback engaged", fallback);
     return fallback;
   }
@@ -144,9 +154,22 @@ export async function selectModel(
   console.error("[model-router] both models exhausted for today", {
     heavyModel,
     liteModel,
+    primaryReason: primary,
+    fallbackReason: fallback,
   });
+
+  // If EITHER tier failed only on RPM (a rolling 60s window that clears
+  // itself), this is transient and worth telling the customer to just
+  // wait a moment. Only if BOTH failed on the daily budget is this a
+  // real "come back tomorrow" situation (RPD quotas reset at midnight
+  // Pacific — see config/env.ts's GEMINI_*_RPM comment).
+  const bothDailyExhausted =
+    primary === "daily_budget" && fallback === "daily_budget";
+
   throw new ApiError(
     503,
-    "The shopping assistant has reached today's free usage limit. Please try again later.",
+    bothDailyExhausted
+      ? "The shopping assistant has reached today's free usage limit. Please try again later."
+      : "The shopping assistant is handling a lot of requests right now. Please try again in a minute.",
   );
 }

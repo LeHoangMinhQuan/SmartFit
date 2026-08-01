@@ -38,12 +38,24 @@ export const chatConfig = {
   embeddingModel: env.GEMINI_EMBEDDING_MODEL,
 
   // Daily free-tier request budgets per model, enforced by
-  // model-router.service.ts via the gemini_usage_counter table. See the
-  // env var comments in config/env.ts for why these are conservative
-  // rather than an exact quota mirror.
+  // model-router.service.ts / gemini-budget.service.ts via the
+  // gemini_usage_counter table. See the env var comments in
+  // config/env.ts for why these are conservative rather than an exact
+  // quota mirror.
   budgets: {
     heavy: env.GEMINI_HEAVY_DAILY_BUDGET,
     lite: env.GEMINI_LITE_DAILY_BUDGET,
+    embedding: env.GEMINI_EMBEDDING_DAILY_BUDGET,
+  },
+
+  // Requests-per-minute ceilings, enforced in-process (see
+  // services/rpm-limiter.service.ts) ahead of every Gemini call. See the
+  // env var comments in config/env.ts for the full rationale — this is
+  // an app-wide cap shared across all users, not a per-user throttle.
+  rpm: {
+    heavy: env.GEMINI_HEAVY_RPM,
+    lite: env.GEMINI_LITE_RPM,
+    embedding: env.GEMINI_EMBEDDING_RPM,
   },
 
   // Matryoshka Representation Learning truncation — matches the vector(768)

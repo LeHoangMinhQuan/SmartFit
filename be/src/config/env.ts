@@ -109,6 +109,41 @@ export const env = {
   GEMINI_LITE_DAILY_BUDGET: Number(
     process.env["GEMINI_LITE_DAILY_BUDGET"] ?? 1200,
   ),
+  // Embedding calls were previously untracked entirely — every
+  // search_products turn (retrieval.service.ts) and every admin reindex
+  // (embedding.service.ts) hit Gemini with zero budget accounting, so
+  // this could silently burn the embedding model's free-tier quota (and
+  // starve retrieval mid-day) without ever showing up in
+  // gemini_usage_counter. Conservative default; see the RPM note below —
+  // free-tier numbers drift over time and Google doesn't publish a
+  // stable public table, so these are a floor, not a guarantee.
+  GEMINI_EMBEDDING_DAILY_BUDGET: Number(
+    process.env["GEMINI_EMBEDDING_DAILY_BUDGET"] ?? 1000,
+  ),
+
+  // Requests-per-minute ceilings, enforced in-process by
+  // rpm-limiter.service.ts BEFORE a call ever reaches Gemini. This is
+  // separate from (and in addition to) the daily budgets above — RPM is
+  // what actually throws a live 429 mid-conversation if too many users
+  // hit the chatbot in the same 60s window, since the free tier's
+  // per-model RPM cap applies across ALL users of this app (they all
+  // share one GEMINI_API_KEY / one Google Cloud project), not per user.
+  // middleware/rateLimiter.ts's chatLimiter (15 msgs/10min/user) does NOT
+  // protect against this — it throttles a single user's spam, but many
+  // different users each under that per-user limit can still collectively
+  // blow through the shared per-minute Gemini quota.
+  //
+  // ⚠️ Verify these against your own project's live numbers at
+  // https://aistudio.google.com/rate-limit before relying on them —
+  // Google's published free-tier RPM/RPD figures for Flash-tier models
+  // have changed multiple times through 2025-2026 and aren't reliably
+  // documented in one place; the AI Studio page for YOUR project/key is
+  // the only source of truth. These defaults are intentionally set below
+  // every publicly-reported number we could find as a safety margin, not
+  // as a claim about the exact real limit.
+  GEMINI_HEAVY_RPM: Number(process.env["GEMINI_HEAVY_RPM"] ?? 8),
+  GEMINI_LITE_RPM: Number(process.env["GEMINI_LITE_RPM"] ?? 12),
+  GEMINI_EMBEDDING_RPM: Number(process.env["GEMINI_EMBEDDING_RPM"] ?? 8),
 
   // ─── Firebase (forgot-password only — optional, see note above) ───────────
   FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],
