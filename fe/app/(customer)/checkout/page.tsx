@@ -112,7 +112,8 @@ export default function CheckoutPage() {
         payment_method_id: VNPAY_METHOD_ID,
         shipping_address: formatFullAddress(addr),
         ward_id: addr.ward_id!,
-        ...(voucher ? { voucher_id: voucher.voucher_id } : {}),
+        shipping_fee: shippingFee,
+        ...(voucher ? { voucher_code: voucher.code } : {}),
       });
       const { paymentUrl } = await paymentService.createVNPayUrl(order_id);
       return paymentUrl;

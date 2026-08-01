@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 export default function TopBanner() {
   const [isDismissed, setIsDismissed] = useState(false);
   const openRegister = useAuthModalStore((s) => s.openRegister);
+  const openLogin = useAuthModalStore((s) => s.openLogin);
   const user = useAuthStore((s) => s.user);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
 
@@ -23,6 +24,13 @@ export default function TopBanner() {
           className="font-medium underline hover:text-gray-300 transition-colors"
         >
           Sign Up Now
+        </button>
+        {" · Already have an account? "}
+        <button
+          onClick={openLogin}
+          className="font-medium underline hover:text-gray-300 transition-colors"
+        >
+          Log In
         </button>
       </p>
       <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { orderService } from "../../../services/order.service";
@@ -10,6 +10,17 @@ import { Check, X, ShieldCheck, AlertCircle } from "lucide-react";
 // VNPay response codes — '00' = success, everything else = failure
 // Full code list: https://sandbox.vnpayment.vn/apis/docs/bang-ma-loi/
 const SUCCESS_CODE = "00";
+
+// Bug fix: this used to be a single fetch after a fixed 2s delay
+// ("Poll the real order status" was aspirational, not actual — there was
+// no refetchInterval). If VNPay's IPN callback took longer than 2s to
+// land (routing latency, retries, etc.), the page would permanently show
+// "pending_payment" with no way to recover short of a manual refresh.
+// Now actually polls every 2.5s, capped at MAX_POLL_ATTEMPTS (~40s total)
+// so a genuinely missing IPN (e.g. the callback URL isn't reachable from
+// VNPay's servers) doesn't poll forever.
+const POLL_INTERVAL_MS = 2500;
+const MAX_POLL_ATTEMPTS = 16;
 
 interface Props {
   responseCode: string;
@@ -45,8 +56,8 @@ export default function PaymentResultPage({
 
   const isSuccess = responseCode === SUCCESS_CODE;
 
-  // Poll the real order status from DB — IPN is authoritative, not this return URL.
-  // Give IPN a short delay to process before checking.
+  // Small initial delay before the first check, same as before — gives
+  // IPN a head start before we even look.
   const [delayElapsed, setDelayElapsed] = useState(false);
   useEffect(() => {
     if (!isSuccess || !orderId) return;
@@ -54,16 +65,33 @@ export default function PaymentResultPage({
     return () => clearTimeout(timer);
   }, [isSuccess, orderId]);
 
+  const pollAttemptsRef = useRef(0);
+
   const orderStatusQuery = useQuery({
     queryKey: ["payment-result-order", orderId],
     queryFn: () => orderService.getOrder(Number(orderId)),
     enabled: isSuccess && !!orderId && delayElapsed,
     retry: false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      const isTerminal = Boolean(status) && status !== "pending_payment";
+      if (isTerminal) return false;
+      pollAttemptsRef.current += 1;
+      return pollAttemptsRef.current < MAX_POLL_ATTEMPTS
+        ? POLL_INTERVAL_MS
+        : false;
+    },
   });
 
   const orderStatus = orderStatusQuery.data?.status ?? null;
+  const stillPending = orderStatus === "pending_payment";
+  const pollingTimedOut =
+    stillPending && pollAttemptsRef.current >= MAX_POLL_ATTEMPTS;
   const polling =
-    isSuccess && !!orderId && (!delayElapsed || orderStatusQuery.isFetching);
+    isSuccess &&
+    !!orderId &&
+    (!delayElapsed || orderStatusQuery.isFetching) &&
+    !pollingTimedOut;
 
   if (polling) {
     return (
@@ -129,6 +157,20 @@ export default function PaymentResultPage({
               </div>
             )}
           </div>
+
+          {pollingTimedOut && (
+            <p className="mt-4 text-xs text-slate-500">
+              Your payment is still being confirmed — this can take a moment
+              longer than usual. Check your{" "}
+              <button
+                onClick={() => router.push("/orders")}
+                className="font-medium underline hover:text-slate-700"
+              >
+                orders page
+              </button>{" "}
+              shortly for the latest status.
+            </p>
+          )}
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             {orderId && (

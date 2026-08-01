@@ -5,7 +5,16 @@ interface CreateOrderBody {
   payment_method_id: number;
   shipping_address: string; // VARCHAR(70) — denormalized, validated before submit
   ward_id: number;
-  voucher_id?: number;
+  // Bug fix: was voucher_id, but the backend (order.service.ts,
+  // VoucherModel.validateVoucher) only ever reads voucher_code — zod
+  // silently strips unrecognized body keys by default, so voucher_id was
+  // dropped server-side on every order, meaning the discount shown in the
+  // checkout UI was never actually applied to what got charged.
+  voucher_code?: string;
+  // Bug fix: previously omitted entirely — total_amount on the backend
+  // was computed as subtotal minus voucher discount only, silently
+  // excluding the delivery fee from every VNPay charge.
+  shipping_fee: number;
 }
 
 export const orderService = {

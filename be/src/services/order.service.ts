@@ -37,6 +37,7 @@ export async function createOrder(
     shipping_address: string;
     ward_id: number;
     voucher_code?: string;
+    shipping_fee: number;
   },
 ) {
   // 1. Load cart items
@@ -61,7 +62,17 @@ export async function createOrder(
     discountAmount = VoucherModel.computeVoucherDiscount(voucher, rawTotal);
   }
 
-  const total_amount = Math.max(0, rawTotal - discountAmount);
+  // Bug fix: this used to be Math.max(0, rawTotal - discountAmount), which
+  // is just the cart subtotal minus any voucher discount — shipping_fee
+  // was never added, so every order (and every VNPay charge, since
+  // vnpay.service.ts reads total_amount directly) silently excluded the
+  // delivery fee entirely. shipping_fee is client-supplied (see the schema
+  // comment on createOrderSchema for the known trust gap there — not
+  // server-recomputed via GHN in this pass).
+  const total_amount = Math.max(
+    0,
+    rawTotal + data.shipping_fee - discountAmount,
+  );
 
   // 3. Build order items list
   const orderItems = cartItems.map((item: any) => ({
@@ -110,6 +121,7 @@ export async function createOrder(
         shipping_address: data.shipping_address,
         ward_id: data.ward_id,
         total_amount,
+        shipping_fee: data.shipping_fee,
         status: "pending_payment",
       })
       .returning("order_id");

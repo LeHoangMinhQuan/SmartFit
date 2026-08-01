@@ -66,10 +66,6 @@ export default function FeaturedCategoriesSection() {
                     className="object-cover object-right-top transition-transform group-hover:scale-105"
                   />
                 )}
-                {/* bg-gray-200 placeholder overlay removed — it was
-                    stacking on top of the image, not behind it, and is
-                    no longer needed now that image_url is always a real
-                    uploaded S3 asset for any category that reaches here. */}
               </Link>
             ))}
           </div>

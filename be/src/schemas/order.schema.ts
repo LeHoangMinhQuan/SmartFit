@@ -5,6 +5,13 @@ export const createOrderSchema = z.object({
     payment_method_id: z.number().int().positive(),
     shipping_address: z.string().min(1).max(255),
     ward_id: z.number().int().positive(),
+    // Bug fix: total_amount previously excluded this entirely — every
+    // VNPay charge silently undercharged by the delivery fee. Trusting
+    // client input for a monetary amount is a known gap (see order.service.ts
+    // createOrder comment) rather than recomputing server-side via GHN,
+    // since that needs package weight data this schema doesn't currently
+    // track — flagged as a follow-up, not solved here.
+    shipping_fee: z.number().min(0).default(0),
     voucher_code: z.string().optional(),
   }),
 });
