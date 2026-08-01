@@ -353,13 +353,28 @@ export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
       db("ORDER").select("status").count("order_id as count").groupBy("status"),
       db("order_item as oi")
         .join("product as p", "oi.product_id", "p.product_id")
+        .join("ORDER as o", "oi.order_id", "o.order_id")
         .select(
           "oi.product_id",
           "p.name",
-          db.raw("SUM(oi.quantity) as total_sold"),
+          // NOTE (2026-08-01) — two bugs fixed here:
+          // 1. Field-name mismatch: this used to alias the sum as
+          //    `total_sold`, but the frontend's TopProduct type
+          //    (services/staff/admin.service.ts) has only ever read
+          //    `p.sold` — so the units-sold column always rendered blank.
+          //    Aliased to `sold` to match.
+          // 2. This had no order-status filter at all, so cancelled,
+          //    payment-failed, and still-pending orders all counted
+          //    towards "units sold". Joined ORDER and restricted to the
+          //    same real-sale statuses already used for total_revenue
+          //    above, so the two numbers on this dashboard agree with
+          //    each other.
+          db.raw("SUM(oi.quantity) as sold"),
+          db.raw("SUM(oi.subtotal) as revenue"),
         )
+        .whereIn("o.status", ["paid", "preparing", "shipping", "delivered"])
         .groupBy("oi.product_id", "p.name")
-        .orderBy("total_sold", "desc")
+        .orderBy("sold", "desc")
         .limit(5),
     ]);
 
@@ -373,7 +388,12 @@ export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
       total_orders: orders,
       new_users_last_30d: newUsers,
       orders_by_status: ordersByStatus,
-      top_products: topProducts,
+      top_products: topProducts.map((p: any) => ({
+        product_id: p.product_id,
+        name: p.name,
+        sold: Number(p.sold),
+        revenue: Number(p.revenue),
+      })),
     },
   });
 });

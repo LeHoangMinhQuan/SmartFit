@@ -30,7 +30,12 @@ export interface DashboardStats {
   // `count` comes back as a string because Postgres COUNT() is bigint and
   // the pg driver stringifies bigints to avoid precision loss.
   orders_by_status: Array<{ status: OrderStatus; count: string | number }>;
-  top_products: Array<{ product_id: number; name: string; sold: number }>;
+  top_products: Array<{
+    product_id: number;
+    name: string;
+    sold: number;
+    revenue: number;
+  }>;
   new_users_last_30d: number;
 }
 

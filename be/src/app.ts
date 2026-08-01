@@ -69,7 +69,15 @@ app.get("/api/health", (_req, res) => {
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/api/auth", authRoutes);
+// NOTE (2026-08-01): mounted at /api/app-auth, not /api/auth. The frontend's
+// NextAuth (app/api/auth/[...nextauth]/route.ts) owns /api/auth/* entirely —
+// session, callback/google, error, csrf, etc. Sharing that prefix with this
+// app's own credentials-based auth (login/register/refresh/...) meant no
+// reverse-proxy rule could cleanly route both, since a proxy can only split
+// traffic on a whole prefix, not by which specific route name each service
+// happens to define. See utils/cookies.ts for the matching refreshToken
+// cookie path change.
+app.use("/api/app-auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/attributes", attributeRouter);

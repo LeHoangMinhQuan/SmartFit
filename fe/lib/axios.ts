@@ -32,11 +32,11 @@ api.interceptors.response.use(
     original._retry = true;
     isRefreshing = true;
     try {
-      // The refreshToken cookie (path-scoped to /api/auth) is sent
+      // The refreshToken cookie (path-scoped to /api/app-auth) is sent
       // automatically. On success the server rotates the accessToken
       // cookie in its response — nothing to read or store here.
       await axios.post(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/auth/refresh`,
+        `${process.env.NEXT_PUBLIC_BASE_URL}/app-auth/refresh`,
         {},
         { withCredentials: true },
       );

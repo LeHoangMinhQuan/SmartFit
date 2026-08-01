@@ -43,10 +43,11 @@ export const setRefreshTokenCookie = (
 ): void => {
   res.cookie("refreshToken", refreshToken, {
     ...baseCookieOptions,
-    // Scoped to /api/auth only — the refresh token never needs to leave
-    // the auth surface (login/register/refresh/logout), unlike the access
-    // token which every authenticated route needs on path "/".
-    path: "/api/auth",
+    // Scoped to /api/app-auth only — the refresh token never needs to
+    // leave the auth surface (login/register/refresh/logout), unlike the
+    // access token which every authenticated route needs on path "/".
+    // Renamed 2026-08-01 from /api/auth — see app.ts's mount comment.
+    path: "/api/app-auth",
     maxAge: REFRESH_TOKEN_MAX_AGE_MS,
   });
 };
@@ -62,5 +63,5 @@ export const setAuthCookies = (
 
 export const clearAuthCookies = (res: Response): void => {
   res.clearCookie("accessToken", { path: "/" });
-  res.clearCookie("refreshToken", { path: "/api/auth" });
+  res.clearCookie("refreshToken", { path: "/api/app-auth" });
 };

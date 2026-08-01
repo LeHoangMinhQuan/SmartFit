@@ -4,7 +4,12 @@ import { useAuthStore } from "@/store/useAuthStore";
 /**
  * services/auth.client.service.ts
  *
- * POST /api/auth/logout
+ * POST /api/app-auth/logout
+ *
+ * NOTE (2026-08-01): these hit /app-auth/*, not /auth/* — /api/auth/* is
+ * now reserved entirely for NextAuth (Google login), which lives on the
+ * frontend itself, not this backend. See the backend's app.ts mount
+ * comment for the full story.
  *
  * Uses the shared `api` instance (lib/axios.ts) — same baseURL as every
  * other call, and `withCredentials: true` sends the httpOnly accessToken/
@@ -16,7 +21,7 @@ export const logoutService = async (): Promise<void> => {
 
   try {
     await api.post(
-      "/auth/logout",
+      "/app-auth/logout",
       null,
       // We don't care if the server returns 401/500, we just want to attempt to tell it.
       { validateStatus: () => true },
@@ -31,12 +36,12 @@ export const logoutService = async (): Promise<void> => {
 };
 
 export const requestPasswordReset = async (email: string): Promise<void> => {
-  await api.post("/auth/forgot-password", { email });
+  await api.post("/app-auth/forgot-password", { email });
 };
 
 export const confirmPasswordReset = async (
   oobCode: string,
   newPassword: string,
 ): Promise<void> => {
-  await api.post("/auth/reset-password", { oobCode, newPassword });
+  await api.post("/app-auth/reset-password", { oobCode, newPassword });
 };

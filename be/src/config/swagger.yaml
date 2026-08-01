@@ -40,7 +40,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Customer JWT from /auth/login or /auth/register
+      description: Customer JWT from /app-auth/login or /app-auth/register
     staffAuth:
       type: http
       scheme: bearer
@@ -258,7 +258,12 @@ components:
 # ─── Paths ──────────────────────────────────────────────────────────────────────
 paths:
   # ── Auth ─────────────────────────────────────────────────────────────────────
-  /auth/register:
+  # NOTE (2026-08-01): mounted at /api/app-auth, not /api/auth — see app.ts's
+  # mount comment for why. Google login does not go through this backend at
+  # all; it's handled entirely by NextAuth on the frontend
+  # (app/api/auth/[...nextauth]/route.ts), which is exactly why /api/auth/*
+  # had to be freed up for it.
+  /app-auth/register:
     post:
       tags: [Auth]
       summary: Register with email + password
@@ -302,7 +307,7 @@ paths:
           }
         "409": { description: Email already exists }
 
-  /auth/login:
+  /app-auth/login:
     post:
       tags: [Auth]
       summary: Login — returns access + refresh tokens
@@ -320,23 +325,7 @@ paths:
         "200": { description: OK }
         "401": { description: Invalid credentials }
 
-  /auth/google:
-    post:
-      tags: [Auth]
-      summary: Google OAuth2 — exchange ID token for app JWT
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id_token]
-              properties:
-                id_token: { type: string }
-      responses:
-        "200": { description: OK }
-
-  /auth/refresh:
+  /app-auth/refresh:
     post:
       tags: [Auth]
       summary: Rotate refresh token
@@ -344,7 +333,7 @@ paths:
         "200": { description: New access token issued }
         "401": { description: Invalid or expired refresh token }
 
-  /auth/logout:
+  /app-auth/logout:
     post:
       tags: [Auth]
       summary: Logout — deletes refresh_token row
@@ -352,7 +341,7 @@ paths:
       responses:
         "204": { description: Logged out }
 
-  /auth/forgot-password:
+  /app-auth/forgot-password:
     post:
       tags: [Auth]
       summary: Send password reset email
@@ -368,7 +357,7 @@ paths:
       responses:
         "200": { description: Reset email sent if account exists }
 
-  /auth/reset-password:
+  /app-auth/reset-password:
     post:
       tags: [Auth]
       summary: Set new password using reset token

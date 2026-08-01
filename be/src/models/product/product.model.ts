@@ -30,7 +30,6 @@ export async function findAllProductIds(): Promise<number[]> {
   return rows.map((r: { product_id: number }) => r.product_id);
 }
 
-
 export async function findProductById(product_id: number) {
   return db("product").where({ product_id }).first();
 }
@@ -228,8 +227,16 @@ export async function findVariantsByProduct(product_id: number) {
   return db("product_variant as pv")
     .select(
       "pv.*",
+      // Bug fix: this used to be json_agg(json_build_object(...)) with no
+      // DISTINCT. Joining product_attribute AND product_image in the same
+      // query multiplies rows — a variant with 2 attributes (e.g. size +
+      // color, the normal case) and 1 image produces 2 joined rows, so
+      // json_agg aggregated that one image twice (and would do the same
+      // to attributes if it were 2 images x 1 attribute instead). jsonb
+      // supports equality/ordering so DISTINCT actually dedupes here,
+      // which plain `json` does not support.
       db.raw(
-        "json_agg(json_build_object('attribute_id', pa.attribute_id, 'value', pa.value)) filter (where pa.attribute_id is not null) as attributes",
+        "jsonb_agg(DISTINCT jsonb_build_object('attribute_id', pa.attribute_id, 'value', pa.value)) filter (where pa.attribute_id is not null) as attributes",
       ),
       // Variant-specific images. Was previously not joined at all, so
       // `variant.images` was always undefined on the API response (rather
@@ -237,7 +244,7 @@ export async function findVariantsByProduct(product_id: number) {
       // `selected.images.length`. COALESCE with '[]' so the frontend
       // always gets an array, even with zero images uploaded.
       db.raw(
-        "COALESCE(json_agg(json_build_object('image_id', pim.image_id, 'product_id', pim.product_id, 'variant_id', pim.variant_id, 's3_url', pim.s3_url)) filter (where pim.image_id is not null), '[]') as images",
+        "COALESCE(jsonb_agg(DISTINCT jsonb_build_object('image_id', pim.image_id, 'product_id', pim.product_id, 'variant_id', pim.variant_id, 's3_url', pim.s3_url)) filter (where pim.image_id is not null), '[]') as images",
       ),
       "pp.base_price",
       "pp.start_date",
