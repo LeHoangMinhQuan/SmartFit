@@ -37,7 +37,7 @@ export default function OrdersPage() {
   if (!hasHydrated || !user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 py-12">
+    <div className="min-h-screen bg-slate-50 py-12">
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
         {/* Header Section */}
         <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -62,7 +62,7 @@ export default function OrdersPage() {
 
         {/* Loading State */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white/80 p-20 shadow-xl shadow-slate-200/40 backdrop-blur-md">
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-200 bg-white p-20 shadow-xl shadow-slate-200/40">
             <Spinner size="lg" />
             <p className="mt-4 text-sm font-medium text-slate-500">
               Loading your orders...
@@ -70,7 +70,7 @@ export default function OrdersPage() {
           </div>
         ) : orders.length === 0 ? (
           /* Empty State */
-          <div className="flex flex-col items-center justify-center text-center rounded-3xl border border-slate-200/80 bg-white p-12 sm:p-16 shadow-xl shadow-slate-200/40">
+          <div className="flex flex-col items-center justify-center text-center rounded-3xl border border-slate-200 bg-white p-12 sm:p-16 shadow-xl shadow-slate-200/40">
             <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-50 text-indigo-600 ring-8 ring-indigo-50/50">
               <svg
                 className="h-10 w-10"
@@ -108,7 +108,7 @@ export default function OrdersPage() {
             </div>
 
             {meta && (
-              <div className="mt-6 flex justify-center border-t border-slate-200/80 pt-6">
+              <div className="mt-6 flex justify-center border-t border-slate-200 pt-6">
                 <Pagination meta={meta} onPageChange={setPage} />
               </div>
             )}

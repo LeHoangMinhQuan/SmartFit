@@ -111,7 +111,7 @@ export default function OrderDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50/50 py-24">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 py-24">
         <Spinner size="lg" />
         <p className="mt-4 text-sm font-medium text-slate-500">
           Retrieving order details...
@@ -122,8 +122,8 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-slate-50/50 py-24">
-        <div className="mx-auto max-w-md text-center rounded-3xl border border-slate-200/80 bg-white p-12 shadow-xl shadow-slate-200/40">
+      <div className="min-h-screen bg-slate-50 py-24">
+        <div className="mx-auto max-w-md text-center rounded-3xl border border-slate-200 bg-white p-12 shadow-xl shadow-slate-200/40">
           <h2 className="text-xl font-bold text-slate-900">Order Not Found</h2>
           <p className="mt-2 text-sm text-slate-500">
             We couldn&rsquo;t find the order you&rsquo;re looking for or you may
@@ -145,7 +145,7 @@ export default function OrderDetailPage() {
     order.status === "pending_payment" || order.status === "payment_failed";
 
   return (
-    <div className="min-h-screen bg-slate-50/50 py-12">
+    <div className="min-h-screen bg-slate-50 py-12">
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
         {/* Navigation Breadcrumb */}
         <Link
@@ -169,7 +169,8 @@ export default function OrderDetailPage() {
         </Link>
 
         {/* Order Header Card */}
-        <div className="mb-6 rounded-3xl border border-slate-200/80 bg-white/80 p-6 sm:p-8 shadow-xl shadow-slate-200/40 backdrop-blur-md">
+        {/* FIX: bg-white instead of bg-white/80 */}
+        <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl shadow-slate-200/40">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-3">
@@ -205,7 +206,7 @@ export default function OrderDetailPage() {
                 <button
                   onClick={handleCancel}
                   disabled={cancelling}
-                  className="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50/50 px-5 py-2.5 text-sm font-semibold text-red-600 transition-all hover:bg-red-100/80 disabled:opacity-50"
+                  className="inline-flex items-center justify-center rounded-2xl border border-red-200 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
                 >
                   {cancelling ? "Cancelling..." : "Cancel Order"}
                 </button>
@@ -216,7 +217,7 @@ export default function OrderDetailPage() {
 
         <div className="grid gap-6">
           {/* Purchased Items Card */}
-          <section className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-xl shadow-slate-200/40">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl shadow-slate-200/40">
             <h2 className="mb-6 text-lg font-bold text-slate-900 flex items-center gap-2">
               <svg
                 className="h-5 w-5 text-indigo-600"
@@ -306,7 +307,7 @@ export default function OrderDetailPage() {
           </section>
 
           {/* Delivery & Logistics Card */}
-          <section className="rounded-3xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-xl shadow-slate-200/40">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xl shadow-slate-200/40">
             <h2 className="mb-4 text-lg font-bold text-slate-900 flex items-center gap-2">
               <svg
                 className="h-5 w-5 text-indigo-600"
@@ -330,14 +331,14 @@ export default function OrderDetailPage() {
               Delivery Address
             </h2>
 
-            <div className="rounded-2xl bg-slate-50/80 p-4 border border-slate-100">
+            <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
               <p className="text-sm font-medium text-slate-700">
                 {order.shipping_address}
               </p>
               {order.shipping?.tracking_code && (
-                <div className="mt-3 flex items-center gap-2 border-t border-slate-200/60 pt-3">
+                <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3">
                   <span className="text-xs text-slate-400">Tracking Code:</span>
-                  <span className="rounded-md bg-slate-200/60 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">
+                  <span className="rounded-md bg-slate-200 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">
                     {order.shipping.tracking_code}
                   </span>
                 </div>
@@ -354,7 +355,7 @@ export default function OrderDetailPage() {
                   {trackingLogs.map((log, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded-xl bg-slate-50/50 p-3 text-xs border border-slate-100"
+                      className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs border border-slate-100"
                     >
                       <span className="font-semibold text-slate-700 capitalize flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-indigo-500" />

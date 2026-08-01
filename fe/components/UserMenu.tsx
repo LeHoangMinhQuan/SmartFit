@@ -101,7 +101,7 @@ export default function UserMenu({
               </span>
             )}
 
-            <span className="hidden max-w-[120px] truncate md:block">
+            <span className="hidden max-w-[90px] truncate md:block">
               {user.username}
             </span>
           </>
