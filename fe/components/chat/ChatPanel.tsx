@@ -66,6 +66,10 @@ export default function ChatPanel() {
         // Read live rather than closing over it, since this transport is
         // constructed once but sessionId changes after the first reply.
         const currentSessionId = useChatUiStore.getState().sessionId;
+        console.log("[ChatPanel] sending request", {
+          text,
+          currentSessionId,
+        });
         return {
           body: {
             message: text,
@@ -75,10 +79,33 @@ export default function ChatPanel() {
       },
     }),
     onFinish: ({ message }) => {
+      console.log("[ChatPanel] onFinish fired", {
+        message_id: message.id,
+        role: message.role,
+        parts_count: message.parts.length,
+        metadata: message.metadata,
+      });
       const newSessionId = message.metadata?.session_id;
       if (newSessionId) setSessionId(newSessionId);
     },
+    onError: (err) => {
+      // DEBUG: useChat's onError only fires for transport-level failures
+      // (non-ok HTTP response, network error, stream-parse error) — it
+      // does NOT fire just because the stream is slow/stalled. If nothing
+      // logs here AND onFinish above never fires either, the stream is
+      // genuinely hanging server-side (check backend logs), not erroring.
+      console.error("[ChatPanel] onError fired", err);
+    },
   });
+
+  // DEBUG: status is the single source of truth for "is the UI stuck
+  // loading" — trace every transition so you can see exactly which state
+  // it's stuck in (submitted = waiting for first byte, streaming = bytes
+  // arriving but not yet finished, ready = done, error = onError above
+  // already logged the why).
+  useEffect(() => {
+    console.log("[ChatPanel] status changed:", status);
+  }, [status]);
 
   // ai's fetch transport throws a plain Error whose .message is the raw
   // response body text on a non-ok response — there's no structured status
@@ -134,7 +161,9 @@ export default function ChatPanel() {
       }`}
     >
       <div className="border-b border-gray-100 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">SmartFit Assistant</h2>
+        <h2 className="text-sm font-semibold text-slate-900">
+          SmartFit Assistant
+        </h2>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">

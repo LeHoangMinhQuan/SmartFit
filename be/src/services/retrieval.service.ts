@@ -41,6 +41,11 @@ interface RankedRow {
  * quality even though both still return a same-shaped vector.
  */
 async function embedQuery(query: string): Promise<number[]> {
+  console.log("[retrieval.service] embedQuery calling Gemini", {
+    model: chatConfig.embeddingModel,
+    query,
+  });
+  const startedAt = Date.now();
   const { embedding } = await embed({
     model: google.textEmbeddingModel(chatConfig.embeddingModel),
     value: query,
@@ -50,6 +55,10 @@ async function embedQuery(query: string): Promise<number[]> {
         taskType: "RETRIEVAL_QUERY",
       } satisfies GoogleGenerativeAIEmbeddingProviderOptions,
     },
+  });
+  console.log("[retrieval.service] embedQuery resolved", {
+    duration_ms: Date.now() - startedAt,
+    dimensions: embedding.length,
   });
   return embedding;
 }
@@ -176,6 +185,9 @@ export async function hybridSearch(
   filters?: SearchFilters,
   k: number = chatConfig.retrieval.defaultK,
 ): Promise<ProductCard[]> {
+  console.log("[retrieval.service] hybridSearch called", { query, filters, k });
+  const startedAt = Date.now();
+
   // Wider pool than k so RRF has enough signal to fuse over — narrowing
   // straight to k from each list separately would bias toward whichever
   // list happens to agree with a small top-k, not genuine hybrid ranking.
@@ -185,6 +197,11 @@ export async function hybridSearch(
     vectorSearch(query, poolSize, filters),
     keywordSearch(query, poolSize, filters),
   ]);
+  console.log("[retrieval.service] vector+keyword search resolved", {
+    vector_count: vectorResults.length,
+    keyword_count: keywordResults.length,
+    duration_ms: Date.now() - startedAt,
+  });
 
   const scores = new Map<number, number>();
   const addRanked = (results: RankedRow[]) => {
@@ -202,8 +219,16 @@ export async function hybridSearch(
     .slice(0, k)
     .map(([product_id]) => product_id);
 
-  if (!rankedIds.length) return [];
+  if (!rankedIds.length) {
+    console.log("[retrieval.service] hybridSearch: no results after fusion");
+    return [];
+  }
 
   const cards = await Promise.all(rankedIds.map(toProductCard));
-  return cards.filter((c): c is ProductCard => c !== null);
+  const resolvedCards = cards.filter((c): c is ProductCard => c !== null);
+  console.log("[retrieval.service] hybridSearch done", {
+    card_count: resolvedCards.length,
+    total_duration_ms: Date.now() - startedAt,
+  });
+  return resolvedCards;
 }

@@ -107,9 +107,19 @@ function buildTools(user_id: number, validPairs: Set<string>) {
           ),
       }),
       execute: async ({ query, category_id, max_price }) => {
+        console.log("[chat.service] search_products tool called", {
+          query,
+          category_id,
+          max_price,
+        });
+        const startedAt = Date.now();
         const cards = await RetrievalService.hybridSearch(query, {
           category_id,
           max_price,
+        });
+        console.log("[chat.service] search_products tool resolved", {
+          result_count: cards.length,
+          duration_ms: Date.now() - startedAt,
         });
         // Every card returned here becomes a legal add_to_cart target for
         // the rest of this turn (and, once persisted, future turns too).
@@ -131,10 +141,19 @@ function buildTools(user_id: number, validPairs: Set<string>) {
         quantity: z.number().int().min(1).default(1),
       }),
       execute: async ({ product_id, variant_id, quantity }) => {
+        console.log("[chat.service] add_to_cart tool called", {
+          product_id,
+          variant_id,
+          quantity,
+        });
         // Guardrail (a): the pair must have actually come from this
         // conversation's own search_products results — not the model
         // inventing an ID, and not an ID injected via the user's message.
         if (!validPairs.has(pairKey(product_id, variant_id))) {
+          console.log(
+            "[chat.service] add_to_cart REJECTED — pair not in validPairs",
+            { validPairs: [...validPairs] },
+          );
           return {
             error:
               "That product/variant hasn't come up in this conversation's search results. Call search_products again, or ask the customer to clarify which item they mean.",
@@ -147,13 +166,21 @@ function buildTools(user_id: number, validPairs: Set<string>) {
           // the variant doesn't actually exist — re-confirming past the
           // in-memory stash, which could theoretically be stale.
           await CartService.addItem(user_id, product_id, variant_id, quantity);
+          console.log("[chat.service] add_to_cart succeeded");
         } catch (err) {
           if (err instanceof ApiError) {
+            console.log("[chat.service] add_to_cart failed with ApiError", {
+              message: err.message,
+            });
             // A recoverable error object, not a thrown exception — lets
             // the model tell the customer what went wrong and try again,
             // instead of the whole turn failing.
             return { error: err.message };
           }
+          console.error(
+            "[chat.service] add_to_cart failed with unexpected error",
+            err,
+          );
           throw err;
         }
 
@@ -179,6 +206,12 @@ export async function sendMessage(
   session_id: number;
   result: ChatStreamResult;
 }> {
+  console.log("[chat.service] sendMessage called", {
+    user_id,
+    session_id,
+    message_length: message.length,
+  });
+
   let resolvedSessionId: number;
   if (session_id !== undefined) {
     const session = await ChatSessionModel.findSessionById(session_id);
@@ -190,12 +223,17 @@ export async function sendMessage(
     const created = await ChatSessionModel.insertSession(user_id);
     resolvedSessionId = created.session_id;
   }
+  console.log("[chat.service] session resolved", { resolvedSessionId });
 
   const history = await ChatSessionModel.findRecentMessages(
     resolvedSessionId,
     chatConfig.historyLimit,
   );
   const validPairs = buildValidPairsFromHistory(history);
+  console.log("[chat.service] history loaded", {
+    history_count: history.length,
+    valid_pairs_count: validPairs.size,
+  });
 
   // Persist the user's message up front, independent of whether the model
   // call below succeeds — a failed generation shouldn't silently drop
@@ -205,11 +243,17 @@ export async function sendMessage(
     role: "user",
     content: message,
   });
+  console.log("[chat.service] user message persisted");
 
   const modelMessages: ModelMessage[] = [
     ...history.map((m): ModelMessage => ({ role: m.role, content: m.content })),
     { role: "user", content: message },
   ];
+
+  console.log("[chat.service] calling streamText", {
+    model: env.GEMINI_CHAT_MODEL,
+    message_count: modelMessages.length,
+  });
 
   const result = streamText({
     model: google(env.GEMINI_CHAT_MODEL),
@@ -217,36 +261,68 @@ export async function sendMessage(
     messages: modelMessages,
     tools: buildTools(user_id, validPairs),
     onFinish: async (event) => {
-      // Correlate tool-call/tool-result content parts across all steps by
-      // toolCallId into { tool, input, output } entries for metadata.
-      const byId = new Map<
-        string,
-        { tool: string; input: unknown; output?: unknown }
-      >();
-      for (const step of event.steps) {
-        for (const part of step.content) {
-          if (part.type === "tool-call") {
-            byId.set(part.toolCallId, {
-              tool: part.toolName,
-              input: part.input,
-            });
-          } else if (part.type === "tool-result") {
-            const entry = byId.get(part.toolCallId);
-            if (entry) entry.output = part.output;
+      // DEBUG: this whole callback is invoked by ai's internal notify()
+      // helper, which SILENTLY SWALLOWS any thrown error (empty catch
+      // block in ai/dist/index.js — confirmed by reading the compiled
+      // source, not just the types). Without this try/catch, a failure
+      // here — e.g. insertMessage/touchSession throwing — disappears with
+      // no trace anywhere: no server log, no client error, nothing. The
+      // client-visible symptom is exactly "request succeeded, reply never
+      // finishes loading", since the stream's finalization work (this
+      // callback) never completes cleanly.
+      console.log("[chat.service] onFinish fired", {
+        text_length: event.text?.length ?? 0,
+        step_count: event.steps?.length ?? 0,
+        finish_reason: event.finishReason,
+      });
+      try {
+        // Correlate tool-call/tool-result content parts across all steps by
+        // toolCallId into { tool, input, output } entries for metadata.
+        const byId = new Map<
+          string,
+          { tool: string; input: unknown; output?: unknown }
+        >();
+        for (const step of event.steps) {
+          for (const part of step.content) {
+            if (part.type === "tool-call") {
+              byId.set(part.toolCallId, {
+                tool: part.toolName,
+                input: part.input,
+              });
+            } else if (part.type === "tool-result") {
+              const entry = byId.get(part.toolCallId);
+              if (entry) entry.output = part.output;
+            }
           }
         }
-      }
-      const tool_calls = [...byId.values()];
+        const tool_calls = [...byId.values()];
+        console.log("[chat.service] onFinish: tool_calls extracted", {
+          count: tool_calls.length,
+          tools: tool_calls.map((t) => t.tool),
+        });
 
-      await ChatSessionModel.insertMessage({
-        session_id: resolvedSessionId,
-        role: "assistant",
-        content: event.text,
-        metadata: tool_calls.length ? { tool_calls } : null,
-      });
-      await ChatSessionModel.touchSession(resolvedSessionId);
+        await ChatSessionModel.insertMessage({
+          session_id: resolvedSessionId,
+          role: "assistant",
+          content: event.text,
+          metadata: tool_calls.length ? { tool_calls } : null,
+        });
+        console.log("[chat.service] onFinish: assistant message persisted");
+
+        await ChatSessionModel.touchSession(resolvedSessionId);
+        console.log("[chat.service] onFinish: session touched — done");
+      } catch (err) {
+        // THIS is the log line that would otherwise never exist. If the
+        // stream hangs/never completes client-side, check here first.
+        console.error(
+          "[chat.service] onFinish FAILED (was being silently swallowed by ai's notify()):",
+          err,
+        );
+      }
     },
   });
+
+  console.log("[chat.service] streamText call returned, streaming to client");
 
   return { session_id: resolvedSessionId, result };
 }

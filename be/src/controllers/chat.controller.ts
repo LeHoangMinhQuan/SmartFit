@@ -25,13 +25,34 @@ export const sendMessage = catchAsync(async (req: Request, res: Response) => {
     message: string;
   };
 
+  console.log("[chat.controller] POST /chat/message", {
+    user_id: req.user?.user_id,
+    session_id,
+    message_preview: message?.slice(0, 80),
+  });
+
   const { session_id: resolvedSessionId, result } =
     await chatService.sendMessage(req.user!.user_id, session_id, message);
 
-  await result.pipeUIMessageStreamToResponse(res, {
-    headers: { "X-Chat-Session-Id": String(resolvedSessionId) },
-    messageMetadata: () => ({ session_id: resolvedSessionId }),
+  console.log("[chat.controller] piping stream to response", {
+    resolvedSessionId,
   });
+
+  try {
+    await result.pipeUIMessageStreamToResponse(res, {
+      headers: { "X-Chat-Session-Id": String(resolvedSessionId) },
+      messageMetadata: () => ({ session_id: resolvedSessionId }),
+    });
+    console.log(
+      "[chat.controller] pipeUIMessageStreamToResponse resolved — stream closed",
+      {
+        resolvedSessionId,
+      },
+    );
+  } catch (err) {
+    console.error("[chat.controller] pipeUIMessageStreamToResponse threw", err);
+    throw err;
+  }
 });
 
 /** GET /api/chat/session/:session_id */

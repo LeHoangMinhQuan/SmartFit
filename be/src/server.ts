@@ -11,6 +11,16 @@ app.listen(port, "0.0.0.0", (error?: Error) => {
   }
 
   console.log(`Server running on port ${port}`);
+  // DEBUG: confirms what this running process actually resolved, in case
+  // the deployed .env is stale/different from what you expect.
+  console.log("[server] Gemini config:", {
+    chat_model: env.GEMINI_CHAT_MODEL,
+    embedding_model: env.GEMINI_EMBEDDING_MODEL,
+    api_key_present: Boolean(env.GEMINI_API_KEY),
+    api_key_preview: env.GEMINI_API_KEY
+      ? `${env.GEMINI_API_KEY.slice(0, 6)}...${env.GEMINI_API_KEY.slice(-4)}`
+      : null,
+  });
 });
 
 // Sweep abandoned 'pending_payment' orders (cancel + restore stock) every
