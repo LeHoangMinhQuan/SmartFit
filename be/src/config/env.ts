@@ -32,9 +32,6 @@ const required = [
   // AWS S3 — credentials via EC2 instance role, not env vars
   "AWS_REGION",
   "S3_BUCKET",
-
-  // CloudFront distribution domain that fronts the private S3 bucket for
-  // publicly-readable product/category images (see §10 of the API plan)
   "CDN_DOMAIN",
 
   // VNPay
@@ -95,18 +92,16 @@ export const env = {
 
   // Gemini
   GEMINI_API_KEY: process.env["GEMINI_API_KEY"]!,
+  // Use the lightweight model, can be replaced with gemini-3.6-flash for more powerful model
   GEMINI_CHAT_MODEL:
-    process.env["GEMINI_CHAT_MODEL"] ?? "gemini-2.5-flash-lite",
+    process.env["GEMINI_CHAT_MODEL"] ?? "gemini-3.1-flash-lite",
   GEMINI_EMBEDDING_MODEL:
-    process.env["GEMINI_EMBEDDING_MODEL"] ?? "gemini-embedding-001",
+    process.env["GEMINI_EMBEDDING_MODEL"] ?? "gemini-embedding-2",
 
   // ─── Firebase (forgot-password only — optional, see note above) ───────────
   FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],
   FIREBASE_CLIENT_EMAIL: process.env["FIREBASE_CLIENT_EMAIL"],
   FIREBASE_PRIVATE_KEY: process.env["FIREBASE_PRIVATE_KEY"],
-  // Web API key (public by design — same one used by Firebase JS SDKs).
-  // Used server-side to call the Identity Toolkit REST API directly, so
-  // we never need a Firebase client SDK in the browser at all.
   FIREBASE_WEB_API_KEY: process.env["FIREBASE_WEB_API_KEY"],
 
   // ─── SMTP (forgot-password only — optional, see note above) ────────────────
