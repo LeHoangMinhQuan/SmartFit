@@ -8,13 +8,13 @@
  */
 import { streamText, tool, type ModelMessage } from "ai";
 import { z } from "zod";
-import { env } from "../config/env.js";
 import { chatConfig, geminiProvider } from "../config/chat.js";
 import { ApiError } from "../utils/ApiError.js";
 import * as ChatSessionModel from "../models/chat-session.model.js";
 import type { ChatMessageRow } from "../models/chat-session.model.js";
 import * as RetrievalService from "./retrieval.service.js";
 import * as CartService from "./cart.service.js";
+import * as ModelRouter from "./model-router.service.js";
 
 const CHAT_SYSTEM_PROMPT = `You are the SmartFit shopping assistant. You help customers find products in the SmartFit catalog and add items to their cart.
 
@@ -249,13 +249,21 @@ export async function sendMessage(
     { role: "user", content: message },
   ];
 
+  const { model: selectedModel, ...routing } = await ModelRouter.selectModel(
+    message,
+    history,
+  );
+  console.log("[chat.service] model routing decision", routing, {
+    model: selectedModel,
+  });
+
   console.log("[chat.service] calling streamText", {
-    model: env.GEMINI_CHAT_MODEL,
+    model: selectedModel,
     message_count: modelMessages.length,
   });
 
   const result = streamText({
-    model: geminiProvider(env.GEMINI_CHAT_MODEL),
+    model: geminiProvider(selectedModel),
     system: CHAT_SYSTEM_PROMPT,
     messages: modelMessages,
     tools: buildTools(user_id, validPairs),
@@ -304,7 +312,11 @@ export async function sendMessage(
           session_id: resolvedSessionId,
           role: "assistant",
           content: event.text,
-          metadata: tool_calls.length ? { tool_calls } : null,
+          metadata: {
+            ...(tool_calls.length ? { tool_calls } : {}),
+            model: selectedModel,
+            ...routing,
+          },
         });
         console.log("[chat.service] onFinish: assistant message persisted");
 

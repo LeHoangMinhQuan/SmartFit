@@ -32,6 +32,9 @@ const required = [
   // AWS S3 — credentials via EC2 instance role, not env vars
   "AWS_REGION",
   "S3_BUCKET",
+
+  // CloudFront distribution domain that fronts the private S3 bucket for
+  // publicly-readable product/category images (see §10 of the API plan)
   "CDN_DOMAIN",
 
   // VNPay
@@ -92,16 +95,24 @@ export const env = {
 
   // Gemini
   GEMINI_API_KEY: process.env["GEMINI_API_KEY"]!,
-  // Use the lightweight model, can be replaced with gemini-3.6-flash for more powerful model
-  GEMINI_CHAT_MODEL:
-    process.env["GEMINI_CHAT_MODEL"] ?? "gemini-3.1-flash-lite",
+  // Default and heavy task model
+  GEMINI_CHAT_MODEL: process.env["GEMINI_CHAT_MODEL"] ?? "gemini-3.6-flash",
   GEMINI_EMBEDDING_MODEL:
     process.env["GEMINI_EMBEDDING_MODEL"] ?? "gemini-embedding-2",
+  // Lite model for low-cost tasks or budget fallbacks
+  GEMINI_CHAT_MODEL_LITE:
+    process.env["GEMINI_CHAT_MODEL_LITE"] ?? "gemini-3.1-flash-lite",
+
+  GEMINI_HEAVY_DAILY_BUDGET: Number(
+    process.env["GEMINI_HEAVY_DAILY_BUDGET"] ?? 1000,
+  ),
+  GEMINI_LITE_DAILY_BUDGET: Number(
+    process.env["GEMINI_LITE_DAILY_BUDGET"] ?? 1200,
+  ),
 
   // ─── Firebase (forgot-password only — optional, see note above) ───────────
   FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],
   FIREBASE_CLIENT_EMAIL: process.env["FIREBASE_CLIENT_EMAIL"],
-  FIREBASE_PRIVATE_KEY: process.env["FIREBASE_PRIVATE_KEY"],
   FIREBASE_WEB_API_KEY: process.env["FIREBASE_WEB_API_KEY"],
 
   // ─── SMTP (forgot-password only — optional, see note above) ────────────────

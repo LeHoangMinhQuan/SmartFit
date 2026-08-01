@@ -2,9 +2,13 @@
  * config/chat.ts
  *
  * Central config for the AI shopping assistant (chatbot build plan, Phase 2+).
- * Model names come from env (see .env.example) rather than being hardcoded,
- * so swapping gemini-3.6-flash -> gemini-3.1-flash-lite under rate-limit pressure
- * mid-demo is a one-line env var change, not a code change.
+ * Model names come from env (see .env.example) rather than being hardcoded.
+ * As of 2026-08-01, chat.service.ts no longer picks a single fixed model —
+ * services/model-router.service.ts routes each turn between the "heavy"
+ * (chatModel) and "light" (liteModel) models below based on task
+ * complexity and remaining daily free-tier budget. Both names still live
+ * here in env rather than hardcoded, so a further model swap stays a
+ * one-line env var change, not a code change.
  */
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { env } from "./env.js";
@@ -25,8 +29,22 @@ export const geminiProvider = createGoogleGenerativeAI({
 });
 
 export const chatConfig = {
+  // "Heavy" model — see services/model-router.service.ts. Kept as
+  // `chatModel` (not renamed) since chat.service.ts's existing log lines
+  // and comments already reference it under this name.
   chatModel: env.GEMINI_CHAT_MODEL,
+  // "Light" model — cheap/fast fallback + default for simple turns.
+  liteModel: env.GEMINI_CHAT_MODEL_LITE,
   embeddingModel: env.GEMINI_EMBEDDING_MODEL,
+
+  // Daily free-tier request budgets per model, enforced by
+  // model-router.service.ts via the gemini_usage_counter table. See the
+  // env var comments in config/env.ts for why these are conservative
+  // rather than an exact quota mirror.
+  budgets: {
+    heavy: env.GEMINI_HEAVY_DAILY_BUDGET,
+    lite: env.GEMINI_LITE_DAILY_BUDGET,
+  },
 
   // Matryoshka Representation Learning truncation — matches the vector(768)
   // column width in product_embedding. Must stay in sync with the schema.

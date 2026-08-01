@@ -14,8 +14,11 @@ app.listen(port, "0.0.0.0", (error?: Error) => {
   // DEBUG: confirms what this running process actually resolved, in case
   // the deployed .env is stale/different from what you expect.
   console.log("[server] Gemini config:", {
-    chat_model: env.GEMINI_CHAT_MODEL,
+    chat_model_heavy: env.GEMINI_CHAT_MODEL,
+    chat_model_lite: env.GEMINI_CHAT_MODEL_LITE,
     embedding_model: env.GEMINI_EMBEDDING_MODEL,
+    heavy_daily_budget: env.GEMINI_HEAVY_DAILY_BUDGET,
+    lite_daily_budget: env.GEMINI_LITE_DAILY_BUDGET,
     api_key_present: Boolean(env.GEMINI_API_KEY),
     api_key_preview: env.GEMINI_API_KEY
       ? `${env.GEMINI_API_KEY.slice(0, 6)}...${env.GEMINI_API_KEY.slice(-4)}`
