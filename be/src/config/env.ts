@@ -63,6 +63,34 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
+/**
+ * A present-but-blank env var (e.g. a bare `GEMINI_CHAT_MODEL=` line in
+ * .env/docker-compose, or a Compose `environment:` block referencing an
+ * unset host variable, which Compose resolves to "" rather than omitting
+ * the key) is NOT the same as an unset one — `??` only falls back on
+ * null/undefined, so "" sails through unchanged. This bit this codebase
+ * twice already: once on GEMINI_CHAT_MODEL/GEMINI_EMBEDDING_MODEL
+ * (google('') -> LoadAPIKeyError-adjacent silent failure), and again on
+ * the model-router's budget/RPM numbers, where Number("") evaluates to
+ * 0 — not NaN — silently zeroing out every daily budget and RPM ceiling,
+ * so every single Gemini call (including every search_products embedding
+ * call) gets rejected by gemini-budget.service.ts's reservation check
+ * before it ever reaches Google. That's the actual root cause of the
+ * "chatbot always says no products found" bug: it's not a search bug,
+ * it's every embedding call failing the budget check 100% of the time.
+ */
+function envString(key: string, fallback: string): string {
+  const raw = process.env[key];
+  return raw && raw.trim() !== "" ? raw : fallback;
+}
+
+function envNumber(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
 export const env = {
   PORT: parseInt(process.env["PORT"] ?? "3000", 10),
   FRONTEND_URL: process.env["FRONTEND_URL"]!,
@@ -96,19 +124,32 @@ export const env = {
   // Gemini
   GEMINI_API_KEY: process.env["GEMINI_API_KEY"]!,
   // Default and heavy task model
-  GEMINI_CHAT_MODEL: process.env["GEMINI_CHAT_MODEL"] ?? "gemini-3.6-flash",
-  GEMINI_EMBEDDING_MODEL:
-    process.env["GEMINI_EMBEDDING_MODEL"] ?? "gemini-embedding-2",
-  // Lite model for low-cost tasks or budget fallbacks
-  GEMINI_CHAT_MODEL_LITE:
-    process.env["GEMINI_CHAT_MODEL_LITE"] ?? "gemini-3.1-flash-lite",
+  GEMINI_CHAT_MODEL: envString("GEMINI_CHAT_MODEL", "gemini-3.6-flash"),
+  GEMINI_EMBEDDING_MODEL: envString(
+    "GEMINI_EMBEDDING_MODEL",
+    "gemini-embedding-2",
+  ),
+  // Lite model for low-cost tasks or budget fallbacks.
+  //
+  // FIX: default here was "gemini-3.1-flash-lite", which Google
+  // deprecated 2026-05-11 and fully shut down 2026-05-25 — confirmed via
+  // the Gemini API's own changelog (ai.google.dev/gemini-api/docs/changelog).
+  // That's before today, so every call to it 404s outright. Since
+  // model-router.service.ts's classifyComplexity defaults to "light" for
+  // most single-intent product searches (anything that isn't cart-intent,
+  // comparison/reasoning language, a resolved anaphoric reference, or
+  // unusually long), THIS — not the budget-zeroing bug fixed above — may
+  // be why searches were failing: whichever bug your deployment actually
+  // hit first, both independently guaranteed 100% failure on ordinary
+  // "find me X" turns. Correct current lite-tier model is
+  // gemini-3.5-flash-lite (GA since 2026-07-21, alongside gemini-3.6-flash).
+  GEMINI_CHAT_MODEL_LITE: envString(
+    "GEMINI_CHAT_MODEL_LITE",
+    "gemini-3.5-flash-lite",
+  ),
 
-  GEMINI_HEAVY_DAILY_BUDGET: Number(
-    process.env["GEMINI_HEAVY_DAILY_BUDGET"] ?? 1000,
-  ),
-  GEMINI_LITE_DAILY_BUDGET: Number(
-    process.env["GEMINI_LITE_DAILY_BUDGET"] ?? 1200,
-  ),
+  GEMINI_HEAVY_DAILY_BUDGET: envNumber("GEMINI_HEAVY_DAILY_BUDGET", 1000),
+  GEMINI_LITE_DAILY_BUDGET: envNumber("GEMINI_LITE_DAILY_BUDGET", 1200),
   // Embedding calls were previously untracked entirely — every
   // search_products turn (retrieval.service.ts) and every admin reindex
   // (embedding.service.ts) hit Gemini with zero budget accounting, so
@@ -117,8 +158,9 @@ export const env = {
   // gemini_usage_counter. Conservative default; see the RPM note below —
   // free-tier numbers drift over time and Google doesn't publish a
   // stable public table, so these are a floor, not a guarantee.
-  GEMINI_EMBEDDING_DAILY_BUDGET: Number(
-    process.env["GEMINI_EMBEDDING_DAILY_BUDGET"] ?? 1000,
+  GEMINI_EMBEDDING_DAILY_BUDGET: envNumber(
+    "GEMINI_EMBEDDING_DAILY_BUDGET",
+    1000,
   ),
 
   // Requests-per-minute ceilings, enforced in-process by
@@ -141,9 +183,9 @@ export const env = {
   // the only source of truth. These defaults are intentionally set below
   // every publicly-reported number we could find as a safety margin, not
   // as a claim about the exact real limit.
-  GEMINI_HEAVY_RPM: Number(process.env["GEMINI_HEAVY_RPM"] ?? 8),
-  GEMINI_LITE_RPM: Number(process.env["GEMINI_LITE_RPM"] ?? 12),
-  GEMINI_EMBEDDING_RPM: Number(process.env["GEMINI_EMBEDDING_RPM"] ?? 8),
+  GEMINI_HEAVY_RPM: envNumber("GEMINI_HEAVY_RPM", 8),
+  GEMINI_LITE_RPM: envNumber("GEMINI_LITE_RPM", 12),
+  GEMINI_EMBEDDING_RPM: envNumber("GEMINI_EMBEDDING_RPM", 8),
 
   // ─── Firebase (forgot-password only — optional, see note above) ───────────
   FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],
