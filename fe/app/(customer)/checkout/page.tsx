@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cartService } from "../../../services/cart.service";
 import { orderService } from "../../../services/order.service";
 import { paymentService } from "../../../services/payment.service";
+import type { PaymentMethod } from "../../../services/payment.service";
 import { userService } from "../../../services/user.service";
 import { useAuthStore } from "../../../store/useAuthStore";
 import { useCartStore } from "../../../store/useCartStore";
@@ -18,14 +19,11 @@ import AddressForm, {
 } from "../../../components/checkout/AddressForm";
 import ShippingSelector from "../../../components/checkout/ShippingSelector";
 import VoucherInput from "../../../components/checkout/VoucherInput";
-import { ShoppingBag, CreditCard } from "lucide-react";
+import { ShoppingBag, CreditCard, Truck } from "lucide-react";
 import type { CartItem, UserAddress } from "../../../interfaces";
 import type { VoucherValidationResult } from "../../../services/voucher.service";
 
 type Step = "address" | "shipping" | "payment";
-
-// VNPay payment_method_id — adjust to match your seed data
-const VNPAY_METHOD_ID = 1;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -36,6 +34,35 @@ export default function CheckoutPage() {
   const checkoutQueryKey = ["checkout", user?.user_id];
 
   const [step, setStep] = useState<Step>("address");
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<
+    number | null
+  >(null);
+
+  // Static reference data (2 rows: VNPay, COD) — fetch once, no need to
+  // gate behind a specific step.
+  const paymentMethodsQuery = useQuery({
+    queryKey: ["payment-methods"],
+    queryFn: () => paymentService.getPaymentMethods(),
+    staleTime: Infinity,
+  });
+  const paymentMethods: PaymentMethod[] = paymentMethodsQuery.data ?? [];
+
+  // Default to VNPay once methods load, if nothing's been picked yet —
+  // keeps the previous behavior (VNPay was the only option) as the
+  // default for anyone who doesn't consciously pick COD.
+  useEffect(() => {
+    if (selectedPaymentMethodId !== null || !paymentMethods.length) return;
+    const vnpay = paymentMethods.find((m) => m.name.toLowerCase() === "vnpay");
+    setSelectedPaymentMethodId(
+      vnpay?.payment_method_id ?? paymentMethods[0].payment_method_id,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMethods.length]);
+
+  const selectedPaymentMethod = paymentMethods.find(
+    (m) => m.payment_method_id === selectedPaymentMethodId,
+  );
+  const isCOD = selectedPaymentMethod?.name.toLowerCase() === "cod";
 
   // Address step state
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(
@@ -142,20 +169,35 @@ export default function CheckoutPage() {
 
   const placeOrderMutation = useMutation({
     mutationFn: async () => {
+      if (!selectedPaymentMethodId) {
+        throw new Error("No payment method selected");
+      }
       const addr = activeAddress ?? newAddress;
       const { order_id } = await orderService.createOrder({
-        payment_method_id: VNPAY_METHOD_ID,
+        payment_method_id: selectedPaymentMethodId,
         shipping_address: formatFullAddress(addr),
         ward_id: addr.ward_id!,
         shipping_fee: shippingFee,
         ...(voucher ? { voucher_code: voucher.code } : {}),
       });
+
+      // COD: nothing to redirect to for online payment — the order is
+      // placed, payment happens on delivery. VNPay: still needs the
+      // create-payment-url + redirect step.
+      if (isCOD) {
+        return { order_id, paymentUrl: null as string | null };
+      }
       const { paymentUrl } = await paymentService.createVNPayUrl(order_id);
-      return paymentUrl;
+      return { order_id, paymentUrl };
     },
-    onSuccess: (paymentUrl) => {
+    onSuccess: ({ order_id, paymentUrl }) => {
       clearItems();
-      window.location.href = paymentUrl;
+      if (paymentUrl) {
+        window.location.href = paymentUrl;
+      } else {
+        toast.success("Order placed! Pay in cash when it arrives.");
+        router.push(`/orders/${order_id}`);
+      }
     },
     onError: () => toast.error("Failed to place order. Please try again."),
   });
@@ -423,16 +465,52 @@ export default function CheckoutPage() {
                   />
                 </div>
 
-                <div className="flex items-start gap-4 rounded-xl border border-indigo-100 bg-indigo-50 p-5">
-                  <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
-                  <div className="text-sm text-indigo-900">
-                    <span className="font-semibold block mb-1">
-                      Secure Payment via VNPay
-                    </span>
-                    <span className="text-indigo-700/80">
-                      After placing your order, you will be securely redirected
-                      to VNPay to complete your purchase.
-                    </span>
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-900">
+                    Payment Method
+                  </h3>
+                  <div className="flex flex-col gap-3">
+                    {paymentMethods.map((method) => {
+                      const selected =
+                        method.payment_method_id === selectedPaymentMethodId;
+                      const isMethodCOD = method.name.toLowerCase() === "cod";
+                      return (
+                        <button
+                          key={method.payment_method_id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedPaymentMethodId(method.payment_method_id)
+                          }
+                          className={`flex items-start gap-4 rounded-xl border p-4 text-left transition ${
+                            selected
+                              ? "border-indigo-400 bg-indigo-50"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          {isMethodCOD ? (
+                            <Truck
+                              className={`mt-0.5 h-5 w-5 shrink-0 ${selected ? "text-indigo-500" : "text-slate-400"}`}
+                            />
+                          ) : (
+                            <CreditCard
+                              className={`mt-0.5 h-5 w-5 shrink-0 ${selected ? "text-indigo-500" : "text-slate-400"}`}
+                            />
+                          )}
+                          <div className="text-sm">
+                            <span className="block font-semibold text-slate-900">
+                              {isMethodCOD
+                                ? "Cash on Delivery"
+                                : `Secure Payment via ${method.name}`}
+                            </span>
+                            <span className="text-slate-500">
+                              {isMethodCOD
+                                ? "Pay in cash when your order arrives."
+                                : `After placing your order, you will be securely redirected to ${method.name} to complete your purchase.`}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </section>
@@ -493,13 +571,15 @@ export default function CheckoutPage() {
               {step === "payment" && (
                 <button
                   onClick={handlePlaceOrder}
-                  disabled={placing}
+                  disabled={placing || !selectedPaymentMethodId}
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30 disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {placing ? (
                     <>
                       <Spinner size="sm" /> Processing...
                     </>
+                  ) : isCOD ? (
+                    "Place Order"
                   ) : (
                     "Place Order & Pay"
                   )}

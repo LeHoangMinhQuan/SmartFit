@@ -65,7 +65,7 @@ export interface RegisterResult {
     user_id: number;
     username: string;
     email: string;
-    phone: string;
+    phone: string | null;
   };
   accessToken: string;
   refreshToken: string;
@@ -135,7 +135,7 @@ export interface LoginResult {
     user_id: number;
     username: string;
     email: string;
-    phone: string;
+    phone: string | null;
   };
   accessToken: string;
   refreshToken: string;
@@ -151,6 +151,17 @@ export const login = async (body: LoginBody): Promise<LoginResult> => {
   }
 
   // 2. Verify password
+  // Bug fix: password_hash is nullable — accounts created via Google
+  // sign-in never get one (see the NextAuth/Google user-creation path).
+  // bcrypt.compare() throws at runtime on a null hash, not just a type
+  // error, so a Google-only account's email hitting this endpoint would
+  // 500 instead of cleanly failing. Same "don't reveal which part was
+  // wrong" message as the !user case above, rather than something like
+  // "this account uses Google sign-in" which would leak account
+  // existence/type to an attacker probing emails.
+  if (!user.password_hash) {
+    throw new ApiError(401, "Invalid email or password");
+  }
   const valid = await bcrypt.compare(body.password, user.password_hash);
 
   if (!valid) {

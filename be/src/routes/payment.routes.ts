@@ -1,7 +1,6 @@
 import { Router, urlencoded } from "express";
 import { authenticate } from "../middleware/authenticate.js";
 import * as PaymentController from "../controllers/payment.controller.js";
-
 /**
  * ⚠️  IPN MUST be registered BEFORE express.json() in app.ts.
  * VNPay sends IPN as application/x-www-form-urlencoded.
@@ -25,6 +24,7 @@ paymentIpnRouter.post(
 // Everything else needs express.json() to have already run — mount this
 // router AFTER express.json() in app.ts (alongside the other /api/* routes).
 const router = Router();
+router.get("/methods", PaymentController.getPaymentMethods);
 router.post("/vnpay/create", authenticate, PaymentController.createPaymentUrl);
 router.get("/vnpay/return", PaymentController.vnpayReturn);
 

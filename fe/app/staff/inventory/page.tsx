@@ -310,6 +310,45 @@ export default function StaffInventoryPage() {
                 { key: "product_name", header: "Product" },
                 { key: "variant_name", header: "Variant" },
                 { key: "quantity", header: "Current Stock" },
+                {
+                  key: "adjust",
+                  header: "Adjust",
+                  render: (row: Record<string, unknown>) => {
+                    const r = row as unknown as InventoryRow;
+                    const key = `${r.product_id}-${r.variant_id}`;
+                    const isAdjusting = adjusting === key;
+                    return (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder={String(r.quantity)}
+                          value={adjustQty[key] ?? ""}
+                          onChange={(e) =>
+                            setAdjustQty((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-black/20"
+                        />
+                        <button
+                          onClick={() =>
+                            handleAdjust(r.product_id, r.variant_id, r.store_id)
+                          }
+                          disabled={isAdjusting || !adjustQty[key]?.trim()}
+                          className="rounded-lg bg-black px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-40 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+                        >
+                          {isAdjusting ? (
+                            <Spinner className="h-3 w-3" />
+                          ) : (
+                            "Save"
+                          )}
+                        </button>
+                      </div>
+                    );
+                  },
+                },
               ]}
               rows={stock as unknown as Record<string, unknown>[]}
               rowKey={(r) => `${r.product_id}-${r.variant_id}`}

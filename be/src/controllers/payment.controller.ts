@@ -1,18 +1,34 @@
 import { Request, Response, NextFunction } from "express";
 import { catchAsync } from "../utils/catchAsync.js";
 import * as VNPayService from "../services/vnpay.service.js";
+import db from "../config/db.js";
+
+/**
+ * GET /api/payment/methods
+ * Public — the checkout page needs this before the customer is
+ * necessarily authenticated-and-past-login (e.g. browsing checkout mid-
+ * guest-flow), and it's static reference data with no per-user variation.
+ */
+export const getPaymentMethods = catchAsync(
+  async (_req: Request, res: Response) => {
+    const methods = await db("payment_method")
+      .select("payment_method_id", "name")
+      .orderBy("payment_method_id");
+    res.status(200).json({ data: methods });
+  },
+);
 
 export const createPaymentUrl = catchAsync(
   async (req: Request, res: Response) => {
     const { order_id } = req.body;
     const user_id = (req as any).user.user_id;
     const ip = req.ip ?? req.socket.remoteAddress ?? "127.0.0.1";
-    console.log("In vnpay.ts, createPaymentUrl()")
-    console.log("order_id: ", order_id)
-    console.log("user_id: ", user_id)
-    console.log("req.ip: ", req.ip)
-    console.log("req.socket.remoteAddress: ", req.socket.remoteAddress)
-    console.log("ip: ", ip)
+    console.log("In vnpay.ts, createPaymentUrl()");
+    console.log("order_id: ", order_id);
+    console.log("user_id: ", user_id);
+    console.log("req.ip: ", req.ip);
+    console.log("req.socket.remoteAddress: ", req.socket.remoteAddress);
+    console.log("ip: ", ip);
     const result = await VNPayService.createPaymentUrl(
       Number(order_id),
       user_id,
