@@ -74,6 +74,21 @@ export async function upsertCartItem(data: {
   unit_price: number;
   subtotal: number;
 }) {
+  // BUG FIX: previously this went straight to `cart_item.insert()` on the
+  // not-exists path without ever guaranteeing a `cart` row exists for this
+  // user — getCartWithItems() calls findOrCreateCart() first, but nothing
+  // did that on the write path. That's fine as long as the user happened
+  // to view their cart (GET /cart) before adding anything, since that
+  // lazily creates the cart row — but the chatbot's add_to_cart tool can
+  // easily be the very first cart-touching action in a session, with no
+  // prior getCart call, so the insert hit
+  // `fk_relationship_46` (cart_item.cart_id -> cart.cart_id) with
+  // "Key (user_id, cart_id)=(?, 1) is not present in table cart".
+  console.log("[cart.model] upsertCartItem: ensuring cart exists", {
+    user_id: data.user_id,
+  });
+  await findOrCreateCart(data.user_id);
+
   const existing = await findCartItem(
     data.user_id,
     data.product_id,

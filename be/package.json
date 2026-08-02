@@ -8,9 +8,6 @@
   },
   "scripts": {
     "seed": "npx tsx node_modules/knex/bin/cli.js seed:run",
-    "postseed": "npm run reindex:embeddings",
-    "reindex:embeddings": "tsx scripts/reindex-embeddings.ts",
-    "backfill:firebase": "tsx scripts/backfill-firebase-users.ts",
     "makeghn": "node sql/ghn_locations_seed.js",
     "dev": "tsx watch src/server.ts",
     "build": "tsc --project tsconfig.json",

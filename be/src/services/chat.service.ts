@@ -225,11 +225,27 @@ function buildTools(user_id: number, validPairs: Set<string>) {
             // instead of the whole turn failing.
             return { error: err.message };
           }
+          // BUG FIX: this branch used to `throw err`, which the model only
+          // ever sees as an opaque tool-error content part with no usable
+          // message — it has zero grounding for what actually happened. In
+          // practice that meant an unexpected failure here (e.g. the
+          // cart_item -> cart FK violation this exact branch just caught in
+          // production: "Key (user_id, cart_id)=(2, 1) is not present in
+          // table cart") could leave the model free to write ANY plausible
+          // closing text, including one that tells the customer the item
+          // was added when it silently wasn't. Returning a structured
+          // {error} here — same shape as the ApiError branch above — is
+          // required by this file's own system prompt rule ("if a tool
+          // call fails, tell the customer what went wrong"), and is the
+          // only way to guarantee that.
           console.error(
             "[chat.service] add_to_cart failed with unexpected error",
             err,
           );
-          throw err;
+          return {
+            error:
+              "Something went wrong adding this to your cart — please try again in a moment.",
+          };
         }
 
         return { cart_url: "/cart" };
