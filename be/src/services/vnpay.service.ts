@@ -122,6 +122,9 @@ async function applyPaymentResult(
       try {
         const { createShipmentForOrder } = await import("./ghn.service.js");
         await createShipmentForOrder(order_id);
+        const { notifyStaffOfConfirmedOrder } =
+          await import("./notification.service.js");
+        await notifyStaffOfConfirmedOrder(order_id);
       } catch (err) {
         console.error(
           `[payment] GHN shipment creation failed for order ${order_id}:`,

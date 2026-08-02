@@ -194,6 +194,9 @@ export async function createOrder(
           try {
             const { createShipmentForOrder } = await import("./ghn.service.js");
             await createShipmentForOrder(result.order_id);
+            const { notifyStaffOfConfirmedOrder } =
+              await import("./notification.service.js");
+            await notifyStaffOfConfirmedOrder(result.order_id);
           } catch (err) {
             console.error(
               `[order] COD GHN shipment creation failed for order ${result.order_id}:`,

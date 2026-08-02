@@ -204,4 +204,14 @@ export const env = {
   SMTP_USER: process.env["SMTP_USER"],
   SMTP_PASS: process.env["SMTP_PASS"],
   SMTP_FROM: process.env["SMTP_FROM"],
+
+  // ─── Order notifications (optional) ─────────────────────────────────────────
+  // Where "new order ready for fulfillment" emails go — see
+  // services/notification.service.ts. The `staff` table has no email
+  // column at all (just staff_id/password_hash), so this is one shared
+  // ops inbox rather than per-staff routing, same as many small real
+  // shops actually do it. Soft-fails (logs + skips) if unset, same
+  // pattern as SMTP/Firebase above — a missing notification must never
+  // block order creation or payment confirmation.
+  ORDER_NOTIFICATION_EMAIL: process.env["ORDER_NOTIFICATION_EMAIL"],
 } as const;
