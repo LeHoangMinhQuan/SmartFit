@@ -42,8 +42,8 @@ export default function AddressBook() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    const { address_line, province_id, district_id, ward_id } = form;
-    if (!address_line || !province_id || !district_id || !ward_id) {
+    const { address_line, province_id, district_id, ward_id, phone } = form;
+    if (!address_line || !province_id || !district_id || !ward_id || !phone) {
       toast.error("Please fill all required fields.");
       return;
     }

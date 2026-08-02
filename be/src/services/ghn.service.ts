@@ -104,8 +104,14 @@ export async function createShipmentForOrder(order_id: number) {
     // Previously hardcoded to "Customer" / "0900000000" for every
     // shipment — a real courier can't reach a placeholder phone number
     // to arrange delivery, and can't collect COD cash from "Customer".
+    // to_phone is order.recipient_phone — a snapshot of the chosen
+    // address's phone, copied in at order placement (see the column
+    // comment on ORDER). The actual required-phone gate is
+    // address.phone / AddressForm, not this field; it's never sourced
+    // from the account's own USER.phone, which is nullable
+    // (Google-authenticated accounts have none).
     to_name: order.customer_name,
-    to_phone: order.customer_phone,
+    to_phone: order.recipient_phone,
     to_address: order.shipping_address,
     to_ward_code: String(order.ward_id ?? ""),
     to_district_id: order.district_id ?? 0,

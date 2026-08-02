@@ -270,6 +270,8 @@ export interface Address {
   province_id: number;
   district_id: number;
   ward_id: number;
+  // Delivery contact number — required for every address.
+  phone: string;
 }
 
 export interface UserAddress extends Address {

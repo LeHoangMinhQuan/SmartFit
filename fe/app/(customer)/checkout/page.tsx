@@ -278,6 +278,7 @@ function CheckoutPageInner() {
         payment_method_id: selectedPaymentMethodId,
         shipping_address: formatFullAddress(addr),
         ward_id: addr.ward_id!,
+        recipient_phone: addr.phone!,
         shipping_fee: shippingFee,
         ...(voucher ? { voucher_code: voucher.code } : {}),
       });
@@ -315,7 +316,7 @@ function CheckoutPageInner() {
     }
 
     const addr = activeAddress ?? newAddress;
-    if (!addr.address_line || !addr.ward_id) {
+    if (!addr.address_line || !addr.ward_id || !addr.phone) {
       toast.error("Address is incomplete.");
       return;
     }
@@ -415,6 +416,9 @@ function CheckoutPageInner() {
                         <span className="text-sm text-slate-600">
                           {formatFullAddress(a)}
                         </span>
+                        <span className="text-xs text-slate-400">
+                          {a.phone}
+                        </span>
                       </div>
                     </label>
                   ))}
@@ -458,7 +462,8 @@ function CheckoutPageInner() {
                           !newAddress.address_line ||
                           !newAddress.province_id ||
                           !newAddress.district_id ||
-                          !newAddress.ward_id
+                          !newAddress.ward_id ||
+                          !newAddress.phone
                         ) {
                           toast.error("Fill in the full address first.");
                           return;
@@ -487,6 +492,11 @@ function CheckoutPageInner() {
                       </span>
                     )}
                     {formatFullAddress(activeAddress ?? newAddress)}
+                    {(activeAddress ?? newAddress).phone && (
+                      <div className="mt-1 text-slate-500">
+                        {(activeAddress ?? newAddress).phone}
+                      </div>
+                    )}
                   </div>
                 )
               )}

@@ -18,6 +18,7 @@ interface AddAddressBody {
   province_id: number;
   district_id: number;
   ward_id: number;
+  phone: string; // CHAR(10) — required, see AddressForm
   label?: string; // VARCHAR(20)
   is_default?: boolean;
 }

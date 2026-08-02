@@ -130,6 +130,9 @@ async function applyPaymentResult(
           `[payment] GHN shipment creation failed for order ${order_id}:`,
           err,
         );
+        const { notifyStaffOfShipmentFailure } =
+          await import("./notification.service.js");
+        await notifyStaffOfShipmentFailure(order_id, err).catch(() => {});
       }
     });
   }

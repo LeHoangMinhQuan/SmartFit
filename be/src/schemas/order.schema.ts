@@ -5,6 +5,16 @@ export const createOrderSchema = z.object({
     payment_method_id: z.number().int().positive(),
     shipping_address: z.string().min(1).max(255),
     ward_id: z.number().int().positive(),
+    // Required so GHN shipment creation (createShipmentForOrder) always has
+    // a deliverable contact number. This is the ORDER-side snapshot of the
+    // chosen address's required phone (see address.phone / AddressForm —
+    // that's the actual collection gate); the frontend copies it in here
+    // at order placement, same as it already builds shipping_address from
+    // the chosen address.
+    recipient_phone: z
+      .string()
+      .length(10)
+      .regex(/^\d+$/, "Phone must be digits only"),
     // Bug fix: total_amount previously excluded this entirely — every
     // VNPay charge silently undercharged by the delivery fee. Trusting
     // client input for a monetary amount is a known gap (see order.service.ts

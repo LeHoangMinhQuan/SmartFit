@@ -5,6 +5,12 @@ interface CreateOrderBody {
   payment_method_id: number;
   shipping_address: string; // VARCHAR(70) — denormalized, validated before submit
   ward_id: number;
+  // Delivery contact number — required by the backend now (see
+  // order.schema.ts): GHN rejects shipment creation without one, and the
+  // account's own profile phone isn't a reliable source (nullable for
+  // Google-authenticated accounts, and not necessarily who should
+  // receive this particular delivery anyway).
+  recipient_phone: string;
   // Bug fix: was voucher_id, but the backend (order.service.ts,
   // VoucherModel.validateVoucher) only ever reads voucher_code — zod
   // silently strips unrecognized body keys by default, so voucher_id was

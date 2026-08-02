@@ -88,3 +88,58 @@ export async function notifyStaffOfConfirmedOrder(
     );
   }
 }
+
+/**
+ * Called from order.service.ts's createOrder (COD path) and
+ * vnpay.service.ts's applyPaymentResult when createShipmentForOrder
+ * throws. Previously that failure only ever hit console.error — the
+ * order was left confirmed/paid with shipping_order_id still NULL,
+ * indistinguishable in the dashboard from an order simply waiting to be
+ * picked, so nobody knew to retry it. This is the only signal staff get;
+ * without ORDER_NOTIFICATION_EMAIL configured, a failed shipment is
+ * invisible until someone happens to notice the order isn't moving.
+ */
+export async function notifyStaffOfShipmentFailure(
+  order_id: number,
+  error: unknown,
+): Promise<void> {
+  const to = env.ORDER_NOTIFICATION_EMAIL;
+  if (!to) {
+    console.warn(
+      `[notification] ORDER_NOTIFICATION_EMAIL not configured — skipping shipment-failure email for order ${order_id}`,
+    );
+    return;
+  }
+
+  try {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    await sendMail({
+      to,
+      subject: `⚠ GHN shipment creation FAILED for order #${order_id}`,
+      html: `
+        <p>Order #${order_id} was confirmed, but creating its GHN shipment
+        failed — no tracking code was generated and this order will not
+        show up as needing fulfillment.</p>
+        <p><strong>Error:</strong> ${reason}</p>
+        <p>
+          Please check the order (address, ward/district, and delivery
+          phone number are the most common causes GHN rejects a shipment)
+          and retry shipment creation manually.
+        </p>
+      `,
+    });
+
+    console.log(
+      `[notification] Sent shipment-failure email for order ${order_id} to ${to}`,
+    );
+  } catch (err) {
+    // Same fail-safe rule as notifyStaffOfConfirmedOrder — this alert
+    // failing must never throw back into the caller's already-caught
+    // shipment-creation failure.
+    console.error(
+      `[notification] Failed to send shipment-failure email for order ${order_id}:`,
+      err,
+    );
+  }
+}

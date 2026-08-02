@@ -50,6 +50,7 @@ export async function createOrder(
     payment_method_id: number;
     shipping_address: string;
     ward_id: number;
+    recipient_phone: string;
     voucher_code?: string;
     shipping_fee: number;
   },
@@ -152,6 +153,7 @@ export async function createOrder(
           payment_method_id: data.payment_method_id,
           shipping_address: data.shipping_address,
           ward_id: data.ward_id,
+          recipient_phone: data.recipient_phone,
           total_amount,
           shipping_fee: data.shipping_fee,
           status: initialStatus,
@@ -201,6 +203,11 @@ export async function createOrder(
             console.error(
               `[order] COD GHN shipment creation failed for order ${result.order_id}:`,
               err,
+            );
+            const { notifyStaffOfShipmentFailure } =
+              await import("./notification.service.js");
+            await notifyStaffOfShipmentFailure(result.order_id, err).catch(
+              () => {},
             );
           }
         });

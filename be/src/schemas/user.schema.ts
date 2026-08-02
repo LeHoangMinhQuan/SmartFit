@@ -25,6 +25,11 @@ export const createAddressSchema = z.object({
     province_id: z.number().int().positive(),
     district_id: z.number().int().positive(),
     ward_id: z.number().int().positive(),
+    // Required — this is the gate for GHN shipment creation having a
+    // deliverable contact number. Not sourced from USER.phone: that's
+    // nullable (Google-authenticated accounts have none) and isn't
+    // necessarily who should receive a delivery to this address anyway.
+    phone: z.string().length(10).regex(/^\d+$/, "Phone must be digits only"),
     label: z.string().max(20).optional(),
   }),
 });
@@ -36,6 +41,11 @@ export const updateAddressSchema = z.object({
     province_id: z.number().int().positive().optional(),
     district_id: z.number().int().positive().optional(),
     ward_id: z.number().int().positive().optional(),
+    phone: z
+      .string()
+      .length(10)
+      .regex(/^\d+$/, "Phone must be digits only")
+      .optional(),
     label: z.string().max(20).optional(),
   }),
 });

@@ -17,6 +17,7 @@ export interface CreateOrderData {
   staff_id: number; // always 1 (system account) for customer orders
   payment_method_id: number;
   shipping_address: string; // VARCHAR(255) denormalized — full concatenated address (address_line, ward, district, province)
+  recipient_phone: string; // denormalized delivery contact — see column comment on ORDER
   total_amount: number;
   status: OrderStatus;
 }
@@ -33,12 +34,18 @@ export async function findOrderById(order_id: number) {
 }
 
 /**
- * Same order row, plus the payment method's name and the customer's real
- * contact info (from USER) — needed anywhere that has to tell COD from
+ * Same order row, plus the payment method's name and the customer's
+ * display name (from USER) — needed anywhere that has to tell COD from
  * prepaid apart (payment_method.name) or actually reach the customer
  * (createShipmentForOrder). Kept separate from findOrderById rather than
  * changing that function's return shape, since it's used in many places
  * that only expect the bare ORDER columns.
+ *
+ * The recipient's phone number is NOT joined from USER — it's already on
+ * `o.*` as `recipient_phone`, captured at checkout. USER.phone is nullable
+ * (Google-authenticated accounts have none) and isn't necessarily who
+ * should receive this particular delivery, so it was dropped as a source
+ * entirely rather than used as a fallback.
  */
 export async function findOrderWithCustomerInfo(order_id: number) {
   return (
@@ -59,7 +66,6 @@ export async function findOrderWithCustomerInfo(order_id: number) {
         "o.*",
         "pm.name as payment_method_name",
         "u.username as customer_name",
-        "u.phone as customer_phone",
         "w.district_id",
       )
       .first()

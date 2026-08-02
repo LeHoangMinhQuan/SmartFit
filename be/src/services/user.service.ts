@@ -60,6 +60,7 @@ export async function addAddress(
     province_id: number;
     district_id: number;
     ward_id: number;
+    phone: string;
     label?: string;
   },
 ) {
@@ -68,6 +69,7 @@ export async function addAddress(
     province_id: data.province_id,
     district_id: data.district_id,
     ward_id: data.ward_id,
+    phone: data.phone,
   });
   await AddressModel.addUserAddress(address_id, user_id, data.label);
 
@@ -88,6 +90,7 @@ export async function updateAddress(
     province_id?: number;
     district_id?: number;
     ward_id?: number;
+    phone?: string;
     label?: string;
   },
 ) {
@@ -102,6 +105,7 @@ export async function updateAddress(
   if (data.province_id) addressFields.province_id = data.province_id;
   if (data.district_id) addressFields.district_id = data.district_id;
   if (data.ward_id) addressFields.ward_id = data.ward_id;
+  if (data.phone) addressFields.phone = data.phone;
 
   if (Object.keys(addressFields).length) {
     await AddressModel.updateAddress(address_id, addressFields);

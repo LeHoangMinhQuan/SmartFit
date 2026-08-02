@@ -18,6 +18,12 @@ export interface AddressFormValues {
   ward_name?: string;
   label: string; // VARCHAR(20) — max 20 chars
   is_default: boolean;
+  // Delivery contact number for this address — required. GHN rejects
+  // shipment creation without one; collected here (not from the
+  // account's own profile) since that's nullable for Google-
+  // authenticated accounts and isn't necessarily who should receive a
+  // delivery to this particular address.
+  phone: string;
 }
 
 interface AddressFormProps {
@@ -95,6 +101,17 @@ export default function AddressForm({
         maxLength={20}
         hint="House number & Street name — max 20 characters"
         error={errors?.address_line}
+        required
+      />
+
+      <Input
+        label="Phone number"
+        type="tel"
+        value={value.phone ?? ""}
+        onChange={(e) => set("phone", e.target.value)}
+        maxLength={10}
+        hint="The courier will call this number to arrange delivery."
+        error={errors?.phone}
         required
       />
 

@@ -6,6 +6,8 @@ export interface Address {
   province_id: number;
   district_id: number;
   ward_id: number;
+  // Delivery contact number — required (NOT NULL on address.phone).
+  phone: string;
 }
 
 export interface AddressWithNames extends Address {
@@ -28,6 +30,7 @@ export interface CreateAddressInput {
   province_id: number;
   district_id: number;
   ward_id: number;
+  phone: string;
 }
 
 export interface UpdateAddressInput {
@@ -35,6 +38,7 @@ export interface UpdateAddressInput {
   province_id?: number;
   district_id?: number;
   ward_id?: number;
+  phone?: string;
 }
 
 /**
@@ -55,6 +59,7 @@ export async function findUserAddresses(
       "a.province_id",
       "a.district_id",
       "a.ward_id",
+      "a.phone",
       "pr.province_name",
       "d.district_name",
       "w.ward_name",
@@ -82,6 +87,7 @@ export async function findAddressByIdAndUser(
       "a.province_id",
       "a.district_id",
       "a.ward_id",
+      "a.phone",
       "pr.province_name",
       "d.district_name",
       "w.ward_name",
@@ -127,6 +133,7 @@ export async function updateAddress(
   if (data.province_id !== undefined) updates["province_id"] = data.province_id;
   if (data.district_id !== undefined) updates["district_id"] = data.district_id;
   if (data.ward_id !== undefined) updates["ward_id"] = data.ward_id;
+  if (data.phone !== undefined) updates["phone"] = data.phone;
 
   return db("address").where({ address_id }).update(updates);
 }
