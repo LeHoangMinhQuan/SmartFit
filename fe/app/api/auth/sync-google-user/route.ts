@@ -98,7 +98,11 @@ export async function POST() {
   // polyfill) returns each one individually, needed here since the
   // backend sets two cookies (accessToken + refreshToken) in one
   // response.
+  // Defense-in-depth alongside middleware.ts's blanket /api/auth/* rule —
+  // this response is per-user (sets accessToken/refreshToken cookies) and
+  // must never be cached by Cloudflare or any intermediate proxy.
   const response = NextResponse.json({ user: body.user }, { status: 200 });
+  response.headers.set("Cache-Control", "no-store, no-cache, private");
   const setCookieHeaders = backendRes.headers.getSetCookie?.() ?? [];
   for (const cookie of setCookieHeaders) {
     response.headers.append("Set-Cookie", cookie);
