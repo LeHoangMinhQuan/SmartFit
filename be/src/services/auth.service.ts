@@ -355,6 +355,38 @@ export const forgotPassword = async (email: string): Promise<void> => {
   const user = await findUserByEmail(email);
   if (!user) return;
 
+  // Google-only account — no local password to reset. These were never
+  // mirrored into Firebase Auth (only the native register() path does
+  // that; the Google sign-in bridge creates the USER row directly).
+  // Without this check, generatePasswordResetLink() below throws
+  // auth/user-not-found and the requester gets a confusing generic 500
+  // with no idea why. Deliberate, minor enumeration trade-off: this
+  // reveals "this email has an account, and it's Google-linked" to
+  // anyone who submits it — the same trade-off GitHub/Slack make for
+  // this exact case, because leaving a legitimate user stuck with an
+  // unexplained failure is worse than that small leak.
+  if (!user.password_hash) {
+    try {
+      await sendMail({
+        to: email,
+        subject: "About your SmartFit account",
+        html: `
+          <p>Hi ${user.username},</p>
+          <p>We received a password reset request for this email, but your SmartFit account signs in with Google and doesn't have a separate password.</p>
+          <p>Please use the "Sign in with Google" button on the login page instead.</p>
+        `,
+      });
+    } catch (err) {
+      console.error(
+        `[auth] Failed to send Google-account notice to ${email}:`,
+        err instanceof Error ? err.message : err,
+      );
+      // Not the primary reset flow — a courtesy notice failing shouldn't
+      // surface as an error to the requester.
+    }
+    return;
+  }
+
   let resetLink: string;
   try {
     resetLink = await firebaseAuth().generatePasswordResetLink(email, {
@@ -365,6 +397,24 @@ export const forgotPassword = async (email: string): Promise<void> => {
       handleCodeInApp: true,
     });
   } catch (err) {
+    const code = (err as { code?: string })?.code;
+    if (code === "auth/user-not-found") {
+      // This account has a local password_hash but was never (or no
+      // longer) mirrored into Firebase — most likely the best-effort
+      // createUser() call at registration failed silently (see the
+      // comment on that call). There's no automated recovery here: we
+      // only ever have the bcrypt hash, never the plaintext password
+      // needed to (re)create the Firebase user. Tell them plainly rather
+      // than a bare 500, since this is a real, if rare, gap in the
+      // current design, not a transient error worth retrying.
+      console.error(
+        `[auth] Firebase mirror missing for ${email} (password reset unavailable) — likely a failed createUser() at registration time.`,
+      );
+      throw new ApiError(
+        500,
+        "We couldn't start a password reset for this account. Please contact support.",
+      );
+    }
     console.error(
       `[auth] Failed to generate a Firebase reset link for ${email}:`,
       err instanceof Error ? err.message : err,
