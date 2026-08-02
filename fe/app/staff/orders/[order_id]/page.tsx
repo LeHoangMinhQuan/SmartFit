@@ -73,6 +73,9 @@ export default function StaffOrderDetailPage() {
         toast.success("Refund confirmed by VNPay.");
       } else {
         // Order stays 'refund_requested' — VNPay declined, safe to retry.
+        // Refetch so latest_refund reflects this attempt (for the "last
+        // attempt failed" note above), not just the toast.
+        queryClient.invalidateQueries({ queryKey: ["staff-order", orderId] });
         toast.error(
           result.message || "VNPay declined the refund. You can retry.",
         );
@@ -149,6 +152,16 @@ export default function StaffOrderDetailPage() {
               Processing it calls VNPay&rsquo;s refund API for{" "}
               {formatPrice(order.total_amount)} — this actually moves money.
             </p>
+            {order.latest_refund?.status === "failed" && (
+              <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs text-amber-900">
+                Last attempt ({formatDate(order.latest_refund.created_at)})
+                failed
+                {order.latest_refund.vnpay_response_code
+                  ? ` — VNPay code ${order.latest_refund.vnpay_response_code}`
+                  : ""}
+                . Safe to retry.
+              </p>
+            )}
           </div>
           <button
             onClick={handleProcessRefund}

@@ -27,16 +27,3 @@ export async function findRefundByOrderId(order_id: number) {
     .orderBy("refund_id", "desc")
     .first();
 }
-
-export async function markRefundResult(
-  refund_id: number,
-  update: {
-    status: RefundStatus;
-    vnpay_refund_txn_no?: string | null;
-    vnpay_response_code?: string | null;
-  },
-) {
-  return db("payment_refund")
-    .where({ refund_id })
-    .update({ ...update, completed_at: db.fn.now() });
-}

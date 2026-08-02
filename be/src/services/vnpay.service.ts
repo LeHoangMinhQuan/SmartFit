@@ -227,6 +227,7 @@ export async function processRefund(
   let result: RefundResponse;
   try {
     result = await vnpayClient.refund({
+      vnp_RequestId: buildTxnRef(order_id), // unique per request, same pattern as payment creation
       vnp_TransactionType: RefundTransactionType.FULL_REFUND,
       vnp_TxnRef: transaction.vnpay_txn_ref,
       vnp_Amount: Number(transaction.vnpay_amount),
@@ -236,7 +237,7 @@ export async function processRefund(
       vnp_CreateDate: now.getTime(),
       vnp_CreateBy: `staff:${staff_id}`,
       vnp_IpAddr: "127.0.0.1",
-    } as any);
+    });
   } catch (err) {
     console.error(
       `[refund] VNPay refund call failed for order ${order_id}:`,

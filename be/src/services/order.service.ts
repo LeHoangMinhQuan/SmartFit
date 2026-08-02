@@ -405,5 +405,16 @@ export async function adminGetOrderDetail(order_id: number) {
 
   const items = await OrderModel.findOrderItems(order_id);
   const shipping = await ShippingModel.findShippingOrderByOrderId(order_id);
-  return { ...order, items, shipping };
+
+  // Only relevant once a refund has actually been attempted — lets staff
+  // see why a previous attempt failed (e.g. VNPay declined) instead of
+  // just seeing the order stuck at 'refund_requested' with no context.
+  let latest_refund = null;
+  if (order.status === "refund_requested" || order.status === "refunded") {
+    const { findRefundByOrderId } =
+      await import("../models/payment_refund.model.js");
+    latest_refund = (await findRefundByOrderId(order_id)) ?? null;
+  }
+
+  return { ...order, items, shipping, latest_refund };
 }

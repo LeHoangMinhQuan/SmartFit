@@ -179,6 +179,18 @@ export interface Order {
   shipping_order_id: number | null;
   items: OrderItem[];
   shipping?: ShippingOrder;
+  // Only present (staff-facing GET /admin/orders/:order_id) once the order
+  // has reached refund_requested/refunded — the most recent refund attempt,
+  // so staff can see why a previous try failed instead of just seeing the
+  // order stuck at refund_requested with no context.
+  latest_refund?: {
+    refund_id: number;
+    status: "pending" | "success" | "failed";
+    amount: number;
+    reason: string | null;
+    vnpay_response_code: string | null;
+    created_at: string;
+  } | null;
 }
 
 export interface OrderItem {
