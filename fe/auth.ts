@@ -17,7 +17,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
   callbacks: {
     // NextAuth's default session.user has no stable id at all — just
-    // name/email/image. app/api/sync-google-user/route.ts needs Google's
+    // name/email/image. app/api/auth/sync-google-user/route.ts needs Google's
     // own account id (not just email) to reliably find-or-create the
     // matching backend USER row, so thread it through: jwt callback
     // copies it from `account` (only present on the initial sign-in,

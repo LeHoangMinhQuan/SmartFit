@@ -2,7 +2,17 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 /**
- * POST /api/sync-google-user
+ * POST /api/auth/sync-google-user
+ *
+ * NOTE (2026-08-01): moved here from /api/sync-google-user — that path
+ * fell through your nginx config's `location /api/` block (backend,
+ * port 3000) rather than `location /api/auth/` (frontend, port 3001),
+ * since it didn't start with /api/auth/. Same class of bug as the
+ * original NextAuth-routes-hitting-the-backend issue, just on a
+ * different specific path this time. Confirmed via Next.js's own docs
+ * that a static route here takes precedence over the sibling
+ * [...nextauth] catch-all for this exact path, so this doesn't
+ * interfere with any NextAuth-internal route.
  *
  * NOTE (2026-08-01): Google login has always gone through NextAuth
  * entirely — it was never bridged into the backend's own USER table or

@@ -19,7 +19,7 @@ import { useAuthStore } from "@/store/useAuthStore";
  * — that fallback object had no user_id and no cookies behind it.
  *
  * This is the actual fix: once NextAuth reports an authenticated session,
- * sync it into the backend (POST /api/sync-google-user — validates the
+ * sync it into the backend (POST /api/auth/sync-google-user — validates the
  * session server-side, finds-or-creates the USER row, sets the same
  * cookies a normal login would) and populate useAuthStore with a real
  * user_id, exactly like email/password login already does. After this,
@@ -52,7 +52,9 @@ export default function GoogleSessionBridge() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/sync-google-user", { method: "POST" });
+        const res = await fetch("/api/auth/sync-google-user", {
+          method: "POST",
+        });
         if (!res.ok) {
           console.error("[GoogleSessionBridge] sync failed:", res.status);
           syncedRef.current = false; // allow a retry on the next render
