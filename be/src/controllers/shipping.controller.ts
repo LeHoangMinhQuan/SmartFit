@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync.js";
 import * as GhnService from "../services/ghn.service.js";
-import { env } from "../config/env.js";
 
 export const getAvailableServices = catchAsync(
   async (req: Request, res: Response) => {
@@ -39,20 +38,6 @@ export const trackOrder = catchAsync(async (req: Request, res: Response) => {
     req.params["tracking_code"] as string,
   );
   res.json({ data });
-});
-
-export const ghnWebhook = catchAsync(async (req: Request, res: Response) => {
-  // GHN doesn't sign webhook payloads (no HMAC/checksum like VNPay's
-  // IPN), so this secret path segment is the actual verification — see
-  // config/env.ts's GHN_WEBHOOK_SECRET comment. 404 rather than 401/403
-  // on mismatch so a prober scanning for endpoints doesn't get a
-  // confirming "this exists but you're unauthorized" response.
-  if (req.params["secret"] !== env.GHN_WEBHOOK_SECRET) {
-    res.status(404).json({ message: "Not found" });
-    return;
-  }
-  await GhnService.handleWebhook(req.body);
-  res.json({ message: "OK" });
 });
 
 export const getProvinces = catchAsync(async (_req: Request, res: Response) => {

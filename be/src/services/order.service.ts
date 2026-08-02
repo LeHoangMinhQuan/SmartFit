@@ -207,13 +207,12 @@ export async function createOrder(
 }
 
 /**
- * Shared by cancelOrder(), cancelOrderBySystem(), and
- * expireStalePendingOrders(): releases the stock that was decremented at
- * order creation and moves the order to `targetStatus` — 'cancelled' when
- * nothing was ever collected (COD, or a VNPay order that never got past
- * pending_payment), 'refund_requested' when money WAS already collected
- * and needs an actual refund rather than a silent cancel. Must run inside
- * the caller's transaction.
+ * Shared by cancelOrder() and expireStalePendingOrders(): releases the
+ * stock that was decremented at order creation and moves the order to
+ * `targetStatus` — 'cancelled' when nothing was ever collected (COD, or
+ * a VNPay order that never got past pending_payment), 'refund_requested'
+ * when money WAS already collected and needs an actual refund rather
+ * than a silent cancel. Must run inside the caller's transaction.
  */
 async function restoreStockAndCancelOrder(
   trx: typeof db,
@@ -363,22 +362,11 @@ export async function cancelOrder(order_id: number, user_id: number) {
   );
 }
 
-/**
- * System-triggered cancellation (no user_id ownership check) — used when
- * GHN itself reports a delivery as returned/cancelled
- * (handleGhnStatusUpdate, ghn.service.ts), not a customer action. The
- * caller decides whether the resulting status should be 'cancelled' (COD
- * — nothing collected) or 'refund_requested' (prepaid — needs an actual
- * refund).
- */
-export async function cancelOrderBySystem(
-  order_id: number,
-  targetStatus: "cancelled" | "refund_requested",
-): Promise<void> {
-  await db.transaction((trx) =>
-    restoreStockAndCancelOrder(trx, order_id, targetStatus),
-  );
-}
+// cancelOrderBySystem() (system/webhook-triggered cancellation) was
+// removed along with the GHN webhook handler — see ghn.service.ts's
+// removed handleWebhook comment. Delivery status now only moves forward
+// via staff manually picking a status from the dropdown
+// (adminUpdateStatus below).
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
