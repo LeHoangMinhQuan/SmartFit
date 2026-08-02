@@ -342,13 +342,29 @@ export default function OrderDetailPage() {
               <p className="text-sm font-medium text-slate-700">
                 {order.shipping_address}
               </p>
-              {order.shipping?.tracking_code && (
+              {order.shipping?.tracking_code ? (
                 <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3">
                   <span className="text-xs text-slate-400">Tracking Code:</span>
                   <span className="rounded-md bg-slate-200 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">
                     {order.shipping.tracking_code}
                   </span>
                 </div>
+              ) : (
+                // Only statuses where a shipment creation attempt would
+                // actually have happened already — pending_payment/
+                // payment_failed haven't reached that point yet at all
+                // (nothing "failed", there's just genuinely nothing to
+                // show), so showing this note there would be a false claim.
+                ["cod_confirmed", "paid", "preparing", "shipping"].includes(
+                  order.status,
+                ) && (
+                  <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3">
+                    <span className="text-xs text-amber-600">
+                      Shipping label not yet created — our team has been
+                      notified and will set this up shortly.
+                    </span>
+                  </div>
+                )
               )}
             </div>
 

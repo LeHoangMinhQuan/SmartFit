@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  VN_PHONE_REGEX,
+  VN_PHONE_ERROR_MESSAGE,
+  PASSWORD_STRENGTH_REGEX,
+  PASSWORD_ERROR_MESSAGE,
+} from "../utils/validators.js";
 
 /**
  * schemas/auth.schema.ts
@@ -20,11 +26,12 @@ export const registerSchema = z.object({
   body: z.object({
     username: z.string().min(2).max(50).trim(),
     email: z.email().max(50).trim().toLowerCase(),
-    password: z.string().min(8).max(72),
-    phone: z
+    password: z
       .string()
-      .length(10)
-      .regex(/^\d{10}$/),
+      .min(8)
+      .max(72)
+      .regex(PASSWORD_STRENGTH_REGEX, PASSWORD_ERROR_MESSAGE),
+    phone: z.string().regex(VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE),
   }),
 });
 
@@ -58,7 +65,11 @@ export const resetPasswordSchema = z.object({
   body: z.object({
     // The oobCode Firebase embeds in the reset link's query string.
     oobCode: z.string().min(1),
-    newPassword: z.string().min(8).max(72),
+    newPassword: z
+      .string()
+      .min(8)
+      .max(72)
+      .regex(PASSWORD_STRENGTH_REGEX, PASSWORD_ERROR_MESSAGE),
   }),
 });
 

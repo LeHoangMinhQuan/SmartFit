@@ -9,6 +9,14 @@ import { useCartStore } from "@/store/useCartStore";
 import api from "@/lib/axios";
 import { cartService } from "@/services/cart.service";
 import { toast } from "@/components/ui/Toast";
+import { useDebounce } from "@/hooks/useDebounce";
+import {
+  isValidVnPhone,
+  isValidEmail,
+  isValidPassword,
+  VN_PHONE_ERROR_MESSAGE,
+  PASSWORD_ERROR_MESSAGE,
+} from "@/lib/validators";
 
 interface RegisterModalProps {
   isOpen: boolean;
@@ -35,6 +43,32 @@ export default function RegisterModal({
   const [form, setForm] = useState(initialForm);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Debounced so errors don't flash on every keystroke mid-type — only
+  // shown once the user pauses AND has touched the field. See
+  // lib/validators.ts's doc comment for why (traced back to a GHN
+  // shipment failure caused by a phone number nothing had validated).
+  const [touched, setTouched] = useState({
+    email: false,
+    phone: false,
+    password: false,
+  });
+  const debouncedEmail = useDebounce(form.email, 400);
+  const debouncedPhone = useDebounce(form.phone, 400);
+  const debouncedPassword = useDebounce(form.password, 400);
+
+  const emailError =
+    touched.email && debouncedEmail && !isValidEmail(debouncedEmail)
+      ? "Enter a valid email address"
+      : undefined;
+  const phoneError =
+    touched.phone && debouncedPhone && !isValidVnPhone(debouncedPhone)
+      ? VN_PHONE_ERROR_MESSAGE
+      : undefined;
+  const passwordError =
+    touched.password && debouncedPassword && !isValidPassword(debouncedPassword)
+      ? PASSWORD_ERROR_MESSAGE
+      : undefined;
 
   const resetForm = useCallback(() => {
     setForm(initialForm);
@@ -66,8 +100,12 @@ export default function RegisterModal({
   }, [isOpen]);
 
   const set =
-    (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
+      if (field in touched) {
+        setTouched((prev) => ({ ...prev, [field]: true }));
+      }
+    };
 
   // Merge guest cart into the server cart, then replace local state with the
   // authoritative server copy. Must run AFTER the register call so the
@@ -138,6 +176,23 @@ export default function RegisterModal({
     e.preventDefault();
     setError(null);
 
+    // Re-validate against the raw current values here, not the debounced
+    // state above — debounce is for the live-typing UX only. Without this,
+    // clicking Create Account within 400ms of the last keystroke on a bad
+    // field could still slip through with the debounced error not having
+    // caught up yet.
+    if (!isValidEmail(form.email)) {
+      setError("Enter a valid email address");
+      return;
+    }
+    if (!isValidVnPhone(form.phone)) {
+      setError(VN_PHONE_ERROR_MESSAGE);
+      return;
+    }
+    if (!isValidPassword(form.password)) {
+      setError(PASSWORD_ERROR_MESSAGE);
+      return;
+    }
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -214,6 +269,9 @@ export default function RegisterModal({
               disabled={loading}
               maxLength={50}
             />
+            {emailError && (
+              <p className="mt-1 text-xs text-red-500">{emailError}</p>
+            )}
           </div>
 
           {/* Phone */}
@@ -234,6 +292,9 @@ export default function RegisterModal({
               pattern="\d{10}"
               title="Phone must be exactly 10 digits"
             />
+            {phoneError && (
+              <p className="mt-1 text-xs text-red-500">{phoneError}</p>
+            )}
           </div>
 
           {/* Password */}
@@ -257,6 +318,9 @@ export default function RegisterModal({
               <p>• Upper &amp; lowercase letters</p>
               <p>• At least one number</p>
             </div>
+            {passwordError && (
+              <p className="mt-1 text-xs text-red-500">{passwordError}</p>
+            )}
           </div>
 
           {/* Confirm Password */}

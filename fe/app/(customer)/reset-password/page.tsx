@@ -6,6 +6,7 @@ import axios from "axios";
 import { confirmPasswordReset } from "@/services/auth.client.service";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import Input from "@/components/ui/Input";
+import { isValidPassword, PASSWORD_ERROR_MESSAGE } from "@/lib/validators";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -32,8 +33,8 @@ function ResetPasswordForm() {
       );
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (!isValidPassword(password)) {
+      setError(PASSWORD_ERROR_MESSAGE);
       return;
     }
     if (password !== confirmPassword) {

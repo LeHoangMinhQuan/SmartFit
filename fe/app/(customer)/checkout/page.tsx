@@ -22,6 +22,10 @@ import VoucherInput from "../../../components/checkout/VoucherInput";
 import { ShoppingBag, CreditCard, Truck } from "lucide-react";
 import type { CartItem, UserAddress } from "../../../interfaces";
 import {
+  isValidVnPhone,
+  VN_PHONE_ERROR_MESSAGE,
+} from "../../../lib/validators";
+import {
   voucherService,
   type VoucherValidationResult,
 } from "../../../services/voucher.service";
@@ -274,28 +278,42 @@ function CheckoutPageInner() {
         throw new Error("No payment method selected");
       }
       const addr = activeAddress ?? newAddress;
-      const { order_id } = await orderService.createOrder({
-        payment_method_id: selectedPaymentMethodId,
-        shipping_address: formatFullAddress(addr),
-        ward_id: addr.ward_id!,
-        recipient_phone: addr.phone!,
-        shipping_fee: shippingFee,
-        ...(voucher ? { voucher_code: voucher.code } : {}),
-      });
+      const { order_id, shipping_setup_failed } =
+        await orderService.createOrder({
+          payment_method_id: selectedPaymentMethodId,
+          shipping_address: formatFullAddress(addr),
+          ward_id: addr.ward_id!,
+          recipient_phone: addr.phone!,
+          shipping_fee: shippingFee,
+          ...(voucher ? { voucher_code: voucher.code } : {}),
+        });
 
       // COD: nothing to redirect to for online payment — the order is
       // placed, payment happens on delivery. VNPay: still needs the
       // create-payment-url + redirect step.
       if (isCOD) {
-        return { order_id, paymentUrl: null as string | null };
+        return {
+          order_id,
+          paymentUrl: null as string | null,
+          shipping_setup_failed,
+        };
       }
       const { paymentUrl } = await paymentService.createVNPayUrl(order_id);
-      return { order_id, paymentUrl };
+      return { order_id, paymentUrl, shipping_setup_failed };
     },
-    onSuccess: ({ order_id, paymentUrl }) => {
+    onSuccess: ({ order_id, paymentUrl, shipping_setup_failed }) => {
       clearItems();
       if (paymentUrl) {
         window.location.href = paymentUrl;
+      } else if (shipping_setup_failed) {
+        // Order genuinely was placed (COD, nothing charged) — but GHN
+        // shipment creation failed, so don't claim everything's ready.
+        // Staff already got notified server-side and can retry/reach out;
+        // this is just making sure the customer isn't told a silent lie.
+        toast.error(
+          "Order placed, but we hit a snag setting up shipping. Our team has been notified and will follow up shortly.",
+        );
+        router.push(`/orders/${order_id}`);
       } else {
         toast.success("Order placed! Pay in cash when it arrives.");
         router.push(`/orders/${order_id}`);
@@ -318,6 +336,10 @@ function CheckoutPageInner() {
     const addr = activeAddress ?? newAddress;
     if (!addr.address_line || !addr.ward_id || !addr.phone) {
       toast.error("Address is incomplete.");
+      return;
+    }
+    if (!isValidVnPhone(addr.phone)) {
+      toast.error(VN_PHONE_ERROR_MESSAGE);
       return;
     }
 
@@ -466,6 +488,10 @@ function CheckoutPageInner() {
                           !newAddress.phone
                         ) {
                           toast.error("Fill in the full address first.");
+                          return;
+                        }
+                        if (!isValidVnPhone(newAddress.phone)) {
+                          toast.error(VN_PHONE_ERROR_MESSAGE);
                           return;
                         }
                         saveNewAddressMutation.mutate(

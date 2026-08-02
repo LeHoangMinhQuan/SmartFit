@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { shippingService } from "../../services/shipping.service";
+import { useDebounce } from "../../hooks/useDebounce";
+import { isValidVnPhone, VN_PHONE_ERROR_MESSAGE } from "../../lib/validators";
 import Input from "../ui/Input";
 
 export interface AddressFormValues {
@@ -37,6 +39,18 @@ export default function AddressForm({
   onChange,
   errors,
 }: AddressFormProps) {
+  // Debounced so the error doesn't flash on every keystroke mid-type —
+  // only shown once the user pauses AND has actually touched the field
+  // (so a pristine empty form doesn't show an error before they've typed
+  // anything). See lib/validators.ts for why this specific regex, and
+  // its doc comment for the incident that motivated adding it.
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const debouncedPhone = useDebounce(value.phone ?? "", 400);
+  const livePhoneError =
+    phoneTouched && debouncedPhone && !isValidVnPhone(debouncedPhone)
+      ? VN_PHONE_ERROR_MESSAGE
+      : undefined;
+
   const { data: provinces = [] } = useQuery({
     queryKey: ["shipping", "provinces"],
     queryFn: () => shippingService.getProvinces(),
@@ -108,10 +122,13 @@ export default function AddressForm({
         label="Phone number"
         type="tel"
         value={value.phone ?? ""}
-        onChange={(e) => set("phone", e.target.value)}
+        onChange={(e) => {
+          set("phone", e.target.value);
+          setPhoneTouched(true);
+        }}
         maxLength={10}
         hint="The courier will call this number to arrange delivery."
-        error={errors?.phone}
+        error={livePhoneError ?? errors?.phone}
         required
       />
 

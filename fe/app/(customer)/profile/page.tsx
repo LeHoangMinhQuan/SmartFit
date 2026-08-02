@@ -12,6 +12,13 @@ import AddressBook from "../../../components/profile/AddressBook";
 import WishlistGrid from "../../../components/profile/WishlistGrid";
 import Spinner from "../../../components/ui/Spinner";
 import { User, MapPin, Heart, Key, Loader2 } from "lucide-react";
+import { useDebounce } from "../../../hooks/useDebounce";
+import {
+  isValidVnPhone,
+  isValidPassword,
+  VN_PHONE_ERROR_MESSAGE,
+  PASSWORD_ERROR_MESSAGE,
+} from "../../../lib/validators";
 
 type Tab = "info" | "addresses" | "wishlist" | "password";
 
@@ -35,6 +42,12 @@ export default function ProfilePage() {
   // ── My Info state ──
   const [username, setUsername] = useState(user?.username ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const debouncedPhone = useDebounce(phone, 400);
+  const phoneError =
+    phoneTouched && debouncedPhone && !isValidVnPhone(debouncedPhone)
+      ? VN_PHONE_ERROR_MESSAGE
+      : undefined;
 
   const saveInfoMutation = useMutation({
     mutationFn: () => userService.updateProfile({ username, phone }),
@@ -53,6 +66,10 @@ export default function ProfilePage() {
 
   async function handleSaveInfo(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (phone && !isValidVnPhone(phone)) {
+      toast.error(VN_PHONE_ERROR_MESSAGE);
+      return;
+    }
     saveInfoMutation.mutate();
   }
 
@@ -60,6 +77,12 @@ export default function ProfilePage() {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
+  const [newPwTouched, setNewPwTouched] = useState(false);
+  const debouncedNewPw = useDebounce(newPw, 400);
+  const newPwError =
+    newPwTouched && debouncedNewPw && !isValidPassword(debouncedNewPw)
+      ? PASSWORD_ERROR_MESSAGE
+      : undefined;
 
   const changePasswordMutation = useMutation({
     mutationFn: () =>
@@ -80,6 +103,10 @@ export default function ProfilePage() {
 
   async function handleChangePassword(e: React.FormEvent) {
     e.preventDefault();
+    if (!isValidPassword(newPw)) {
+      toast.error(PASSWORD_ERROR_MESSAGE);
+      return;
+    }
     if (newPw !== confirmPw) {
       toast.error("New passwords don't match.");
       return;
@@ -156,9 +183,13 @@ export default function ProfilePage() {
                     <Input
                       label="Phone"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => {
+                        setPhone(e.target.value);
+                        setPhoneTouched(true);
+                      }}
                       maxLength={10}
                       hint="10 digits"
+                      error={phoneError}
                     />
                   </div>
                   <button
@@ -215,10 +246,14 @@ export default function ProfilePage() {
                     label="New Password"
                     type="password"
                     value={newPw}
-                    onChange={(e) => setNewPw(e.target.value)}
+                    onChange={(e) => {
+                      setNewPw(e.target.value);
+                      setNewPwTouched(true);
+                    }}
                     required
                     minLength={8}
-                    hint="Must be at least 8 characters long."
+                    hint="8+ characters with upper & lowercase letters and a number."
+                    error={newPwError}
                   />
                   <Input
                     label="Confirm New Password"

@@ -184,35 +184,58 @@ export async function createOrder(
       return { order_id, total_amount, isCOD };
     })
     .then(async (result) => {
-      // COD: create the GHN shipment right away, same as VNPay does on
-      // payment success (see vnpay.service.ts's applyPaymentResult) — COD
-      // just has no payment event to wait for first. setImmediate + a
-      // failure that only logs (never throws back to the customer) matches
-      // that same established pattern: order creation must succeed even if
-      // GHN is briefly unreachable — staff can retry shipment creation
-      // manually rather than the customer's checkout failing outright.
+      // COD: create the GHN shipment synchronously, as part of this same
+      // request — the whole reason to gate on it. This used to be
+      // setImmediate (fire-and-forget): the HTTP response went out before
+      // this even started, so checkout always reported success regardless
+      // of whether GHN accepted the shipment, and the only trace of a
+      // failure was a server log line + a staff notification — nothing
+      // the customer could ever see.
+      //
+      // Deliberately NOT rolling back the order on failure, though —
+      // this is "gate" as in "tell the truth about what happened", not
+      // "deny the order". COD has zero payment at risk (nothing was
+      // charged), and by this point stock is already held and the
+      // voucher (if any) already consumed — throwing away a legitimate
+      // order over a transient GHN outage would cost the customer a full
+      // re-checkout for a problem that's usually on GHN's end, not
+      // theirs. Staff get notified either way and can retry shipment
+      // creation once GHN's back, or reach out to the customer directly.
+      //
+      // If you'd rather have GHN failures hard-block the order entirely
+      // (rolling back stock/voucher usage, no order created), that's a
+      // different shape of fix — the GHN call would need to move inside
+      // the transaction above, before commit, so a thrown error here
+      // rolls the whole insert back. Flagging that as the alternative
+      // rather than silently picking one, same as the reasoning that led
+      // to 'refund_requested' needing staff review instead of an
+      // automatic refund elsewhere in this file.
+      let shipping_setup_failed = false;
       if (result.isCOD) {
-        setImmediate(async () => {
-          try {
-            const { createShipmentForOrder } = await import("./ghn.service.js");
-            await createShipmentForOrder(result.order_id);
-            const { notifyStaffOfConfirmedOrder } =
-              await import("./notification.service.js");
-            await notifyStaffOfConfirmedOrder(result.order_id);
-          } catch (err) {
-            console.error(
-              `[order] COD GHN shipment creation failed for order ${result.order_id}:`,
-              err,
-            );
-            const { notifyStaffOfShipmentFailure } =
-              await import("./notification.service.js");
-            await notifyStaffOfShipmentFailure(result.order_id, err).catch(
-              () => {},
-            );
-          }
-        });
+        try {
+          const { createShipmentForOrder } = await import("./ghn.service.js");
+          await createShipmentForOrder(result.order_id);
+          const { notifyStaffOfConfirmedOrder } =
+            await import("./notification.service.js");
+          await notifyStaffOfConfirmedOrder(result.order_id);
+        } catch (err) {
+          shipping_setup_failed = true;
+          console.error(
+            `[order] COD GHN shipment creation failed for order ${result.order_id}:`,
+            err,
+          );
+          const { notifyStaffOfShipmentFailure } =
+            await import("./notification.service.js");
+          await notifyStaffOfShipmentFailure(result.order_id, err).catch(
+            () => {},
+          );
+        }
       }
-      return { order_id: result.order_id, total_amount: result.total_amount };
+      return {
+        order_id: result.order_id,
+        total_amount: result.total_amount,
+        shipping_setup_failed,
+      };
     });
 }
 

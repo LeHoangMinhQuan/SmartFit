@@ -1,13 +1,15 @@
 import { z } from "zod";
+import {
+  VN_PHONE_REGEX,
+  VN_PHONE_ERROR_MESSAGE,
+  PASSWORD_STRENGTH_REGEX,
+  PASSWORD_ERROR_MESSAGE,
+} from "../utils/validators.js";
 
 export const updateProfileSchema = z.object({
   body: z.object({
     username: z.string().min(1).max(30).optional(),
-    phone: z
-      .string()
-      .length(10)
-      .regex(/^\d+$/, "Phone must be digits only")
-      .optional(),
+    phone: z.string().regex(VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE).optional(),
     avatar_url: z.string().url().optional(),
   }),
 });
@@ -15,7 +17,11 @@ export const updateProfileSchema = z.object({
 export const changePasswordSchema = z.object({
   body: z.object({
     old_password: z.string().min(1),
-    new_password: z.string().min(8),
+    new_password: z
+      .string()
+      .min(8)
+      .max(72)
+      .regex(PASSWORD_STRENGTH_REGEX, PASSWORD_ERROR_MESSAGE),
   }),
 });
 
@@ -29,7 +35,7 @@ export const createAddressSchema = z.object({
     // deliverable contact number. Not sourced from USER.phone: that's
     // nullable (Google-authenticated accounts have none) and isn't
     // necessarily who should receive a delivery to this address anyway.
-    phone: z.string().length(10).regex(/^\d+$/, "Phone must be digits only"),
+    phone: z.string().regex(VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE),
     label: z.string().max(20).optional(),
   }),
 });
@@ -41,11 +47,7 @@ export const updateAddressSchema = z.object({
     province_id: z.number().int().positive().optional(),
     district_id: z.number().int().positive().optional(),
     ward_id: z.number().int().positive().optional(),
-    phone: z
-      .string()
-      .length(10)
-      .regex(/^\d+$/, "Phone must be digits only")
-      .optional(),
+    phone: z.string().regex(VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE).optional(),
     label: z.string().max(20).optional(),
   }),
 });

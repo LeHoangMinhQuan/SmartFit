@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE } from "../utils/validators.js";
 
 export const createOrderSchema = z.object({
   body: z.object({
@@ -11,10 +12,7 @@ export const createOrderSchema = z.object({
     // that's the actual collection gate); the frontend copies it in here
     // at order placement, same as it already builds shipping_address from
     // the chosen address.
-    recipient_phone: z
-      .string()
-      .length(10)
-      .regex(/^\d+$/, "Phone must be digits only"),
+    recipient_phone: z.string().regex(VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE),
     // Bug fix: total_amount previously excluded this entirely — every
     // VNPay charge silently undercharged by the delivery fee. Trusting
     // client input for a monetary amount is a known gap (see order.service.ts

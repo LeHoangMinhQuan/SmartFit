@@ -5,6 +5,8 @@ import axios from "axios";
 import { useMutation } from "@tanstack/react-query";
 import Button from "@/components/ui/Button";
 import { requestPasswordReset } from "@/services/auth.client.service";
+import { useDebounce } from "@/hooks/useDebounce";
+import { isValidEmail } from "@/lib/validators";
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -19,11 +21,19 @@ export default function ForgotPasswordModal({
 }: ForgotPasswordModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [email, setEmail] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  const debouncedEmail = useDebounce(email, 400);
+  const emailError =
+    emailTouched && debouncedEmail && !isValidEmail(debouncedEmail)
+      ? "Enter a valid email address"
+      : undefined;
+
   const resetForm = useCallback(() => {
     setEmail("");
+    setEmailTouched(false);
     setError(null);
     setSubmitted(false);
   }, []);
@@ -68,6 +78,10 @@ export default function ForgotPasswordModal({
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    if (!isValidEmail(email)) {
+      setError("Enter a valid email address");
+      return;
+    }
     forgotPasswordMutation.mutate();
   };
 
@@ -129,11 +143,17 @@ export default function ForgotPasswordModal({
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailTouched(true);
+                }}
                 className="w-full bg-[#F0F0F0] rounded-xl px-4 py-3 outline-none text-black"
                 required
                 disabled={loading}
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-500">{emailError}</p>
+              )}
             </div>
 
             {error && (

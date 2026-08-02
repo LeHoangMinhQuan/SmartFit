@@ -24,11 +24,22 @@ interface CreateOrderBody {
 }
 
 export const orderService = {
-  // Backend wraps this in { data: { order_id } } — unwrap fully, or
+  // Backend wraps this in { data: { order_id, ... } } — unwrap fully, or
   // `order_id` destructures as undefined (as it did before this fix).
+  // shipping_setup_failed: true means the order WAS created (COD has no
+  // payment at risk, so a GHN hiccup doesn't erase it) but the courier
+  // shipment could not be — checkout must not show a flat "success" when
+  // this is true. See order.service.ts (backend) createOrder for why this
+  // isn't a hard rollback.
   createOrder: (body: CreateOrderBody) =>
     api
-      .post<{ data: { order_id: number } }>("/orders", body)
+      .post<{
+        data: {
+          order_id: number;
+          total_amount: number;
+          shipping_setup_failed: boolean;
+        };
+      }>("/orders", body)
       .then((r) => r.data.data),
 
   // getOrders already returns { data, meta } matching PaginatedResponse
