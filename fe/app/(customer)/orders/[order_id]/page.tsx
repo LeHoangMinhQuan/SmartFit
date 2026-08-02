@@ -103,7 +103,11 @@ export default function OrderDetailPage() {
 
   async function handleCancel() {
     if (!order) return;
-    if (!confirm("Cancel this order? This cannot be undone.")) return;
+    const isCOD = order.status === "cod_confirmed";
+    const message = isCOD
+      ? "Cancel this order? This cannot be undone."
+      : "Cancel this order? Since it's already paid, this will submit a refund request for our team to review — it won't refund automatically.";
+    if (!confirm(message)) return;
     cancelMutation.mutate();
   }
 
@@ -140,7 +144,10 @@ export default function OrderDetailPage() {
     );
   }
 
-  const canCancel = order.status === "paid" || order.status === "preparing";
+  const canCancel =
+    order.status === "cod_confirmed" ||
+    order.status === "paid" ||
+    order.status === "preparing";
   const canRetryPayment =
     order.status === "pending_payment" || order.status === "payment_failed";
 

@@ -17,6 +17,7 @@ import * as StaffService from "../services/staff.service.js";
 import * as InventoryService from "../services/inventory.service.js";
 import * as ReviewModel from "../models/review.model.js";
 import * as OrderService from "../services/order.service.js";
+import * as VNPayService from "../services/vnpay.service.js";
 import * as StoreProductModel from "../models/store_product.model.js";
 import db from "../config/db.js";
 import { env } from "../config/env.js";
@@ -335,6 +336,18 @@ export const adminUpdateOrderStatus = catchAsync(
       req.body.status,
     );
     res.json({ data: { message: "Status updated" } });
+  },
+);
+
+export const adminProcessRefund = catchAsync(
+  async (req: Request, res: Response) => {
+    const staff_id = (req as any).staff.staff_id;
+    const result = await VNPayService.processRefund(
+      Number(req.params["order_id"]),
+      staff_id,
+      req.body.reason,
+    );
+    res.json({ data: result });
   },
 );
 

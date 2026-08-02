@@ -6,6 +6,7 @@ const STATUS_MAP: Record<
   { label: string; variant: BadgeVariant }
 > = {
   pending_payment: { label: "Pending Payment", variant: "warning" },
+  cod_confirmed: { label: "Confirmed (COD)", variant: "info" },
   paid: { label: "Paid", variant: "info" },
   preparing: { label: "Preparing", variant: "info" },
   shipping: { label: "Shipping", variant: "info" },

@@ -36,6 +36,7 @@ export const updateOrderStatusSchema = z.object({
   body: z.object({
     status: z.enum([
       "pending_payment",
+      "cod_confirmed",
       "paid",
       "preparing",
       "shipping",

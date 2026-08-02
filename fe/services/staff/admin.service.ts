@@ -299,6 +299,17 @@ export const adminService = {
       >(`/admin/orders/${order_id}/status`, { status })
       .then((r) => r.data.data),
 
+  // POST /admin/orders/:order_id/refund — only valid while the order is
+  // 'refund_requested'. Staff-triggered, not automatic — see
+  // order.service.ts's cancelOrder() for why a prepaid cancellation lands
+  // in refund_requested instead of an instant cancel.
+  processRefund: (order_id: number, reason?: string) =>
+    api
+      .post<
+        ApiResponse<{ status: "success" | "failed"; message: string }>
+      >(`/admin/orders/${order_id}/refund`, { reason })
+      .then((r) => r.data.data),
+
   // ── Users ──
   // NOTE: same PaginatedResponse exception as getAllOrders above.
   getAllUsers: (params?: { page?: number; limit?: number }) =>

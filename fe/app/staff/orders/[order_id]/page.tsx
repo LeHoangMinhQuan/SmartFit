@@ -12,6 +12,7 @@ import type { OrderStatus } from "../../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
+  "cod_confirmed",
   "paid",
   "preparing",
   "shipping",
@@ -57,6 +58,39 @@ export default function StaffOrderDetailPage() {
   async function handleStatusChange(status: OrderStatus) {
     if (!order) return;
     updateStatusMutation.mutate(status);
+  }
+
+  const refundMutation = useMutation({
+    mutationFn: () => adminService.processRefund(order!.order_id),
+    onSuccess: (result) => {
+      if (result.status === "success") {
+        queryClient.setQueryData(
+          ["staff-order", orderId],
+          (old: typeof order) =>
+            old ? { ...old, status: "refunded" as OrderStatus } : old,
+        );
+        queryClient.invalidateQueries({ queryKey: ["staff-orders"] });
+        toast.success("Refund confirmed by VNPay.");
+      } else {
+        // Order stays 'refund_requested' — VNPay declined, safe to retry.
+        toast.error(
+          result.message || "VNPay declined the refund. You can retry.",
+        );
+      }
+    },
+    onError: () =>
+      toast.error("Refund request failed — order left as-is for retry."),
+  });
+
+  async function handleProcessRefund() {
+    if (!order) return;
+    if (
+      !confirm(
+        `Refund ${formatPrice(order.total_amount)} to the customer via VNPay? This actually moves money — double check this is the right order.`,
+      )
+    )
+      return;
+    refundMutation.mutate();
   }
 
   if (loading)
@@ -105,6 +139,26 @@ export default function StaffOrderDetailPage() {
         </select>
         {updating && <Spinner size="sm" />}
       </div>
+
+      {order.status === "refund_requested" && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex-1 text-sm text-amber-800">
+            <p className="font-medium">Refund pending review</p>
+            <p className="mt-0.5 text-amber-700">
+              This order was already paid via VNPay and is waiting on a refund.
+              Processing it calls VNPay&rsquo;s refund API for{" "}
+              {formatPrice(order.total_amount)} — this actually moves money.
+            </p>
+          </div>
+          <button
+            onClick={handleProcessRefund}
+            disabled={refundMutation.isPending}
+            className="whitespace-nowrap rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+          >
+            {refundMutation.isPending ? "Processing..." : "Process Refund"}
+          </button>
+        </div>
+      )}
 
       {/* Order items */}
       <section className="rounded-xl border p-5">

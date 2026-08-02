@@ -5,6 +5,7 @@ import type { Order, OrderStatus } from "@/interfaces";
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: "Pending Payment",
+  cod_confirmed: "Confirmed (COD)",
   paid: "Paid",
   preparing: "Preparing",
   shipping: "Shipping",
@@ -17,6 +18,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
   pending_payment: "bg-yellow-500/15 text-yellow-400 border-yellow-500/30",
+  cod_confirmed: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   paid: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   preparing: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
   shipping: "bg-purple-500/15 text-purple-400 border-purple-500/30",

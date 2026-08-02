@@ -21,7 +21,11 @@ router.get(
   ShippingController.trackOrder,
 );
 
-// GHN webhook (no auth — verified by GHN token in config)
-router.post("/webhook", ShippingController.ghnWebhook);
+// GHN webhook — see shipping.controller.ts's ghnWebhook for the actual
+// secret check (GHN doesn't sign payloads, so a secret path segment is
+// the verification; see config/env.ts's GHN_WEBHOOK_SECRET comment).
+// This must match exactly what's registered as the "Callback URL" in
+// GHN's shop settings.
+router.post("/webhook/:secret", ShippingController.ghnWebhook);
 
 export default router;

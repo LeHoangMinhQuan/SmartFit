@@ -2,6 +2,7 @@ import db from "../config/db.js";
 
 export type OrderStatus =
   | "pending_payment"
+  | "cod_confirmed"
   | "paid"
   | "preparing"
   | "shipping"
@@ -29,6 +30,40 @@ export async function createOrder(data: CreateOrderData): Promise<number> {
 
 export async function findOrderById(order_id: number) {
   return db("ORDER").where({ order_id }).first();
+}
+
+/**
+ * Same order row, plus the payment method's name and the customer's real
+ * contact info (from USER) — needed anywhere that has to tell COD from
+ * prepaid apart (payment_method.name) or actually reach the customer
+ * (createShipmentForOrder). Kept separate from findOrderById rather than
+ * changing that function's return shape, since it's used in many places
+ * that only expect the bare ORDER columns.
+ */
+export async function findOrderWithCustomerInfo(order_id: number) {
+  return (
+    db("ORDER as o")
+      .join(
+        "payment_method as pm",
+        "o.payment_method_id",
+        "pm.payment_method_id",
+      )
+      .join("USER as u", "o.user_id", "u.user_id")
+      // ORDER only stores ward_id — district_id lives on the ward row.
+      // Previously nothing joined this at all (order.district_id was always
+      // undefined wherever it was read), so every GHN shipment ever created
+      // sent to_district_id: 0 — an invalid district, not "unknown"/"skip".
+      .leftJoin("ward as w", "o.ward_id", "w.ward_id")
+      .where("o.order_id", order_id)
+      .select(
+        "o.*",
+        "pm.name as payment_method_name",
+        "u.username as customer_name",
+        "u.phone as customer_phone",
+        "w.district_id",
+      )
+      .first()
+  );
 }
 
 export async function findOrderByIdAndUser(order_id: number, user_id: number) {

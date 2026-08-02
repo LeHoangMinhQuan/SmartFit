@@ -53,6 +53,7 @@ const required = [
   "GHN_SHOP_ID",
   "GHN_FROM_DISTRICT",
   "GHN_FROM_WARD",
+  "GHN_WEBHOOK_SECRET",
 
   // Gemini (AI shopping assistant — chat + embeddings)
   "GEMINI_API_KEY",
@@ -125,6 +126,18 @@ export const env = {
   GHN_SHOP_ID: process.env["GHN_SHOP_ID"]!,
   GHN_FROM_DISTRICT: process.env["GHN_FROM_DISTRICT"]!,
   GHN_FROM_WARD: process.env["GHN_FROM_WARD"]!,
+  // GHN's webhook payloads aren't HMAC-signed the way VNPay's IPN is —
+  // there's no shared-secret checksum GHN computes for you to verify.
+  // The practical mitigation used here (and by most real GHN
+  // integrations): register a URL containing this secret as the
+  // "Callback URL" in GHN's shop settings
+  // (https://.../api/shipping/webhook/<this value>), and reject any
+  // request that doesn't have it — see shipping.controller.ts's
+  // ghnWebhook. Without this, the route comment claiming "verified by
+  // GHN token" was aspirational — nothing actually checked anything, so
+  // anyone who found the endpoint could POST fake delivery statuses for
+  // any order.
+  GHN_WEBHOOK_SECRET: process.env["GHN_WEBHOOK_SECRET"]!,
 
   // Gemini
   GEMINI_API_KEY: process.env["GEMINI_API_KEY"]!,

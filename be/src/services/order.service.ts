@@ -20,9 +20,23 @@ const PENDING_PAYMENT_TIMEOUT_MINUTES = 15;
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending_payment: ["paid", "payment_failed", "cancelled"],
+  // COD's own initial state — see the migration's comment for why this
+  // isn't just 'pending_payment'. No online payment to wait for, so
+  // staff moves it straight into fulfillment once ready; cash is
+  // collected by the courier on delivery, not tracked as a separate
+  // "paid" step.
+  cod_confirmed: ["preparing", "cancelled"],
   paid: ["preparing", "refund_requested", "cancelled"],
   preparing: ["shipping", "cancelled"],
-  shipping: ["delivered"],
+  // Previously only ["delivered"] — a shipment GHN reports as
+  // "return" (delivery failed / customer refused / returned to shop)
+  // or "cancelled" had nowhere valid to go, so handleGhnStatusUpdate()
+  // (ghn.service.ts) couldn't act on those events even though it now
+  // receives them. cancelled covers COD (nothing was ever collected,
+  // safe to just cancel); refund_requested covers a prepaid order that
+  // failed to deliver (money WAS collected, needs a refund, not a
+  // silent cancel).
+  shipping: ["delivered", "cancelled", "refund_requested"],
   delivered: ["refund_requested"],
   payment_failed: ["cancelled"],
   cancelled: [],
@@ -84,81 +98,127 @@ export async function createOrder(
     subtotal: Number(item.subtotal),
   }));
 
-  // 4. All writes in a single transaction
-  return db.transaction(async (trx) => {
-    // Decrement stock per item
-    for (const item of orderItems) {
-      const stock = await trx("store_product")
-        .where({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          store_id: DEFAULT_STORE_ID,
-        })
-        .first();
+  // COD has no online payment step to wait for — 'pending_payment' would
+  // leave it silently misclassified as an abandoned VNPay checkout (see
+  // sql/migration_cod_and_refunds.sql's comment: expireStalePendingOrders
+  // would auto-cancel it after 15 minutes, and every detail-page read
+  // would waste a VNPay reconciliation call against a transaction that
+  // never existed). Looked up by name rather than trusting a hardcoded
+  // ID, matching the same check the checkout page itself already uses
+  // (isCOD in app/(customer)/checkout/page.tsx).
+  const paymentMethod = await db("payment_method")
+    .where({ payment_method_id: data.payment_method_id })
+    .first("name");
+  if (!paymentMethod) {
+    throw new ApiError(400, "Invalid payment method");
+  }
+  const isCOD = paymentMethod.name.toLowerCase() === "cod";
+  const initialStatus = isCOD ? "cod_confirmed" : "pending_payment";
 
-      if (!stock || stock.quantity < item.quantity) {
-        throw new ApiError(
-          409,
-          `Insufficient stock for product ${item.product_id} variant ${item.variant_id}`,
-        );
+  // 4. All writes in a single transaction
+  return db
+    .transaction(async (trx) => {
+      // Decrement stock per item
+      for (const item of orderItems) {
+        const stock = await trx("store_product")
+          .where({
+            product_id: item.product_id,
+            variant_id: item.variant_id,
+            store_id: DEFAULT_STORE_ID,
+          })
+          .first();
+
+        if (!stock || stock.quantity < item.quantity) {
+          throw new ApiError(
+            409,
+            `Insufficient stock for product ${item.product_id} variant ${item.variant_id}`,
+          );
+        }
+
+        await trx("store_product")
+          .where({
+            product_id: item.product_id,
+            variant_id: item.variant_id,
+            store_id: DEFAULT_STORE_ID,
+          })
+          .decrement("quantity", item.quantity);
       }
 
-      await trx("store_product")
-        .where({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          store_id: DEFAULT_STORE_ID,
+      // Create order (shipping_order_id nullable — filled after payment via IPN)
+      const [orderRow] = await trx("ORDER")
+        .insert({
+          user_id,
+          staff_id: SYSTEM_STAFF_ID,
+          payment_method_id: data.payment_method_id,
+          shipping_address: data.shipping_address,
+          ward_id: data.ward_id,
+          total_amount,
+          shipping_fee: data.shipping_fee,
+          status: initialStatus,
         })
-        .decrement("quantity", item.quantity);
-    }
+        .returning("order_id");
+      const order_id = orderRow.order_id;
 
-    // Create order (shipping_order_id nullable — filled after payment via IPN)
-    const [orderRow] = await trx("ORDER")
-      .insert({
-        user_id,
-        staff_id: SYSTEM_STAFF_ID,
-        payment_method_id: data.payment_method_id,
-        shipping_address: data.shipping_address,
-        ward_id: data.ward_id,
-        total_amount,
-        shipping_fee: data.shipping_fee,
-        status: "pending_payment",
-      })
-      .returning("order_id");
-    const order_id = orderRow.order_id;
+      // Insert order items
+      await trx("order_item").insert(
+        orderItems.map((i: any) => ({ ...i, order_id })),
+      );
 
-    // Insert order items
-    await trx("order_item").insert(
-      orderItems.map((i: any) => ({ ...i, order_id })),
-    );
+      // Apply voucher
+      if (voucher) {
+        await trx("voucher_usage").insert({
+          voucher_id: voucher.voucher_id,
+          order_id,
+          user_id,
+        });
+        await trx("voucher")
+          .where({ voucher_id: voucher.voucher_id })
+          .increment("usage_count", 1);
+      }
 
-    // Apply voucher
-    if (voucher) {
-      await trx("voucher_usage").insert({
-        voucher_id: voucher.voucher_id,
-        order_id,
-        user_id,
-      });
-      await trx("voucher")
-        .where({ voucher_id: voucher.voucher_id })
-        .increment("usage_count", 1);
-    }
+      // Clear cart
+      await trx("cart_item").where({ user_id, cart_id: 1 }).delete();
 
-    // Clear cart
-    await trx("cart_item").where({ user_id, cart_id: 1 }).delete();
-
-    return { order_id, total_amount };
-  });
+      return { order_id, total_amount, isCOD };
+    })
+    .then(async (result) => {
+      // COD: create the GHN shipment right away, same as VNPay does on
+      // payment success (see vnpay.service.ts's applyPaymentResult) — COD
+      // just has no payment event to wait for first. setImmediate + a
+      // failure that only logs (never throws back to the customer) matches
+      // that same established pattern: order creation must succeed even if
+      // GHN is briefly unreachable — staff can retry shipment creation
+      // manually rather than the customer's checkout failing outright.
+      if (result.isCOD) {
+        setImmediate(async () => {
+          try {
+            const { createShipmentForOrder } = await import("./ghn.service.js");
+            await createShipmentForOrder(result.order_id);
+          } catch (err) {
+            console.error(
+              `[order] COD GHN shipment creation failed for order ${result.order_id}:`,
+              err,
+            );
+          }
+        });
+      }
+      return { order_id: result.order_id, total_amount: result.total_amount };
+    });
 }
 
 /**
- * Shared by cancelOrder() and expireStalePendingOrders(): releases the
- * stock that was decremented at order creation and marks the order
- * 'cancelled'. Must run inside the caller's transaction.
+ * Shared by cancelOrder(), cancelOrderBySystem(), and
+ * expireStalePendingOrders(): releases the stock that was decremented at
+ * order creation and moves the order to `targetStatus` — 'cancelled' when
+ * nothing was ever collected (COD, or a VNPay order that never got past
+ * pending_payment), 'refund_requested' when money WAS already collected
+ * and needs an actual refund rather than a silent cancel. Must run inside
+ * the caller's transaction.
  */
 async function restoreStockAndCancelOrder(
   trx: typeof db,
   order_id: number,
+  targetStatus: "cancelled" | "refund_requested" = "cancelled",
 ): Promise<void> {
   const items = await trx("order_item").where({ order_id });
   for (const item of items) {
@@ -173,7 +233,7 @@ async function restoreStockAndCancelOrder(
 
   await trx("ORDER")
     .where({ order_id })
-    .update({ status: "cancelled", updated_at: db.fn.now() });
+    .update({ status: targetStatus, updated_at: db.fn.now() });
 }
 
 /**
@@ -271,10 +331,12 @@ export async function getOrderDetail(order_id: number, user_id: number) {
 }
 
 export async function cancelOrder(order_id: number, user_id: number) {
-  const order = await OrderModel.findOrderByIdAndUser(order_id, user_id);
-  if (!order) throw new ApiError(404, "Order not found");
+  const order = await OrderModel.findOrderWithCustomerInfo(order_id);
+  if (!order || order.user_id !== user_id) {
+    throw new ApiError(404, "Order not found");
+  }
 
-  const cancellable = ["paid", "preparing"];
+  const cancellable = ["cod_confirmed", "paid", "preparing"];
   if (!cancellable.includes(order.status)) {
     throw new ApiError(
       400,
@@ -282,7 +344,40 @@ export async function cancelOrder(order_id: number, user_id: number) {
     );
   }
 
-  return db.transaction((trx) => restoreStockAndCancelOrder(trx, order_id));
+  const isCOD = order.payment_method_name.toLowerCase() === "cod";
+  // COD: nothing was ever collected (cash is only taken on delivery, which
+  // hasn't happened) — a plain cancel is correct, same as before.
+  //
+  // Prepaid via VNPay: money WAS already collected. Cancelling outright
+  // would silently keep the customer's payment — this is the concrete bug
+  // behind the "missing refund strategy" gap. Move to 'refund_requested'
+  // instead (stock restored now; the actual VNPay refund call happens
+  // separately once staff reviews and approves it — see
+  // vnpay.service.ts's processRefund, triggered from the staff dashboard).
+  return db.transaction((trx) =>
+    restoreStockAndCancelOrder(
+      trx,
+      order_id,
+      isCOD ? "cancelled" : "refund_requested",
+    ),
+  );
+}
+
+/**
+ * System-triggered cancellation (no user_id ownership check) — used when
+ * GHN itself reports a delivery as returned/cancelled
+ * (handleGhnStatusUpdate, ghn.service.ts), not a customer action. The
+ * caller decides whether the resulting status should be 'cancelled' (COD
+ * — nothing collected) or 'refund_requested' (prepaid — needs an actual
+ * refund).
+ */
+export async function cancelOrderBySystem(
+  order_id: number,
+  targetStatus: "cancelled" | "refund_requested",
+): Promise<void> {
+  await db.transaction((trx) =>
+    restoreStockAndCancelOrder(trx, order_id, targetStatus),
+  );
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────

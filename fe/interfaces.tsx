@@ -156,6 +156,7 @@ export interface CartItem {
 // Order
 export type OrderStatus =
   | "pending_payment"
+  | "cod_confirmed"
   | "paid"
   | "preparing"
   | "shipping"

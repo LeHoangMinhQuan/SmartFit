@@ -1,8 +1,10 @@
-import type { ReturnQueryFromVNPay } from "vnpay";
+import type { ReturnQueryFromVNPay, RefundResponse } from "vnpay";
+import { RefundTransactionType } from "vnpay";
 import db from "../config/db.js";
 import { ApiError } from "../utils/ApiError.js";
 import * as OrderModel from "../models/order.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
+import * as PaymentRefundModel from "../models/payment_refund.model.js";
 import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
 import { expireStalePendingOrders } from "./order.service.js";
 
@@ -178,6 +180,114 @@ export async function handleIpn(
   });
 
   return { RspCode: "00", Message: "Confirmed" };
+}
+
+// ─── Refund ────────────────────────────────────────────────────────────────
+//
+// Staff-triggered, not automatic — see order.service.ts's cancelOrder():
+// cancelling a prepaid order moves it to 'refund_requested' but does NOT
+// move any money by itself. This is the function that actually calls
+// VNPay's refund API, invoked from the staff dashboard once someone has
+// reviewed the request. Deliberately not automatic — a wrong refund is a
+// real financial mistake, and giving staff a review step before money
+// moves is worth the extra click.
+export async function processRefund(
+  order_id: number,
+  staff_id: number,
+  reason?: string,
+): Promise<{ status: "success" | "failed"; message: string }> {
+  const order = await OrderModel.findOrderById(order_id);
+  if (!order) throw new ApiError(404, "Order not found");
+  if (order.status !== "refund_requested") {
+    throw new ApiError(
+      400,
+      `Order is '${order.status}', not 'refund_requested' — nothing to refund`,
+    );
+  }
+
+  // The transaction that was actually charged — the one and only
+  // 'success' row for this order. If there isn't one, this order was
+  // never really paid via VNPay (shouldn't be reachable given
+  // cancelOrder() only routes VNPay orders into 'refund_requested' — see
+  // that function's isCOD check — but checked explicitly rather than
+  // trusting that invariant blindly, since this is the one place in the
+  // codebase that actually moves money back out).
+  const transaction = await db("payment_transaction")
+    .where({ order_id, status: "success" })
+    .orderBy("transaction_id", "desc")
+    .first();
+  if (!transaction) {
+    throw new ApiError(
+      409,
+      "No successful VNPay transaction found for this order — cannot refund",
+    );
+  }
+
+  const now = new Date();
+  let result: RefundResponse;
+  try {
+    result = await vnpayClient.refund({
+      vnp_TransactionType: RefundTransactionType.FULL_REFUND,
+      vnp_TxnRef: transaction.vnpay_txn_ref,
+      vnp_Amount: Number(transaction.vnpay_amount),
+      vnp_OrderInfo: `Refund for order ${order_id}${reason ? `: ${reason}` : ""}`,
+      vnp_TransactionNo: Number(transaction.vnpay_transaction_no) || undefined,
+      vnp_TransactionDate: now.getTime(),
+      vnp_CreateDate: now.getTime(),
+      vnp_CreateBy: `staff:${staff_id}`,
+      vnp_IpAddr: "127.0.0.1",
+    } as any);
+  } catch (err) {
+    console.error(
+      `[refund] VNPay refund call failed for order ${order_id}:`,
+      err,
+    );
+    await PaymentRefundModel.createRefund({
+      order_id,
+      transaction_id: transaction.transaction_id,
+      amount: Number(transaction.vnpay_amount),
+      reason: reason ?? null,
+      status: "failed",
+      requested_by_staff_id: staff_id,
+    });
+    throw new ApiError(
+      502,
+      "VNPay refund request failed — order left as 'refund_requested' for retry",
+    );
+  }
+
+  // isVerified: signature on VNPay's response checks out. isSuccess: the
+  // refund itself was accepted (vnp_ResponseCode === "00") — these are
+  // two different things and both matter before we trust "refunded".
+  const isSuccess = result.isVerified && result.isSuccess;
+
+  await PaymentRefundModel.createRefund({
+    order_id,
+    transaction_id: transaction.transaction_id,
+    vnpay_refund_txn_no:
+      result.vnp_TransactionNo != null
+        ? String(result.vnp_TransactionNo)
+        : null,
+    vnpay_response_code:
+      result.vnp_ResponseCode != null ? String(result.vnp_ResponseCode) : null,
+    amount: Number(transaction.vnpay_amount),
+    reason: reason ?? null,
+    status: isSuccess ? "success" : "failed",
+    requested_by_staff_id: staff_id,
+  });
+
+  if (isSuccess) {
+    await OrderModel.updateOrderStatus(order_id, "refunded");
+    return { status: "success", message: "Refund confirmed by VNPay" };
+  }
+
+  // Left as 'refund_requested' — VALID_TRANSITIONS only allows
+  // refund_requested -> refunded, so staff can simply retry from the
+  // dashboard rather than this landing in some other unreachable state.
+  return {
+    status: "failed",
+    message: result.vnp_Message ?? "VNPay declined the refund request",
+  };
 }
 
 // ─── Reconciliation (pull-based fallback for missed/undelivered IPNs) ────────

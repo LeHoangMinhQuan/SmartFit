@@ -74,6 +74,7 @@ router.patch(
   validate(updateOrderStatusSchema),
   Admin.adminUpdateOrderStatus,
 );
+router.post("/orders/:order_id/refund", Admin.adminProcessRefund);
 
 // ─── Reviews ─────────────────────────────────────────────────────────────────
 router.get("/reviews", Admin.listReviews);

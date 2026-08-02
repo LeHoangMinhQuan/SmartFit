@@ -18,6 +18,7 @@ import type { Order, OrderStatus } from "../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
+  "cod_confirmed",
   "paid",
   "preparing",
   "shipping",

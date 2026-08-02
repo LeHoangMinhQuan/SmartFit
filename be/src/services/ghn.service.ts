@@ -81,20 +81,31 @@ function setCache(key: string, data: any) {
 // ─── Shipment creation (triggered from IPN after payment) ─────────────────────
 
 export async function createShipmentForOrder(order_id: number) {
-  const order = await OrderModel.findOrderById(order_id);
+  const order = await OrderModel.findOrderWithCustomerInfo(order_id);
   if (!order) throw new Error(`Order ${order_id} not found`);
 
   const items = await OrderModel.findOrderItems(order_id);
   const parcel = getParcelForItems(items);
 
+  const isCOD = order.payment_method_name.toLowerCase() === "cod";
+
   const payload = {
-    payment_type_id: 2, // recipient pays
+    payment_type_id: 2, // recipient pays the shipping fee (see comment above)
+    // cod_amount is a SEPARATE concept from payment_type_id — this is the
+    // cash GHN should actually collect from the recipient for the ORDER
+    // itself. Previously never set at all, meaning even genuine COD
+    // orders had no money collected on delivery. 0 for prepaid orders
+    // (nothing to collect — already paid via VNPay).
+    cod_amount: isCOD ? Number(order.total_amount) : 0,
     note: "",
     required_note: "CHOXEMHANGKHONG",
     from_district_id: Number(env.GHN_FROM_DISTRICT),
     from_ward_code: env.GHN_FROM_WARD,
-    to_name: "Customer",
-    to_phone: "0900000000",
+    // Previously hardcoded to "Customer" / "0900000000" for every
+    // shipment — a real courier can't reach a placeholder phone number
+    // to arrange delivery, and can't collect COD cash from "Customer".
+    to_name: order.customer_name,
+    to_phone: order.customer_phone,
     to_address: order.shipping_address,
     to_ward_code: String(order.ward_id ?? ""),
     to_district_id: order.district_id ?? 0,
@@ -243,7 +254,18 @@ export async function trackOrder(tracking_code: string) {
 export async function handleWebhook(body: {
   OrderCode: string;
   Status: string;
+  ShopID?: number;
 }) {
+  // Defense-in-depth: GHN's webhook payloads aren't HMAC-signed (unlike
+  // VNPay's IPN), so the URL-path secret checked in shipping.controller.ts
+  // is the actual verification. This is a secondary check — if GHN
+  // includes ShopID in the payload, it should match ours, or this isn't a
+  // callback about our shop at all.
+  if (body.ShopID != null && Number(body.ShopID) !== Number(env.GHN_SHOP_ID)) {
+    console.warn(`[GHN Webhook] ShopID mismatch: got ${body.ShopID}`);
+    return;
+  }
+
   const { OrderCode: tracking_code, Status: ghnStatus } = body;
 
   const shipment =
@@ -256,11 +278,67 @@ export async function handleWebhook(body: {
   // Map + enforce ≤10 chars before insert
   await ShippingModel.insertShippingLog(shipment.shipping_order_id, ghnStatus);
 
-  // If delivered, update order status
   const mapped = ShippingModel.mapGhnStatus(ghnStatus);
-  if (mapped === "delivered") {
-    await OrderModel.updateOrderStatus(shipment.order_id, "delivered");
+  const order = await OrderModel.findOrderWithCustomerInfo(shipment.order_id);
+  if (!order) {
+    console.warn(
+      `[GHN Webhook] Shipment ${shipment.shipping_order_id} has no matching order ${shipment.order_id}`,
+    );
+    return;
   }
+
+  const { adminUpdateStatus, cancelOrderBySystem } =
+    await import("./order.service.js");
+
+  if (mapped === "delivered") {
+    // Only act if 'delivered' is actually a valid move from wherever the
+    // order currently is — avoids a stray/duplicate webhook call throwing
+    // on an order that's already delivered (or was cancelled/refunded in
+    // the meantime for an unrelated reason).
+    try {
+      await adminUpdateStatus(shipment.order_id, "delivered");
+    } catch (err) {
+      console.warn(
+        `[GHN Webhook] Could not move order ${shipment.order_id} to delivered:`,
+        err,
+      );
+    }
+    return;
+  }
+
+  if (mapped === "return" || mapped === "cancelled") {
+    // Delivery failed / was returned to the shop, or GHN cancelled the
+    // shipment outright — the order can't proceed as-is. Previously this
+    // was logged to shipping_logs and nothing else happened, leaving the
+    // order stuck showing "shipping" forever with no way for staff or the
+    // customer to tell it had actually failed.
+    //
+    // COD: nothing was ever collected (the courier never got paid, since
+    // delivery never completed) — safe to just cancel outright, same as
+    // any other cancellation, and restore the held stock.
+    //
+    // Prepaid (VNPay): money WAS already collected at checkout, so a
+    // silent cancel would keep the customer's payment with nothing
+    // delivered — exactly the bug cancelOrder() was fixed to avoid for
+    // customer-initiated cancellations. Route through refund_requested
+    // here too, for staff to review and process via
+    // vnpay.service.ts's processRefund.
+    const isCOD = order.payment_method_name.toLowerCase() === "cod";
+    try {
+      await cancelOrderBySystem(
+        shipment.order_id,
+        isCOD ? "cancelled" : "refund_requested",
+      );
+    } catch (err) {
+      console.error(
+        `[GHN Webhook] Failed to cancel/refund order ${shipment.order_id} after GHN status '${ghnStatus}':`,
+        err,
+      );
+    }
+  }
+
+  // picking/delivering: logged to shipping_logs above, no ORDER.status
+  // change — these are normal in-transit states, not terminal ones.
 }
 
 // ─── Location data (cached) ───────────────────────────────────────────────────
