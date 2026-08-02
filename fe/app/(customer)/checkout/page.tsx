@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cartService } from "../../../services/cart.service";
@@ -21,17 +21,55 @@ import ShippingSelector from "../../../components/checkout/ShippingSelector";
 import VoucherInput from "../../../components/checkout/VoucherInput";
 import { ShoppingBag, CreditCard, Truck } from "lucide-react";
 import type { CartItem, UserAddress } from "../../../interfaces";
-import type { VoucherValidationResult } from "../../../services/voucher.service";
+import {
+  voucherService,
+  type VoucherValidationResult,
+} from "../../../services/voucher.service";
 
 type Step = "address" | "shipping" | "payment";
 
+// useSearchParams() (read below, for the chatbot's prepare_checkout
+// handoff — payment_method_id/voucher_code/address_id query params) opts
+// this page out of static prerendering unless it's wrapped in its own
+// Suspense boundary — this wrapper is that boundary. The actual page
+// logic lives in CheckoutPageInner.
 export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-24">
+          <Spinner size="lg" />
+        </div>
+      }
+    >
+      <CheckoutPageInner />
+    </Suspense>
+  );
+}
+
+function CheckoutPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const { clearItems } = useCartStore();
   const queryClient = useQueryClient();
   const checkoutQueryKey = ["checkout", user?.user_id];
+
+  // Preferences the chatbot's prepare_checkout tool can hand off via URL
+  // (see components/chat/ChatCheckoutRedirect.tsx) — e.g. "use my default
+  // address, pay with VNPay, apply voucher SALE10". Read once on mount;
+  // this page doesn't need to react to the URL changing after that.
+  const [chatPrefs] = useState(() => ({
+    paymentMethodId: searchParams.get("payment_method_id"),
+    voucherCode: searchParams.get("voucher_code"),
+    addressId: searchParams.get("address_id"),
+  }));
+  const hasChatPrefs = !!(
+    chatPrefs.paymentMethodId ||
+    chatPrefs.voucherCode ||
+    chatPrefs.addressId
+  );
 
   const [step, setStep] = useState<Step>("address");
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<
@@ -49,9 +87,20 @@ export default function CheckoutPage() {
 
   // Default to VNPay once methods load, if nothing's been picked yet —
   // keeps the previous behavior (VNPay was the only option) as the
-  // default for anyone who doesn't consciously pick COD.
+  // default for anyone who doesn't consciously pick COD. A chat-supplied
+  // payment_method_id takes priority over that default, same way a
+  // customer's own click would.
   useEffect(() => {
     if (selectedPaymentMethodId !== null || !paymentMethods.length) return;
+    if (chatPrefs.paymentMethodId) {
+      const fromChat = paymentMethods.find(
+        (m) => String(m.payment_method_id) === chatPrefs.paymentMethodId,
+      );
+      if (fromChat) {
+        setSelectedPaymentMethodId(fromChat.payment_method_id);
+        return;
+      }
+    }
     const vnpay = paymentMethods.find((m) => m.name.toLowerCase() === "vnpay");
     setSelectedPaymentMethodId(
       vnpay?.payment_method_id ?? paymentMethods[0].payment_method_id,
@@ -114,18 +163,70 @@ export default function CheckoutPage() {
   const cartTotal = checkoutData?.cart.total ?? 0;
   const addresses: UserAddress[] = checkoutData?.addresses ?? [];
 
-  // Default address selection, applied once addresses load.
+  // Default address selection, applied once addresses load. A
+  // chat-supplied address_id (customer said "use my default address") is
+  // honored the same way — it should already point at the default one per
+  // prepare_checkout's own lookup, but matching by id here rather than
+  // re-deriving is_default keeps this in sync even if that ever changes.
   useEffect(() => {
     if (!checkoutData || selectedAddressId != null) return;
+    if (chatPrefs.addressId) {
+      const fromChat = checkoutData.addresses.find(
+        (a) => String(a.address_id) === chatPrefs.addressId,
+      );
+      if (fromChat) {
+        setSelectedAddressId(fromChat.address_id);
+        return;
+      }
+    }
     const def = checkoutData.addresses.find((a) => a.is_default);
     if (def) setSelectedAddressId(def.address_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutData]);
 
+  // Once an address is resolved and the chatbot handed off preferences,
+  // skip straight past the "pick an address" step the customer already
+  // effectively answered in the conversation — shipping fee still has to
+  // be computed against that address (ShippingSelector), which itself
+  // auto-advances to "payment" once done, so this doesn't skip anything
+  // that actually needs a fee calculation.
+  const chatStepAdvanced = useRef(false);
+
+  // Voucher auto-apply, once cart total is known. Runs once — if it fails
+  // (invalid/expired code), the customer just sees the normal VoucherInput
+  // box and can enter one manually; prepare_checkout (chat.service.ts)
+  // already screened obviously-bad codes before ever handing off this URL,
+  // so a failure here is mainly a race (voucher expired/used up between
+  // the chat turn and now).
+  const voucherAutoApplied = useRef(false);
+  useEffect(() => {
+    if (voucherAutoApplied.current) return;
+    if (!chatPrefs.voucherCode || !checkoutData) return;
+    voucherAutoApplied.current = true;
+    voucherService
+      .validateVoucher(chatPrefs.voucherCode, cartTotal)
+      .then(setVoucher)
+      .catch(() => {
+        toast.error(
+          `Voucher "${chatPrefs.voucherCode}" couldn't be applied — you can try entering it manually.`,
+        );
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatPrefs.voucherCode, checkoutData, cartTotal]);
+
   const activeAddress =
     !useNew && selectedAddressId
       ? (addresses.find((a) => a.address_id === selectedAddressId) ?? null)
       : null;
+
+  useEffect(() => {
+    if (chatStepAdvanced.current) return;
+    if (!hasChatPrefs || step !== "address") return;
+    if (!activeAddress) return;
+    chatStepAdvanced.current = true;
+    setStep("shipping");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasChatPrefs, step, activeAddress]);
 
   // Server-computed — avoids re-summing item subtotals (and the string-
   // concatenation bug that came with it, since subtotal is a Postgres

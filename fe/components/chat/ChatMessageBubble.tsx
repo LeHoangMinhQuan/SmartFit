@@ -1,8 +1,10 @@
 import type { UIMessage } from "ai";
 import ChatProductCard from "./ChatProductCard";
 import ChatCartRedirect from "./ChatCartRedirect";
+import ChatCheckoutRedirect from "./ChatCheckoutRedirect";
 import type {
   ChatAddToCartOutput,
+  ChatPrepareCheckoutOutput,
   ChatProductCardData,
   ChatToolError,
 } from "@/interfaces";
@@ -80,6 +82,33 @@ export default function ChatMessageBubble({ message }: ChatMessageBubbleProps) {
               );
             }
             return <ChatCartRedirect key={i} cartUrl={output.cart_url} />;
+          }
+
+          if (part.type === "tool-prepare_checkout") {
+            if (part.state !== "output-available") {
+              return (
+                <p key={i} className="text-xs italic text-gray-500">
+                  Preparing checkout…
+                </p>
+              );
+            }
+            const output = part.output as
+              | ChatPrepareCheckoutOutput
+              | ChatToolError;
+            if ("error" in output) {
+              return (
+                <p key={i} className="text-xs text-red-600">
+                  {output.error}
+                </p>
+              );
+            }
+            return (
+              <ChatCheckoutRedirect
+                key={i}
+                checkoutUrl={output.checkout_url}
+                warnings={output.warnings}
+              />
+            );
           }
 
           return null;

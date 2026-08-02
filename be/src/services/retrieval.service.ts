@@ -14,11 +14,19 @@ import db from "../config/db.js";
 import { chatConfig, geminiProvider } from "../config/chat.js";
 import { ApiError } from "../utils/ApiError.js";
 import * as ProductModel from "../models/product/product.model.js";
+import * as AttributeModel from "../models/attribute.model.js";
 import * as GeminiBudget from "./gemini-budget.service.js";
 
 export interface SearchFilters {
   category_id?: number;
   max_price?: number;
+  // Attribute name -> requested value (e.g. { color: "red", size: "M" }).
+  // Matched case-insensitively against product_attribute/attribute, at the
+  // product level (does this product have ANY variant with that value) —
+  // see applyFilters below. Card resolution (toProductCard) then narrows
+  // down to the specific matching variant, so the price/stock shown is for
+  // the variant the customer actually asked about, not an arbitrary one.
+  attributes?: Record<string, string>;
 }
 
 export interface ProductCard {
@@ -122,6 +130,29 @@ function applyFilters(
         .andWhere("pp.base_price", "<=", max_price);
     });
   }
+  if (filters?.attributes) {
+    // One EXISTS per requested attribute (color, size, ...) — a product
+    // only passes if it has AT LEAST ONE variant carrying that exact
+    // attribute value. Each attribute is its own EXISTS (not one combined
+    // subquery) so "red, size M" doesn't wrongly require a single variant
+    // to match both AND filter out a product where red comes in one
+    // variant and M comes in another — the specific variant gets resolved
+    // afterward in toProductCard. This is what actually fixes results
+    // ignoring color/size: previously these were only ever present in the
+    // free-text query for the embedding/keyword search to *maybe* pick up
+    // on, never enforced as a hard filter.
+    for (const [name, value] of Object.entries(filters.attributes)) {
+      if (!value) continue;
+      qb = qb.whereExists(function (this: Knex.QueryBuilder) {
+        this.select(1)
+          .from("product_attribute as pa")
+          .join("attribute as a", "pa.attribute_id", "a.attribute_id")
+          .whereRaw("pa.product_id = pe.product_id")
+          .andWhereRaw("LOWER(a.name) = LOWER(?)", [name])
+          .andWhereRaw("LOWER(pa.value) = LOWER(?)", [value]);
+      });
+    }
+  }
   return qb;
 }
 
@@ -183,7 +214,11 @@ export async function keywordSearch(
  * findImagesByProduct rather than a new query — same DEFAULT_STORE_ID
  * stock scoping already audited there.
  */
-async function toProductCard(product_id: number): Promise<ProductCard | null> {
+async function toProductCard(
+  product_id: number,
+  attributeFilters?: Record<string, string>,
+  attributeNameById?: Map<number, string>,
+): Promise<ProductCard | null> {
   const product = await ProductModel.findProductById(product_id);
   // A stale product_embedding row (product deleted after last reindex) —
   // skip rather than throw, since one bad row shouldn't fail the whole
@@ -195,8 +230,44 @@ async function toProductCard(product_id: number): Promise<ProductCard | null> {
     ProductModel.findImagesByProduct(product_id),
   ]);
 
+  // If the customer asked for a specific color/size, prefer the variant
+  // that actually carries those attribute values — otherwise the card can
+  // show a name/price/stock for a completely different variant than what
+  // was requested (e.g. asked for "red, size M" but the card silently
+  // shows the first in-stock variant, which might be blue/L). Falls back
+  // to the old "first in-stock, else first variant" behavior when no
+  // attribute filters were given, or when nothing actually matches (still
+  // a relevant product per the EXISTS filter — it may just be temporarily
+  // out of stock in the requested combo).
+  const wantedEntries =
+    attributeFilters && attributeNameById
+      ? Object.entries(attributeFilters).filter(([, v]) => !!v)
+      : [];
+
+  function variantMatches(v: {
+    attributes?: { attribute_id: number; value: string }[] | null;
+  }): boolean {
+    if (!wantedEntries.length) return false;
+    const attrs = v.attributes ?? [];
+    return wantedEntries.every(([name, value]) =>
+      attrs.some((a) => {
+        const attrName = attributeNameById!.get(a.attribute_id);
+        return (
+          attrName?.toLowerCase() === name.toLowerCase() &&
+          a.value.toLowerCase() === value.toLowerCase()
+        );
+      }),
+    );
+  }
+
+  const matching = variants.filter(variantMatches);
+  const matchingInStock = matching.find(
+    (v: { stock: number }) => Number(v.stock) > 0,
+  );
   const inStock = variants.find((v: { stock: number }) => Number(v.stock) > 0);
-  const primaryVariant = inStock ?? variants[0] ?? null;
+
+  const primaryVariant =
+    matchingInStock ?? matching[0] ?? inStock ?? variants[0] ?? null;
 
   return {
     product_id,
@@ -260,7 +331,22 @@ export async function hybridSearch(
     return [];
   }
 
-  const cards = await Promise.all(rankedIds.map(toProductCard));
+  let attributeNameById: Map<number, string> | undefined;
+  if (filters?.attributes && Object.keys(filters.attributes).length) {
+    const allAttributes = await AttributeModel.findAllAttributes();
+    attributeNameById = new Map(
+      allAttributes.map((a: { attribute_id: number; name: string }) => [
+        a.attribute_id,
+        a.name,
+      ]),
+    );
+  }
+
+  const cards = await Promise.all(
+    rankedIds.map((id) =>
+      toProductCard(id, filters?.attributes, attributeNameById),
+    ),
+  );
   const resolvedCards = cards.filter((c): c is ProductCard => c !== null);
   console.log("[retrieval.service] hybridSearch done", {
     card_count: resolvedCards.length,

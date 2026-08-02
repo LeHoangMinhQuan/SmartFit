@@ -403,6 +403,12 @@ export interface ChatAddToCartOutput {
   cart_url: string;
 }
 
+// Mirrors backend services/chat.service.ts's prepare_checkout tool output.
+export interface ChatPrepareCheckoutOutput {
+  checkout_url: string;
+  warnings: string[];
+}
+
 export interface ChatToolError {
   error: string;
 }
