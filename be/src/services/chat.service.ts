@@ -6,7 +6,7 @@
  * loop means the tool definitions and the model call can live directly
  * here. See ecommerce-api-plan.md §11 for the design rationale.
  */
-import { streamText, tool, type ModelMessage } from "ai";
+import { streamText, stepCountIs, tool, type ModelMessage } from "ai";
 import { z } from "zod";
 import { chatConfig, geminiProvider } from "../config/chat.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -393,6 +393,31 @@ export async function sendMessage(
     { role: "user", content: message },
   ];
 
+  // DEBUG: modelMessages is what the model actually sees — not the same
+  // thing as `history` from the DB. In particular, every past assistant
+  // turn that only made a tool call (no closing text — see the stopWhen
+  // fix below for why that used to be every turn) shows up here as
+  // content: "", which erases the model's own memory of what it searched
+  // for and found. Logging the exact array sent lets us confirm whether
+  // a given turn's odd tool-call args (e.g. reusing a stale query/filter
+  // from an earlier turn) trace back to missing/empty history entries
+  // rather than the model just guessing.
+  console.log("[chat.service] modelMessages built", {
+    resolvedSessionId,
+    latest_user_message: message,
+    messages: modelMessages.map((m, i) => ({
+      idx: i,
+      role: m.role,
+      content_preview:
+        typeof m.content === "string"
+          ? m.content.length > 120
+            ? `${m.content.slice(0, 120)}…`
+            : m.content
+          : "[non-string content]",
+      content_is_empty: m.content === "",
+    })),
+  });
+
   const {
     model: selectedModel,
     reservation,
@@ -412,6 +437,22 @@ export async function sendMessage(
     system: CHAT_SYSTEM_PROMPT,
     messages: modelMessages,
     tools: buildTools(user_id, validPairs),
+    // BUG FIX: without stopWhen, ai@7's streamText defaults to a single
+    // step — it stops as soon as the model produces a tool call, and
+    // NEVER automatically feeds the tool result back in for a follow-up
+    // generation. That's exactly what every log line in this file showed:
+    // `finish_reason: 'tool-calls', text_length: 0, step_count: 1` on
+    // every single turn, whether search found 0 or N products. The model
+    // was never given the chance to look at its own search results and
+    // write a reply — the assistant's `content` persisted to chat_message
+    // was always "", which in turn meant modelMessages on the NEXT turn
+    // carried empty assistant history (see the debug log above), robbing
+    // the model of any memory of what it previously searched for. That's
+    // the most likely explanation for turns reusing stale query/filter
+    // args from an earlier turn instead of the customer's latest message.
+    // stepCountIs(5) allows: tool call -> tool result -> text, with slack
+    // for a chained case like search_products -> add_to_cart -> text.
+    stopWhen: stepCountIs(5),
     // Fires for errors during the model call/stream itself (network
     // failure, provider error response, etc.) — this promise resolves
     // BEFORE any of that happens (streamText returns immediately and
@@ -443,6 +484,22 @@ export async function sendMessage(
         step_count: event.steps?.length ?? 0,
         finish_reason: event.finishReason,
       });
+      // DEBUG: with stopWhen now allowing multiple steps, log what each
+      // step actually did — which tool (if any) was called with what
+      // input, and whether that step produced text. This is the direct
+      // trace for "did the model use the right query/filters this turn"
+      // without cross-referencing the modelMessages log by hand.
+      console.log(
+        "[chat.service] onFinish: step-by-step trace",
+        event.steps.map((step, i) => ({
+          step_index: i,
+          text_length: step.text?.length ?? 0,
+          tool_calls: step.content
+            .filter((p) => p.type === "tool-call")
+            .map((p) => ({ tool: p.toolName, input: p.input })),
+          finish_reason: step.finishReason,
+        })),
+      );
       try {
         // Correlate tool-call/tool-result content parts across all steps by
         // toolCallId into { tool, input, output } entries for metadata.
