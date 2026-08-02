@@ -39,15 +39,11 @@ export default function ProfilePage() {
   const saveInfoMutation = useMutation({
     mutationFn: () => userService.updateProfile({ username, phone }),
     onSuccess: (updated) => {
-      // Keep the session, just refresh the cached user object
+      // Keep the session, just refresh the cached user object. `updated`
+      // is already a full User from the backend — no need to reconstruct
+      // individual fields with fallbacks.
       if (user) {
-        setAuth({
-          ...user,
-          ...updated,
-          phone: updated.phone ?? "",
-          address: updated.address ?? "",
-          avatar_url: updated.avatar_url ?? "",
-        });
+        setAuth({ ...user, ...updated });
       }
       toast.success("Profile updated.");
     },

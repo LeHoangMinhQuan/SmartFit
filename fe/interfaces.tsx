@@ -33,8 +33,7 @@ export interface AuthUser {
   user_id: number;
   username: string;
   email: string;
-  phone: string;
-  address: string;
+  phone: string | null; // nullable (2026-08-01) — Google accounts have none at signup
   avatar_url?: string | null;
 }
 

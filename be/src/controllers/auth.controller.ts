@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import crypto from "node:crypto";
 import { catchAsync } from "../utils/catchAsync.js";
 import { ApiError } from "../utils/ApiError.js";
 import {
@@ -8,17 +9,20 @@ import {
   logout,
   forgotPassword,
   resetPassword,
+  syncGoogleUser,
 } from "../services/auth.service.js";
 import {
   setAuthCookies,
   setAccessTokenCookie,
   clearAuthCookies,
 } from "../utils/cookies.js";
+import { env } from "../config/env.js";
 import type {
   RegisterBody,
   LoginBody,
   ForgotPasswordBody,
   ResetPasswordBody,
+  SyncGoogleUserBody,
 } from "../schemas/auth.schema.js";
 
 /**
@@ -82,7 +86,7 @@ export const loginController = catchAsync(
  * services/auth.service.ts for why).
  *
  * Reads the refresh token from the httpOnly `refreshToken` cookie
- * (path-scoped to /api/auth, so it's only ever sent to these four
+ * (path-scoped to /api/app-auth, so it's only ever sent to these
  * routes) rather than the request body — nothing sensitive travels
  * through JS-readable state anymore.
  *
@@ -163,5 +167,42 @@ export const resetPasswordController = catchAsync(
     res
       .status(200)
       .json({ message: "Password reset successful. You can now log in." });
+  },
+);
+
+/**
+ * POST /api/app-auth/google-sync
+ *
+ * NOT reachable from the browser directly — this endpoint trusts the
+ * caller's claimed email/google_id completely (there's no password to
+ * check, unlike login()), so it must only ever be called server-to-server
+ * by the Next.js app (app/api/sync-google-user/route.ts), which is the
+ * thing that actually validated the Google sign-in via NextAuth. Anyone
+ * else calling this directly could mint a session for any email/google_id
+ * they want — that's what X-Internal-Secret guards against. Compared
+ * with the request header via a constant-time check to avoid a timing
+ * side-channel on the secret.
+ */
+export const syncGoogleUserController = catchAsync(
+  async (req: Request, res: Response) => {
+    const provided = req.header("X-Internal-Secret") ?? "";
+    const expected = env.GOOGLE_SYNC_SECRET;
+    const isValid =
+      provided.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+    if (!isValid) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const body = req.body as SyncGoogleUserBody;
+    const result = await syncGoogleUser({
+      email: body.email,
+      google_id: body.google_id,
+      username: body.username,
+      avatar_url: body.avatar_url ?? null,
+    });
+
+    setAuthCookies(res, result.accessToken, result.refreshToken);
+    res.status(200).json({ user: result.user });
   },
 );

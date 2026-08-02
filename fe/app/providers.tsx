@@ -4,6 +4,7 @@ import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import SessionVerifier from "@/components/auth/SessionVerifier";
+import GoogleSessionBridge from "@/components/auth/GoogleSessionBridge";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   // Created once per mount via useState, not on every render.
@@ -23,6 +24,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         <SessionVerifier />
+        <GoogleSessionBridge />
         {children}
       </QueryClientProvider>
     </SessionProvider>

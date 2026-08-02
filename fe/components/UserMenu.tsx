@@ -17,37 +17,34 @@ export default function UserMenu({
   onLoginClick,
   onRegisterClick,
 }: UserMenuProps) {
-  const storeUser = useAuthStore((state) => state.user);
+  const user = useAuthStore((state) => state.user);
   const clearAuth = useAuthStore((state) => state.clearAuth);
 
-  // Fetch the Auth.js Google session
+  // Still needed for handleLogout's nextAuthSignOut call below — Google
+  // sign-in still creates a real NextAuth session alongside the backend
+  // one now (see GoogleSessionBridge.tsx), and both need clearing.
   const { data: session } = useSession();
 
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Combine data: Prefer Zustand (custom backend), fallback to Auth.js (Google)
-  const user =
-    storeUser ||
-    (session?.user
-      ? {
-          username: session.user.name || "User",
-          email: session.user.email || "",
-          avatar_url: session.user.image || "",
-        }
-      : null);
-
   const handleLogout = async () => {
     setOpen(false);
 
-    // 1. Clear custom backend session
-    if (storeUser) {
+    // 1. Clear the backend session (accessToken/refreshToken cookies +
+    // the DB-side refresh token row). GoogleSessionBridge.tsx means
+    // `user` is populated identically regardless of login method now, so
+    // this always runs for anyone actually signed in — the clearAuth()
+    // fallback only matters for the rare case where a NextAuth session
+    // exists but the bridge sync hasn't resolved/succeeded yet.
+    if (user) {
       await logoutService();
     } else {
       clearAuth();
     }
 
-    // 2. Clear Auth.js Google session
+    // 2. Clear the NextAuth session itself (Google sign-in still creates
+    // one alongside the backend session — see GoogleSessionBridge.tsx).
     if (session) {
       await nextAuthSignOut({ redirect: false });
     }

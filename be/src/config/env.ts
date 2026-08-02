@@ -16,6 +16,10 @@ const required = [
   // Server
   "PORT",
   "FRONTEND_URL",
+  // Shared secret between the Next.js server (app/api/sync-google-user)
+  // and this backend's POST /api/app-auth/google-sync — see that route's
+  // doc comment for why this endpoint can't be left open to any caller.
+  "GOOGLE_SYNC_SECRET",
   "NODE_ENV",
 
   // Database
@@ -94,6 +98,7 @@ function envNumber(key: string, fallback: number): number {
 export const env = {
   PORT: parseInt(process.env["PORT"] ?? "3000", 10),
   FRONTEND_URL: process.env["FRONTEND_URL"]!,
+  GOOGLE_SYNC_SECRET: process.env["GOOGLE_SYNC_SECRET"]!,
   NODE_ENV: process.env["NODE_ENV"]!,
 
   DB_HOST: process.env["DB_HOST"]!,

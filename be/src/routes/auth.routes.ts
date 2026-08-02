@@ -7,6 +7,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  syncGoogleUserSchema,
 } from "../schemas/auth.schema.js";
 import {
   registerController,
@@ -15,12 +16,14 @@ import {
   logoutController,
   forgotPasswordController,
   resetPasswordController,
+  syncGoogleUserController,
 } from "../controllers/auth.controller.js";
 
 /**
  * routes/auth.routes.ts
  *
- * Mounted at /api/auth in app.ts.
+ * Mounted at /api/app-auth in app.ts (renamed 2026-08-01 — see app.ts's
+ * mount comment; /api/auth itself is now exclusively NextAuth's).
  *
  * Middleware chain per route:
  *   Public:      authLimiter → validate(schema) → controller
@@ -38,7 +41,7 @@ import {
  * endpoint could never actually be used for its intended purpose.
  * The refresh token itself (a 320-bit crypto-random value, hashed before
  * storage — see findRefreshTokenByHash) arrives via an httpOnly cookie
- * that's path-scoped to /api/auth, so no extra access-token-derived
+ * that's path-scoped to /api/app-auth, so no extra access-token-derived
  * user_id scoping is needed for security.
  *
  * /refresh and /logout no longer validate a body — both tokens now travel
@@ -46,7 +49,7 @@ import {
  */
 const router = Router();
 
-// POST /api/auth/register
+// POST /api/app-auth/register
 router.post(
   "/register",
   authLimiter,
@@ -54,18 +57,18 @@ router.post(
   registerController,
 );
 
-// POST /api/auth/login
+// POST /api/app-auth/login
 router.post("/login", authLimiter, validate(loginSchema), loginController);
 
-// POST /api/auth/refresh
+// POST /api/app-auth/refresh
 // Public — see note above. authLimiter guards against brute-forcing tokens.
 router.post("/refresh", authLimiter, refreshController);
 
-// POST /api/auth/logout
+// POST /api/app-auth/logout
 // authenticate first — user_id needed to delete the correct token row.
 router.post("/logout", authenticate, logoutController);
 
-// POST /api/auth/forgot-password
+// POST /api/app-auth/forgot-password
 // Public. Generates a Firebase password-reset link and emails it out.
 // See controllers/auth.controller.js + services/auth.service.js.
 router.post(
@@ -75,7 +78,7 @@ router.post(
   forgotPasswordController,
 );
 
-// POST /api/auth/reset-password
+// POST /api/app-auth/reset-password
 // Public — the oobCode itself (not a session) is the credential here,
 // and it's redeemed server-side against Google's Identity Toolkit API.
 router.post(
@@ -83,6 +86,18 @@ router.post(
   authLimiter,
   validate(resetPasswordSchema),
   resetPasswordController,
+);
+
+// POST /api/app-auth/google-sync
+// Server-to-server only (Next.js's app/api/sync-google-user route) — see
+// syncGoogleUserController's doc comment for why this must never be
+// reachable directly from the browser. No authLimiter: this isn't a
+// credential-guessing surface (the X-Internal-Secret check is), and the
+// Next.js route is the only intended caller.
+router.post(
+  "/google-sync",
+  validate(syncGoogleUserSchema),
+  syncGoogleUserController,
 );
 
 export default router;

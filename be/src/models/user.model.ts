@@ -6,8 +6,8 @@ export interface UserRow {
   user_id: number;
   username: string;
   email: string;
-  password_hash: string;
-  phone: string; // CHAR(10) NOT NULL
+  password_hash: string | null;
+  phone: string | null; // CHAR(10) — nullable, see google_id below
   avatar_url: string | null;
   google_id: string | null;
   firebase_uid: string | null;
@@ -43,9 +43,28 @@ export const emailExists = async (email: string): Promise<boolean> => {
 export const insertUser = (user: {
   username: string;
   email: string;
-  password_hash: string;
-  phone: string; // CHAR(10) NOT NULL
+  password_hash?: string | null; // null for Google-only accounts
+  phone?: string | null; // null for Google-only accounts — see schema note
+  google_id?: string | null;
+  avatar_url?: string | null;
 }): Promise<UserRow[]> => db<UserRow>("USER").insert(user).returning("*");
+
+// Links an existing (password-based) account to a Google identity — used
+// when syncGoogleUser (auth.service.ts) finds a USER row matching the
+// Google account's email but without a google_id yet, so signing in with
+// Google afterward reuses the same account instead of creating a
+// duplicate.
+export const linkGoogleId = (
+  user_id: number,
+  google_id: string,
+  avatar_url: string | null,
+): Promise<number> =>
+  db<UserRow>("USER").where({ user_id }).update({ google_id, avatar_url });
+
+export const findUserByGoogleId = (
+  google_id: string,
+): Promise<UserRow | undefined> =>
+  db<UserRow>("USER").where({ google_id }).first();
 
 // firebase_uid is populated best-effort at registration time (see
 // auth.service.ts#register) and by the one-off backfill script for

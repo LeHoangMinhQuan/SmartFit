@@ -13,6 +13,7 @@ import {
 import {
   findUserByEmail,
   findUserById,
+  findUserByGoogleId,
   insertUser,
   insertRefreshToken,
   findRefreshTokenByHash,
@@ -21,6 +22,7 @@ import {
   emailExists,
   updateUserFirebaseUid,
   updateUserPasswordByEmail,
+  linkGoogleId,
 } from "../models/user.model.js";
 import type { RegisterBody, LoginBody } from "../schemas/auth.schema.js";
 
@@ -167,6 +169,86 @@ export const login = async (body: LoginBody): Promise<LoginResult> => {
       username: user.username,
       email: user.email,
       phone: user.phone,
+    },
+    accessToken,
+    refreshToken,
+  };
+};
+
+// ─── Google sync ──────────────────────────────────────────────────────────────
+//
+// NOTE (2026-08-01): Google login goes through NextAuth entirely on the
+// frontend (see the /api/auth rename in app.ts's mount comment) — it was
+// never bridged into this backend's own USER table or JWT/cookie auth at
+// all. A Google-authenticated visitor had a valid NextAuth session but no
+// USER row and no accessToken/refreshToken cookies, so every
+// backend-authenticated feature (orders, wishlist, addresses, profile,
+// chat) 401'd for them, and they never appeared in admin's new-user
+// counts since nothing ever inserted a USER row for them.
+//
+// Called by a Next.js server-side route (app/api/sync-google-user) right
+// after a Google sign-in resolves — NOT reachable from the browser
+// directly, see the controller's auth check.
+export interface SyncGoogleUserResult {
+  user: {
+    user_id: number;
+    username: string;
+    email: string;
+    phone: string | null;
+    avatar_url: string | null;
+  };
+  accessToken: string;
+  refreshToken: string;
+}
+
+export const syncGoogleUser = async (body: {
+  email: string;
+  google_id: string;
+  username: string;
+  avatar_url: string | null;
+}): Promise<SyncGoogleUserResult> => {
+  let user = await findUserByGoogleId(body.google_id);
+
+  if (!user) {
+    // Not linked yet — if an account with this email already exists
+    // (e.g. they originally registered with a password), link Google to
+    // it rather than creating a duplicate account. Trusting email-match
+    // here is reasonable since Google itself only issues sessions for
+    // verified email addresses.
+    const existing = await findUserByEmail(body.email);
+    if (existing) {
+      await linkGoogleId(existing.user_id, body.google_id, body.avatar_url);
+      user = {
+        ...existing,
+        google_id: body.google_id,
+        avatar_url: body.avatar_url,
+      };
+    } else {
+      const [created] = await insertUser({
+        username: body.username,
+        email: body.email,
+        password_hash: null, // Google-only account — no password set
+        phone: null, // Google doesn't provide one; profile page can collect it later
+        google_id: body.google_id,
+        avatar_url: body.avatar_url,
+      });
+      if (!created) throw new ApiError(500, "Failed to create user");
+      user = created;
+    }
+  }
+
+  const { accessToken, refreshToken } = await issueTokens(
+    user.user_id,
+    user.email,
+  );
+
+  return {
+    user: {
+      user_id: user.user_id,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      avatar_url: user.avatar_url,
     },
     accessToken,
     refreshToken,

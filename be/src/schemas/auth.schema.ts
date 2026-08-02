@@ -45,6 +45,15 @@ export const forgotPasswordSchema = z.object({
   }),
 });
 
+export const syncGoogleUserSchema = z.object({
+  body: z.object({
+    email: z.email().trim().toLowerCase(),
+    google_id: z.string().min(1),
+    username: z.string().min(1).max(50),
+    avatar_url: z.string().url().nullable().optional(),
+  }),
+});
+
 export const resetPasswordSchema = z.object({
   body: z.object({
     // The oobCode Firebase embeds in the reset link's query string.
@@ -57,4 +66,5 @@ export const resetPasswordSchema = z.object({
 export type RegisterBody = z.infer<typeof registerSchema>["body"];
 export type LoginBody = z.infer<typeof loginSchema>["body"];
 export type ForgotPasswordBody = z.infer<typeof forgotPasswordSchema>["body"];
+export type SyncGoogleUserBody = z.infer<typeof syncGoogleUserSchema>["body"];
 export type ResetPasswordBody = z.infer<typeof resetPasswordSchema>["body"];
