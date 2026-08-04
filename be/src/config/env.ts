@@ -154,38 +154,25 @@ export const env = {
   ),
 
   // Updated 2026-08-03 from the actual live numbers on this project's
-  // own https://aistudio.google.com Rate Limits page (no more guessing
-  // from third-party trackers — see git history on this file for that
-  // era). The dashboard lists two figures per metric, e.g. for
-  // Gemini 3.6 Flash: RPM "7 / 5", TPM "15.98K / 250K", RPD "23 / 20".
-  // The two figures are this model's OWN ceiling and the PROJECT-WIDE
-  // shared-pool ceiling that applies across every Gemini model this key
-  // calls (chat.ts's geminiProvider is one shared client/key for heavy +
-  // lite + embedding) — and either ceiling can bind independently
-  // (that's why RPD's second figure of 20 is the *lower* of the pair,
-  // while TPM's second figure of 250K is the *higher* one — there's no
-  // fixed direction; each is just whichever the dashboard reports).
-  // Since both must hold simultaneously, the true usable budget per
-  // model is min() of the two — so heavy Flash is really capped at 20
-  // requests/day project-wide, not 23.
+  // own https://aistudio.google.com Rate Limits page — confirmed reads,
+  // not estimates. Gemini 3.6 Flash (heavy): RPM 5, RPD 20. Gemini 3.5
+  // Flash Lite: RPM 15, RPD 500. These are per-project ceilings shared
+  // across every user of this app (chat.ts's geminiProvider is one
+  // client/key for heavy + lite + embedding), not per-user.
   //
-  // This is drastically lower than this app's earlier assumed range
-  // (~250-1,500 RPD) — free-tier Gemini access has clearly tightened
-  // since those trackers were snapshotted. At 20 requests/day for the
-  // heavy model, do NOT expect this to comfortably cover a 10-user demo
-  // on heavy alone; model-router.service.ts's fallback-to-lite behavior
-  // on heavy-budget exhaustion is now load-bearing, not just a nicety.
-  // Re-check https://aistudio.google.com (Projects -> Rate Limits) for
-  // your own key before a real demo — these figures can and do change.
+  // At 20 requests/day for the heavy model, do NOT expect this to
+  // comfortably cover a 10-user demo on heavy alone; model-router
+  // .service.ts's fallback-to-lite behavior on heavy-budget exhaustion
+  // is now load-bearing, not just a nicety — lite's 500 RPD gives far
+  // more headroom, which is exactly why classifyComplexity defaults to
+  // "light" for ordinary single-intent searches rather than routing
+  // everything to heavy.
+  //
+  // ⚠️ Re-verify at https://aistudio.google.com (Projects -> Rate
+  // Limits) before a real demo — free-tier limits have changed multiple
+  // times through 2025-2026 and these are not guaranteed to hold.
   GEMINI_HEAVY_DAILY_BUDGET: envNumber("GEMINI_HEAVY_DAILY_BUDGET", 20),
-  // Gemini 3.5 Flash Lite's dashboard row only reports RPM (see below);
-  // RPD isn't shown for this model/tier, so there's no live number to
-  // read off directly. Estimated by keeping the same heavy:lite ratio
-  // this file used before (lite ran ~1.75x heavy) against the NEW heavy
-  // figure (20) rather than the old one, which lands at 35. Treat this
-  // one figure as an estimate, not a confirmed dashboard read — verify
-  // it directly once RPD is visible for this model on your project.
-  GEMINI_LITE_DAILY_BUDGET: envNumber("GEMINI_LITE_DAILY_BUDGET", 35),
+  GEMINI_LITE_DAILY_BUDGET: envNumber("GEMINI_LITE_DAILY_BUDGET", 500),
   // Embedding model's RPD isn't broken out separately on the dashboard
   // either. Kept proportional to the previous heavy:embedding ratio
   // (1.25x) applied to the new heavy figure — same caveat as lite above,
@@ -193,7 +180,7 @@ export const env = {
   // (retrieval.service.ts) costs one embedding call regardless of which
   // chat model handles the turn, so this scales with total conversation
   // volume, not with the heavy/lite split.
-  GEMINI_EMBEDDING_DAILY_BUDGET: envNumber("GEMINI_EMBEDDING_DAILY_BUDGET", 25),
+  GEMINI_EMBEDDING_DAILY_BUDGET: envNumber("GEMINI_EMBEDDING_DAILY_BUDGET", 1000),
 
   // Requests-per-minute ceilings, enforced in-process by
   // rpm-limiter.service.ts BEFORE a call ever reaches Gemini. This is
@@ -222,8 +209,8 @@ export const env = {
   // through 2025-2026 — re-verify at https://aistudio.google.com/rate-limit
   // before a real demo rather than assuming these stay valid indefinitely.
   GEMINI_HEAVY_RPM: envNumber("GEMINI_HEAVY_RPM", 5),
-  GEMINI_LITE_RPM: envNumber("GEMINI_LITE_RPM", 4),
-  GEMINI_EMBEDDING_RPM: envNumber("GEMINI_EMBEDDING_RPM", 5),
+  GEMINI_LITE_RPM: envNumber("GEMINI_LITE_RPM", 15),
+  GEMINI_EMBEDDING_RPM: envNumber("GEMINI_EMBEDDING_RPM", 100),
 
   // ─── Firebase (forgot-password only — optional, see note above) ───────────
   FIREBASE_PROJECT_ID: process.env["FIREBASE_PROJECT_ID"],
