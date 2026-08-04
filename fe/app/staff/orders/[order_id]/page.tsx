@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { adminService } from "../../../../services/staff/admin.service";
 import { formatDate, formatPrice } from "../../../../lib/utils";
 import { toast } from "../../../../components/ui/Toast";
@@ -67,7 +68,12 @@ export default function StaffOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["staff-orders"] });
       toast.success("Status updated.");
     },
-    onError: () => toast.error("Failed to update status."),
+    onError: (err) => {
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data?.message ?? "Failed to update status.")
+        : "Failed to update status.";
+      toast.error(message);
+    },
   });
   const updating = updateStatusMutation.isPending;
 
@@ -118,23 +124,25 @@ export default function StaffOrderDetailPage() {
         <Spinner size="lg" />
       </div>
     );
-  if (!order) return <div className="p-8 text-gray-500">Order not found.</div>;
+  if (!order) return <div className="p-8 text-slate-500">Order not found.</div>;
+
+  const isTerminal = TERMINAL_STATUSES.includes(order.status);
 
   return (
-    <div className="p-8 flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6 p-8 max-w-3xl">
       <button
         onClick={() => router.back()}
-        className="text-sm text-gray-400 hover:underline self-start"
+        className="self-start text-sm text-slate-500 hover:cursor-pointer hover:text-slate-800 hover:underline"
       >
         ← Back
       </button>
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-slate-900">
             Order #{order.order_id}
           </h1>
-          <p className="text-sm text-gray-500">
+          <p className="mt-1 text-sm text-slate-500">
             {formatDate(order.created_at)} · User #{order.user_id}
           </p>
         </div>
@@ -142,13 +150,15 @@ export default function StaffOrderDetailPage() {
       </div>
 
       {/* Status update */}
-      <div className="flex items-center gap-3 rounded-xl border p-4">
-        <span className="text-sm font-medium">Update Status:</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <span className="text-sm font-medium text-slate-700">
+          Update Status:
+        </span>
         <select
           value={order.status}
-          disabled={updating}
+          disabled={updating || isTerminal}
           onChange={(e) => handleStatusChange(e.target.value as OrderStatus)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>
@@ -157,6 +167,11 @@ export default function StaffOrderDetailPage() {
           ))}
         </select>
         {updating && <Spinner size="sm" />}
+        {isTerminal && !updating && (
+          <span className="text-xs text-slate-400">
+            {order.status} is a final status — no further changes possible.
+          </span>
+        )}
       </div>
 
       {order.status === "refund_requested" && (
@@ -190,22 +205,24 @@ export default function StaffOrderDetailPage() {
       )}
 
       {/* Order items */}
-      <section className="rounded-xl border p-5">
-        <h2 className="mb-4 font-semibold">Items</h2>
-        <div className="flex flex-col divide-y text-sm">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 font-semibold text-slate-900">Items</h2>
+        <div className="flex flex-col divide-y divide-slate-100 text-sm">
           {order.items.map((item) => (
             <div
               key={`${item.product_id}-${item.variant_id}`}
-              className="flex justify-between py-2"
+              className="flex justify-between py-2 text-slate-700"
             >
               <span>
                 Product #{item.product_id} / Variant #{item.variant_id} ×{" "}
                 {item.quantity}
               </span>
-              <span className="font-medium">{formatPrice(item.subtotal)}</span>
+              <span className="font-medium text-slate-900">
+                {formatPrice(item.subtotal)}
+              </span>
             </div>
           ))}
-          <div className="flex justify-between pt-3 font-semibold">
+          <div className="flex justify-between pt-3 font-semibold text-slate-900">
             <span>Total</span>
             <span>{formatPrice(order.total_amount)}</span>
           </div>
@@ -213,11 +230,11 @@ export default function StaffOrderDetailPage() {
       </section>
 
       {/* Shipping */}
-      <section className="rounded-xl border p-5">
-        <h2 className="mb-2 font-semibold">Shipping</h2>
-        <p className="text-sm text-gray-600">{order.shipping_address}</p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-2 font-semibold text-slate-900">Shipping</h2>
+        <p className="text-sm text-slate-600">{order.shipping_address}</p>
         {order.shipping?.tracking_code && (
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-slate-400">
             Tracking: {order.shipping.tracking_code}
           </p>
         )}

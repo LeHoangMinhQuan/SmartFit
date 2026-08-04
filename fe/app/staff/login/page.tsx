@@ -47,12 +47,12 @@ export default function StaffLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-3xl border border-gray-200 bg-white p-8">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="mb-6 flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
+          className="mb-6 flex items-center gap-1 text-sm text-slate-500 transition hover:cursor-pointer hover:text-slate-800"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -70,10 +70,8 @@ export default function StaffLoginPage() {
         </button>
 
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
-            Staff Login
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">Internal access only</p>
+          <h1 className="text-2xl font-bold text-slate-900">Staff Login</h1>
+          <p className="mt-1 text-sm text-slate-500">Internal access only</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -90,6 +88,8 @@ export default function StaffLoginPage() {
           <Input
             label="Password"
             type="password"
+            passwordToggle
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -97,13 +97,13 @@ export default function StaffLoginPage() {
           />
 
           {error && (
-            <p className="text-sm text-red-500 text-center -mt-1">{error}</p>
+            <p className="-mt-1 text-center text-sm text-red-500">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 rounded-xl bg-black py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            className="mt-2 rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:cursor-pointer hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-50"
           >
             {loading ? "Signing in…" : "Sign In"}
           </button>

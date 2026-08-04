@@ -330,14 +330,14 @@ export default function StaffInventoryPage() {
                               [key]: e.target.value,
                             }))
                           }
-                          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-black/20"
+                          className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                         />
                         <button
                           onClick={() =>
                             handleAdjust(r.product_id, r.variant_id, r.store_id)
                           }
                           disabled={isAdjusting || !adjustQty[key]?.trim()}
-                          className="rounded-lg bg-black px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-40 hover:cursor-pointer disabled:hover:cursor-not-allowed"
+                          className="rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 px-3 py-1 text-xs font-medium text-white shadow-sm transition hover:cursor-pointer hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
                         >
                           {isAdjusting ? (
                             <Spinner className="h-3 w-3" />
@@ -366,7 +366,12 @@ export default function StaffInventoryPage() {
             </p>
             <button
               onClick={() => setShowImportForm((v) => !v)}
-              className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800 hover:cursor-pointer"
+              className={clsx(
+                "rounded-xl px-4 py-2 text-sm font-medium transition hover:cursor-pointer",
+                showImportForm
+                  ? "border border-slate-300 text-slate-600 hover:bg-slate-100"
+                  : "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5 hover:shadow-xl",
+              )}
             >
               {showImportForm ? "Cancel" : "+ Record Import"}
             </button>
@@ -389,7 +394,7 @@ export default function StaffInventoryPage() {
                       supplier_id: e.target.value,
                     })
                   }
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   required
                 >
                   <option value="">Select…</option>
@@ -410,7 +415,7 @@ export default function StaffInventoryPage() {
                   onChange={(e) =>
                     setImportForm({ ...importForm, store_id: e.target.value })
                   }
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   required
                 >
                   <option value="">Select…</option>
@@ -430,7 +435,7 @@ export default function StaffInventoryPage() {
                   value={importForm.product_id}
                   onChange={(e) => handleProductChange(e.target.value)}
                   disabled={productsQuery.isLoading}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:opacity-50"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                   required
                 >
                   <option value="">
@@ -457,7 +462,7 @@ export default function StaffInventoryPage() {
                     })
                   }
                   disabled={!selectedProductId || variantsQuery.isLoading}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-black outline-none transition focus:border-black focus:ring-1 focus:ring-black disabled:opacity-50"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                   required
                 >
                   <option value="">
@@ -499,7 +504,7 @@ export default function StaffInventoryPage() {
                 <button
                   type="submit"
                   disabled={savingImport}
-                  className="rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2 text-sm text-white disabled:opacity-50 hover:bg-gray-800"
+                  className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
                 >
                   {savingImport ? "Recording…" : "Record Import"}
                 </button>
