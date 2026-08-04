@@ -60,6 +60,15 @@ export default function StaffDetailPage() {
   }, [detailQuery.isError]);
 
   const [roles, setRoles] = useState<Role[]>([]);
+  // BUG FIX: this previously never populated from the fetched staff detail
+  // at all — it only ever changed in-session via the assign/remove
+  // mutations below, so the Roles tab showed "No roles assigned" for
+  // every staff member on first load regardless of their actual roles.
+  // GET /admin/staff/:staff_id already returns `roles` (see
+  // StaffService.getStaff on the backend) — just wasn't being read here.
+  useEffect(() => {
+    if (staff) setRoles(staff.roles ?? []);
+  }, [staff]);
 
   // Edit info state — reset when staff loads
   const [editName, setEditName] = useState("");
@@ -158,39 +167,45 @@ export default function StaffDetailPage() {
       </div>
     );
   if (!staff)
-    return <div className="p-8 text-gray-500">Staff member not found.</div>;
+    return <div className="p-8 text-slate-500">Staff member not found.</div>;
 
   const unassignedRoles = allRoles.filter(
     (r) => !roles.some((ar) => ar.role_id === r.role_id),
   );
 
   return (
-    <div className="p-8 flex flex-col gap-6 max-w-2xl">
+    <div className="flex max-w-2xl flex-col gap-6 p-8">
       <button
         onClick={() => router.back()}
-        className="self-start text-sm text-gray-400 hover:underline"
+        className="self-start text-sm text-slate-500 hover:cursor-pointer hover:text-slate-800 hover:underline"
       >
         ← Back
       </button>
 
-      <h1 className="text-2xl font-bold text-gray-900 text-gray-900">
-        {staff.name}
-        <span className="ml-2 text-sm font-normal text-gray-400">
-          #{staff.staff_id}
-        </span>
-      </h1>
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">
+          {staff.name}
+          <span className="ml-2 text-base font-normal text-slate-400">
+            #{staff.staff_id}
+          </span>
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Manage this staff member&apos;s info, roles, work history, and store
+          assignment.
+        </p>
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b border-slate-200">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={clsx(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition",
+              "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition hover:cursor-pointer",
               tab === t.key
-                ? "border-black text-black"
-                : "border-transparent text-gray-500 hover:text-gray-800",
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800",
             )}
           >
             {t.label}
@@ -198,167 +213,173 @@ export default function StaffDetailPage() {
         ))}
       </div>
 
-      {/* Info tab */}
-      {tab === "info" && (
-        <form
-          onSubmit={handleSaveInfo}
-          className="flex flex-col gap-4 max-w-sm"
-        >
-          <Input
-            label="Name"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            required
-          />
-          <div className="text-sm text-gray-500">
-            <p>Birth date: {staff.birth_date ?? "—"}</p>
-            <p>Start date: {staff.start_time ?? "—"}</p>
-          </div>
-          <button
-            type="submit"
-            disabled={savingInfo}
-            className="self-start rounded-lg bg-black px-5 py-2 text-sm text-white disabled:opacity-50"
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        {/* Info tab */}
+        {tab === "info" && (
+          <form
+            onSubmit={handleSaveInfo}
+            className="flex flex-col gap-4 max-w-sm"
           >
-            {savingInfo ? "Saving…" : "Save"}
-          </button>
-        </form>
-      )}
-
-      {/* Roles tab */}
-      {tab === "roles" && (
-        <div className="flex flex-col gap-4">
-          {/* Assigned roles */}
-          {roles.length === 0 ? (
-            <p className="text-sm text-gray-500">No roles assigned.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {roles.map((r) => (
-                <span
-                  key={r.role_id}
-                  className="flex items-center gap-2 rounded-full bg-black px-3 py-1 text-sm text-white"
-                >
-                  {r.name}
-                  <button
-                    onClick={() => handleRemoveRole(r.role_id)}
-                    disabled={togglingRole === r.role_id}
-                    className="opacity-60 hover:opacity-100"
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Assign new role */}
-          {unassignedRoles.length > 0 && (
-            <form onSubmit={handleAssignRole} className="flex items-end gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-gray-700">
-                  Add Role
-                </label>
-                <select
-                  value={assignRoleId}
-                  onChange={(e) => setAssignRoleId(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
-                >
-                  <option value="">Choose role…</option>
-                  {unassignedRoles.map((r) => (
-                    <option key={r.role_id} value={r.role_id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                disabled={!assignRoleId}
-                className="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-40 hover:cursor-pointer"
-              >
-                Assign
-              </button>
-            </form>
-          )}
-        </div>
-      )}
-
-      {/* History tab */}
-      {tab === "history" && (
-        <div className="rounded-xl border">
-          {history.length === 0 ? (
-            <p className="p-6 text-center text-sm text-gray-500">
-              No work history found.
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase text-gray-500">
-                  <th className="px-4 py-3">Store ID</th>
-                  <th className="px-4 py-3">Start</th>
-                  <th className="px-4 py-3">End</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {history.map((h) => (
-                  <tr key={h.history_id}>
-                    <td className="px-4 py-3">{h.store_id}</td>
-                    <td className="px-4 py-3">
-                      {String(h.start_date).split("T")[0]}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {h.end_date ? (
-                        String(h.end_date).split("T")[0]
-                      ) : (
-                        <span className="font-medium text-green-600">
-                          Current
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {/* Transfer tab */}
-      {tab === "transfer" && (
-        <form
-          onSubmit={handleTransfer}
-          className="flex flex-col gap-4 max-w-sm"
-        >
-          <p className="text-sm text-gray-500">
-            Transferring closes the current open history row and opens a new one
-            for the selected store. This cannot be undone.
-          </p>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">
-              New Store
-            </label>
-            <select
-              value={transferStoreId}
-              onChange={(e) => setTransferStoreId(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+            <Input
+              variant="indigo"
+              label="Name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
               required
+            />
+            <div className="text-sm text-slate-500">
+              <p>Birth date: {staff.birth_date ?? "—"}</p>
+              <p>Start date: {staff.start_time ?? "—"}</p>
+            </div>
+            <button
+              type="submit"
+              disabled={savingInfo}
+              className="self-start rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
             >
-              <option value="">Select store…</option>
-              {stores.map((s) => (
-                <option key={s.store_id} value={s.store_id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              {savingInfo ? "Saving…" : "Save"}
+            </button>
+          </form>
+        )}
+
+        {/* Roles tab */}
+        {tab === "roles" && (
+          <div className="flex flex-col gap-4">
+            {/* Assigned roles */}
+            {roles.length === 0 ? (
+              <p className="text-sm text-slate-500">No roles assigned.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {roles.map((r) => (
+                  <span
+                    key={r.role_id}
+                    className="flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-1 text-sm text-white"
+                  >
+                    {r.name}
+                    <button
+                      onClick={() => handleRemoveRole(r.role_id)}
+                      disabled={togglingRole === r.role_id}
+                      className="opacity-60 hover:cursor-pointer hover:opacity-100"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Assign new role */}
+            {unassignedRoles.length > 0 && (
+              <form
+                onSubmit={handleAssignRole}
+                className="flex items-end gap-3"
+              >
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-slate-700">
+                    Add Role
+                  </label>
+                  <select
+                    value={assignRoleId}
+                    onChange={(e) => setAssignRoleId(e.target.value)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">Choose role…</option>
+                    {unassignedRoles.map((r) => (
+                      <option key={r.role_id} value={r.role_id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!assignRoleId}
+                  className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Assign
+                </button>
+              </form>
+            )}
           </div>
-          <button
-            type="submit"
-            disabled={transferring || !transferStoreId}
-            className="self-start rounded-lg bg-black px-5 py-2 text-sm text-white disabled:opacity-50"
+        )}
+
+        {/* History tab */}
+        {tab === "history" && (
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            {history.length === 0 ? (
+              <p className="p-6 text-center text-sm text-slate-500">
+                No work history found.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-3">Store ID</th>
+                    <th className="px-4 py-3">Start</th>
+                    <th className="px-4 py-3">End</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {history.map((h) => (
+                    <tr key={h.history_id}>
+                      <td className="px-4 py-3 text-slate-700">{h.store_id}</td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {String(h.start_date).split("T")[0]}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">
+                        {h.end_date ? (
+                          String(h.end_date).split("T")[0]
+                        ) : (
+                          <span className="font-medium text-emerald-600">
+                            Current
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* Transfer tab */}
+        {tab === "transfer" && (
+          <form
+            onSubmit={handleTransfer}
+            className="flex flex-col gap-4 max-w-sm"
           >
-            {transferring ? "Transferring…" : "Confirm Transfer"}
-          </button>
-        </form>
-      )}
+            <p className="text-sm text-slate-500">
+              Transferring closes the current open history row and opens a new
+              one for the selected store. This cannot be undone.
+            </p>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-700">
+                New Store
+              </label>
+              <select
+                value={transferStoreId}
+                onChange={(e) => setTransferStoreId(e.target.value)}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                required
+              >
+                <option value="">Select store…</option>
+                {stores.map((s) => (
+                  <option key={s.store_id} value={s.store_id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={transferring || !transferStoreId}
+              className="self-start rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
+            >
+              {transferring ? "Transferring…" : "Confirm Transfer"}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

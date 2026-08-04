@@ -242,13 +242,22 @@ export default function ProductForm({
     );
 
   return (
-    <div className="p-8 flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-gray-900 text-slate-900">
-        {mode === "create" ? "New Product" : `Edit Product #${savedProductId}`}
-      </h1>
+    <div className="flex flex-col gap-6 p-8">
+      <div>
+        <h1 className="text-3xl font-bold text-slate-900">
+          {mode === "create"
+            ? "New Product"
+            : `Edit Product #${savedProductId}`}
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {mode === "create"
+            ? "Set up a new product, then add variants, images, and categories."
+            : "Update product info, variants, images, and categories."}
+        </p>
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b border-slate-200">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -260,13 +269,13 @@ export default function ProductForm({
               setTab(t.key);
             }}
             className={clsx(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition",
+              "-mb-px border-b-2 px-4 py-2 text-sm font-medium transition hover:cursor-pointer",
               tab === t.key
-                ? "border-black text-black"
-                : "border-transparent text-gray-500 hover:text-gray-800",
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800",
               t.key !== "info" &&
                 !savedProductId &&
-                "opacity-40 cursor-not-allowed",
+                "opacity-40 cursor-not-allowed hover:cursor-not-allowed",
             )}
           >
             {t.label}
@@ -274,259 +283,263 @@ export default function ProductForm({
         ))}
       </div>
 
-      {/* Tab 1 — Info */}
-      {tab === "info" && (
-        <form
-          onSubmit={handleSaveInfo}
-          className="flex max-w-md flex-col gap-4"
-        >
-          <Input
-            label="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            maxLength={20}
-            hint="Max 20 characters"
-            required
-          />
-          <Input
-            label="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            maxLength={100}
-            hint="Max 100 characters"
-          />
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        {/* Tab 1 — Info */}
+        {tab === "info" && (
+          <form
+            onSubmit={handleSaveInfo}
+            className="flex max-w-md flex-col gap-4"
+          >
+            <Input
+              label="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={20}
+              hint="Max 20 characters"
+              required
+            />
+            <Input
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={100}
+              hint="Max 100 characters"
+            />
 
-          <div>
-            <p className="mb-1 text-xs font-medium text-gray-500">
-              Shipping dimensions
-            </p>
-            <p className="mb-2 text-xs text-gray-400">
-              Used to calculate real shipping fees. Leave blank to use a default
-              placeholder parcel.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Weight (g)"
-                type="number"
-                min={1}
-                value={weightGrams}
-                onChange={(e) => setWeightGrams(e.target.value)}
-              />
-              <Input
-                label="Length (cm)"
-                type="number"
-                min={1}
-                value={lengthCm}
-                onChange={(e) => setLengthCm(e.target.value)}
-              />
-              <Input
-                label="Width (cm)"
-                type="number"
-                min={1}
-                value={widthCm}
-                onChange={(e) => setWidthCm(e.target.value)}
-              />
-              <Input
-                label="Height (cm)"
-                type="number"
-                min={1}
-                value={heightCm}
-                onChange={(e) => setHeightCm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={savingInfo}
-              className="rounded-lg bg-black px-6 py-2 text-sm text-white disabled:opacity-50"
-            >
-              {savingInfo
-                ? "Saving…"
-                : savedProductId
-                  ? "Update Info"
-                  : "Create & Continue"}
-            </button>
-            {savedProductId && (
-              <button
-                type="button"
-                onClick={() => {
-                  onSaved(savedProductId);
-                }}
-                className="text-sm text-gray-400 hover:underline"
-              >
-                Done
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-
-      {/* Tab 2 — Variants & Attributes */}
-      {tab === "variants" && savedProductId && (
-        <div className="max-w-2xl">
-          <p className="mb-4 text-sm text-gray-500">
-            Manage variants, per-variant pricing, and attributes. Each attribute
-            type can only be assigned once per variant.
-          </p>
-          <VariantManager
-            productId={savedProductId}
-            variants={product?.variants ?? []}
-            onChange={invalidateProduct}
-          />
-        </div>
-      )}
-
-      {/* Tab 3 — Images */}
-      {tab === "images" && savedProductId && (
-        <div className="flex flex-col gap-4 max-w-lg">
-          <p className="text-sm text-gray-500">
-            Max 10 files · 5 MB each · JPEG / PNG / WEBP
-          </p>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-slate-900">
-              Applies to
-            </label>
-            <select
-              value={imageVariantId}
-              onChange={(e) => setImageVariantId(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="">General (all variants)</option>
-              {(product?.variants ?? []).map((v) => (
-                <option key={v.variant_id} value={v.variant_id}>
-                  Variant #{v.variant_id} — {v.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Pending selection — nothing uploads until "Upload" is clicked */}
-          {pendingFiles.length > 0 && (
-            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-gray-300 p-3">
-              <p className="text-xs font-medium text-gray-500">
-                {pendingFiles.length} selected — not uploaded yet
+            <div>
+              <p className="mb-1 text-xs font-medium text-slate-500">
+                Shipping dimensions
               </p>
-              <div className="flex flex-wrap gap-2">
-                {pendingPreviews.map((url, i) => (
-                  <div key={url} className="group relative">
-                    <img
-                      src={url}
-                      alt=""
-                      className="h-20 w-20 rounded-lg border object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePendingFile(i)}
-                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black text-xs text-white opacity-0 transition group-hover:opacity-100"
-                      title="Remove"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={handleImageUpload}
-                  disabled={uploadingImages}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:cursor-pointer hover:bg-slate-800 hover:shadow-lg active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {uploadingImages
-                    ? "Uploading…"
-                    : `Upload ${pendingFiles.length} image${pendingFiles.length > 1 ? "s" : ""}`}
-                </button>
-                <button
-                  type="button"
-                  onClick={clearPendingFiles}
-                  disabled={uploadingImages}
-                  className="text-sm text-gray-900 hover:underline disabled:opacity-50 hover:cursor-pointer"
-                >
-                  Clear
-                </button>
+              <p className="mb-2 text-xs text-slate-400">
+                Used to calculate real shipping fees. Leave blank to use a
+                default placeholder parcel.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Weight (g)"
+                  type="number"
+                  min={1}
+                  value={weightGrams}
+                  onChange={(e) => setWeightGrams(e.target.value)}
+                />
+                <Input
+                  label="Length (cm)"
+                  type="number"
+                  min={1}
+                  value={lengthCm}
+                  onChange={(e) => setLengthCm(e.target.value)}
+                />
+                <Input
+                  label="Width (cm)"
+                  type="number"
+                  min={1}
+                  value={widthCm}
+                  onChange={(e) => setWidthCm(e.target.value)}
+                />
+                <Input
+                  label="Height (cm)"
+                  type="number"
+                  min={1}
+                  value={heightCm}
+                  onChange={(e) => setHeightCm(e.target.value)}
+                />
               </div>
             </div>
-          )}
 
-          {/* Already-uploaded images, grouped by variant */}
-          {product?.images?.length ? (
-            <div className="flex flex-col gap-4">
-              <ImageGroup
-                label="General"
-                images={product.images.filter((img) => img.variant_id == null)}
-              />
-              {(product?.variants ?? []).map((v) => {
-                // NOTE: product.images only ever holds general (variant_id
-                // IS NULL) images — the API deliberately excludes
-                // variant-specific ones from that array (see
-                // findImagesByProduct). Each variant carries its own
-                // images via v.images instead.
-                const variantImages = v.images ?? [];
-                if (!variantImages.length) return null;
-                return (
-                  <ImageGroup
-                    key={v.variant_id}
-                    label={`Variant #${v.variant_id} — ${v.name}`}
-                    images={variantImages}
-                  />
-                );
-              })}
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={savingInfo}
+                className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
+              >
+                {savingInfo
+                  ? "Saving…"
+                  : savedProductId
+                    ? "Update Info"
+                    : "Create & Continue"}
+              </button>
+              {savedProductId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaved(savedProductId);
+                  }}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-600 transition hover:cursor-pointer hover:bg-slate-100 active:bg-slate-200"
+                >
+                  Done
+                </button>
+              )}
             </div>
-          ) : (
-            pendingFiles.length === 0 && (
-              <p className="text-sm text-gray-400">No images yet.</p>
-            )
-          )}
+          </form>
+        )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={(e) =>
-              e.target.files && handleFilesSelected(e.target.files)
-            }
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadingImages}
-            className="self-start rounded-lg border border-gray-300 px-5 py-2 text-sm text-slate-900 hover:bg-gray-50 disabled:opacity-50 hover:cursor-pointer"
-          >
-            Choose Images…
-          </button>
-        </div>
-      )}
-
-      {/* Tab 4 — Categories */}
-      {tab === "categories" && savedProductId && (
-        <div className="flex flex-col gap-4 max-w-sm">
-          <p className="text-sm text-gray-500">
-            Select all categories this product belongs to.
-          </p>
-          <div className="flex flex-col gap-1 max-h-80 overflow-y-auto rounded-xl border p-4 text-slate-900">
-            {categories.length === 0 ? (
-              <p className="text-sm text-gray-400">No categories yet.</p>
-            ) : (
-              <CategoryCheckboxTree
-                nodes={categories}
-                selectedCategoryIds={selectedCategoryIds}
-                onToggle={toggleCategory}
-              />
-            )}
+        {/* Tab 2 — Variants & Attributes */}
+        {tab === "variants" && savedProductId && (
+          <div className="max-w-2xl">
+            <p className="mb-4 text-sm text-slate-500">
+              Manage variants, per-variant pricing, and attributes. Each
+              attribute type can only be assigned once per variant.
+            </p>
+            <VariantManager
+              productId={savedProductId}
+              variants={product?.variants ?? []}
+              onChange={invalidateProduct}
+            />
           </div>
-          <button
-            onClick={handleSaveCategories}
-            disabled={savingCategories}
-            className="self-start rounded-lg bg-black px-6 py-2 text-sm text-white disabled:opacity-50 hover:bg-gray-800"
-          >
-            {savingCategories ? "Saving…" : "Save & Done"}
-          </button>
-        </div>
-      )}
+        )}
+
+        {/* Tab 3 — Images */}
+        {tab === "images" && savedProductId && (
+          <div className="flex flex-col gap-4 max-w-lg">
+            <p className="text-sm text-slate-500">
+              Max 10 files · 5 MB each · JPEG / PNG / WEBP
+            </p>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-900">
+                Applies to
+              </label>
+              <select
+                value={imageVariantId}
+                onChange={(e) => setImageVariantId(e.target.value)}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              >
+                <option value="">General (all variants)</option>
+                {(product?.variants ?? []).map((v) => (
+                  <option key={v.variant_id} value={v.variant_id}>
+                    Variant #{v.variant_id} — {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pending selection — nothing uploads until "Upload" is clicked */}
+            {pendingFiles.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
+                <p className="text-xs font-medium text-slate-500">
+                  {pendingFiles.length} selected — not uploaded yet
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {pendingPreviews.map((url, i) => (
+                    <div key={url} className="group relative">
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-20 w-20 rounded-lg border border-slate-200 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePendingFile(i)}
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-xs text-white opacity-0 transition group-hover:opacity-100 hover:cursor-pointer"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleImageUpload}
+                    disabled={uploadingImages}
+                    className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    {uploadingImages
+                      ? "Uploading…"
+                      : `Upload ${pendingFiles.length} image${pendingFiles.length > 1 ? "s" : ""}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearPendingFiles}
+                    disabled={uploadingImages}
+                    className="text-sm text-slate-500 hover:cursor-pointer hover:text-slate-800 hover:underline disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Already-uploaded images, grouped by variant */}
+            {product?.images?.length ? (
+              <div className="flex flex-col gap-4">
+                <ImageGroup
+                  label="General"
+                  images={product.images.filter(
+                    (img) => img.variant_id == null,
+                  )}
+                />
+                {(product?.variants ?? []).map((v) => {
+                  // NOTE: product.images only ever holds general (variant_id
+                  // IS NULL) images — the API deliberately excludes
+                  // variant-specific ones from that array (see
+                  // findImagesByProduct). Each variant carries its own
+                  // images via v.images instead.
+                  const variantImages = v.images ?? [];
+                  if (!variantImages.length) return null;
+                  return (
+                    <ImageGroup
+                      key={v.variant_id}
+                      label={`Variant #${v.variant_id} — ${v.name}`}
+                      images={variantImages}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              pendingFiles.length === 0 && (
+                <p className="text-sm text-slate-400">No images yet.</p>
+              )
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) =>
+                e.target.files && handleFilesSelected(e.target.files)
+              }
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImages}
+              className="self-start rounded-xl border border-slate-300 px-5 py-2 text-sm text-slate-700 transition hover:cursor-pointer hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50"
+            >
+              Choose Images…
+            </button>
+          </div>
+        )}
+
+        {/* Tab 4 — Categories */}
+        {tab === "categories" && savedProductId && (
+          <div className="flex flex-col gap-4 max-w-sm">
+            <p className="text-sm text-slate-500">
+              Select all categories this product belongs to.
+            </p>
+            <div className="flex flex-col gap-1 max-h-80 overflow-y-auto rounded-xl border border-slate-200 p-4 text-slate-900">
+              {categories.length === 0 ? (
+                <p className="text-sm text-slate-400">No categories yet.</p>
+              ) : (
+                <CategoryCheckboxTree
+                  nodes={categories}
+                  selectedCategoryIds={selectedCategoryIds}
+                  onToggle={toggleCategory}
+                />
+              )}
+            </div>
+            <button
+              onClick={handleSaveCategories}
+              disabled={savingCategories}
+              className="self-start rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
+            >
+              {savingCategories ? "Saving…" : "Save & Done"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -587,7 +600,7 @@ export default function ProductForm({
   }) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium text-gray-500">{label}</p>
+        <p className="text-xs font-medium text-slate-500">{label}</p>
         <div className="flex flex-wrap gap-2">
           {images.map((img) => (
             <img

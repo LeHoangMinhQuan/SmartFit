@@ -143,9 +143,9 @@ export default function VariantManager({
       {adding ? (
         <form
           onSubmit={handleCreate}
-          className="flex flex-col gap-3 rounded-xl border border-dashed p-4"
+          className="flex flex-col gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4"
         >
-          <p className="text-sm font-medium">New Variant</p>
+          <p className="text-sm font-semibold text-slate-900">New Variant</p>
 
           <div className="grid grid-cols-2 gap-3">
             <Input
@@ -164,7 +164,7 @@ export default function VariantManager({
             />
           </div>
 
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-slate-500">
             Price (optional — can be set later)
           </p>
           <div className="grid grid-cols-3 gap-3">
@@ -188,11 +188,11 @@ export default function VariantManager({
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-black px-5 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
             >
               {saving ? "Saving…" : "Add Variant"}
             </button>
@@ -202,7 +202,7 @@ export default function VariantManager({
                 setAdding(false);
                 setForm(emptyForm);
               }}
-              className="text-sm text-gray-500 hover:underline"
+              className="text-sm text-slate-500 hover:cursor-pointer hover:text-slate-800 hover:underline"
             >
               Cancel
             </button>
@@ -211,7 +211,7 @@ export default function VariantManager({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="rounded-xl border border-dashed border-gray-300 py-3 text-sm text-gray-500 hover:border-gray-500"
+          className="rounded-xl border border-dashed border-slate-300 py-3 text-sm text-slate-500 transition hover:cursor-pointer hover:border-slate-400 hover:text-slate-700"
         >
           + Add variant
         </button>
@@ -346,13 +346,13 @@ function VariantRow({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 p-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium">
+          <p className="text-sm font-semibold text-slate-900">
             #{variant.variant_id} — {variant.name}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             {variant.base_price
               ? `${variant.base_price.toLocaleString()}₫`
               : "No active price"}
@@ -363,35 +363,37 @@ function VariantRow({
         <button
           onClick={onDeleteVariant}
           disabled={deletingVariant}
-          className="text-xs text-red-500 hover:underline disabled:opacity-50"
+          className="text-xs text-red-500 hover:cursor-pointer hover:underline disabled:opacity-50"
         >
           {deletingVariant ? "Deleting…" : "Delete"}
         </button>
       </div>
 
       {/* Attributes — now fully editable via /api/products/:id/variants/:variant_id/attributes */}
-      <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
         {(variant.attributes ?? []).map((a) =>
           editingAttrId === a.attribute_id ? (
             <span key={a.attribute_id} className="flex items-center gap-1">
-              <span className="text-xs text-gray-500">{a.attribute_name}:</span>
+              <span className="text-xs text-slate-500">
+                {a.attribute_name}:
+              </span>
               <input
                 autoFocus
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 maxLength={20}
-                className="w-20 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                className="w-20 rounded border border-slate-300 px-1.5 py-0.5 text-xs text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
               <button
                 onClick={() => handleSaveEdit(a.attribute_id)}
                 disabled={savingEditAttr}
-                className="text-xs text-green-600 hover:underline"
+                className="text-xs text-emerald-600 hover:cursor-pointer hover:underline"
               >
                 Save
               </button>
               <button
                 onClick={() => setEditingAttrId(null)}
-                className="text-xs text-gray-400 hover:underline"
+                className="text-xs text-slate-400 hover:cursor-pointer hover:underline"
               >
                 Cancel
               </button>
@@ -399,12 +401,12 @@ function VariantRow({
           ) : (
             <span
               key={a.attribute_id}
-              className="group flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+              className="group flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
             >
               {a.attribute_name}: {a.value}
               <button
                 onClick={() => startEdit(a.attribute_id, a.value)}
-                className="ml-1 text-gray-400 hover:text-gray-700"
+                className="ml-1 text-slate-400 hover:cursor-pointer hover:text-slate-700"
                 title="Edit"
               >
                 ✎
@@ -412,7 +414,7 @@ function VariantRow({
               <button
                 onClick={() => handleRemoveAttribute(a.attribute_id)}
                 disabled={removingAttrId === a.attribute_id}
-                className="text-gray-400 hover:text-red-500"
+                className="text-slate-400 hover:cursor-pointer hover:text-red-500"
                 title="Remove"
               >
                 ✕
@@ -430,7 +432,7 @@ function VariantRow({
               value={selectedAttrId}
               onChange={(e) => setSelectedAttrId(e.target.value)}
               disabled={catalogLoading}
-              className="rounded border border-gray-300 px-1.5 py-1 text-xs text-slate-900"
+              className="rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">
                 {catalogLoading ? "Loading…" : "Choose attribute…"}
@@ -446,12 +448,12 @@ function VariantRow({
               onChange={(e) => setAttrValue(e.target.value)}
               placeholder="Value"
               maxLength={20}
-              className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs text-slate-900"
+              className="w-20 rounded border border-slate-300 px-1.5 py-1 text-xs text-slate-900 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             />
             <button
               type="submit"
               disabled={savingAddAttr}
-              className="text-xs text-green-600 hover:underline"
+              className="text-xs text-emerald-600 hover:cursor-pointer hover:underline"
             >
               Add
             </button>
@@ -462,7 +464,7 @@ function VariantRow({
                 setSelectedAttrId("");
                 setAttrValue("");
               }}
-              className="text-xs text-gray-400 hover:underline"
+              className="text-xs text-slate-400 hover:cursor-pointer hover:underline"
             >
               Cancel
             </button>
@@ -471,7 +473,7 @@ function VariantRow({
           <button
             onClick={() => setAddingAttr(true)}
             disabled={catalogLoading || availableCatalog.length === 0}
-            className="rounded border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-500 hover:border-gray-500 disabled:opacity-40"
+            className="rounded border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-500 transition hover:cursor-pointer hover:border-slate-400 disabled:opacity-40 disabled:hover:cursor-not-allowed"
             title={
               !catalogLoading && availableCatalog.length === 0
                 ? "All catalog attributes are already attached"

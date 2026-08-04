@@ -360,6 +360,10 @@ export interface Staff {
   name: string;
   birth_date: string | null;
   start_time: string | null;
+  // Only present on GET /admin/staff/:staff_id (StaffService.getStaff
+  // joins role_assigment -> role and spreads it onto the staff row).
+  // Absent from the list endpoint (GET /admin/staff).
+  roles?: Role[];
 }
 
 export interface Role {

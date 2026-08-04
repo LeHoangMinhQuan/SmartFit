@@ -36,10 +36,10 @@ export default function DataTable<T extends Record<string, unknown>>({
 }: DataTableProps<T>) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
-            <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <tr className="border-b border-slate-200 bg-slate-50/80 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               {columns.map((col) => (
                 <th
                   key={col.key}
@@ -85,7 +85,7 @@ export default function DataTable<T extends Record<string, unknown>>({
                     <td
                       key={col.key}
                       className={clsx(
-                        "px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500",
+                        "px-6 py-4 text-left text-sm text-slate-700",
                         col.className,
                       )}
                     >

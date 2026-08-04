@@ -40,7 +40,18 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   delivered: ["refund_requested"],
   payment_failed: ["cancelled"],
   cancelled: [],
-  refund_requested: ["refunded"],
+  // Deliberately NOT ["refunded"]. This table only gates the generic
+  // staff dropdown (adminUpdateStatus below) — the real refund flow
+  // (vnpay.service.ts's processRefund) calls
+  // OrderModel.updateOrderStatus(order_id, "refunded") directly after a
+  // verified VNPay refund response, and never consults this table. If
+  // "refunded" were listed as a valid manual transition here, staff
+  // could pick it straight from the status dropdown and mark an order
+  // refunded without VNPay ever actually returning the customer's money
+  // — a real financial bug, not just a UX one. refund_requested orders
+  // can only become "refunded" through the dedicated Process Refund
+  // action.
+  refund_requested: [],
   refunded: [],
 };
 

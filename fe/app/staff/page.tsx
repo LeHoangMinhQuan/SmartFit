@@ -30,7 +30,7 @@ export default function StaffDashboardPage() {
       </div>
     );
   if (!stats)
-    return <div className="p-8 text-gray-500">No data available.</div>;
+    return <div className="p-8 text-slate-500">No data available.</div>;
 
   // Flatten the backend's array-of-rows shape into a lookup map so both the
   // top KPI cards and the per-status breakdown below can index by status.
@@ -42,10 +42,8 @@ export default function StaffDashboardPage() {
   );
 
   return (
-    <div className="p-8 flex flex-col gap-8 min-h-screen bg-slate-50 p-8">
-      <h1 className="text-2xl font-bold text-gray-900 text-slate-900">
-        Dashboard
-      </h1>
+    <div className="flex flex-col gap-8 p-8">
+      <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
 
       {/* Key metrics */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -91,7 +89,7 @@ export default function StaffDashboardPage() {
         <div className="rounded-xl border bg-white shadow-sm border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-gray-50 text-left text-xs font-medium uppercase text-gray-500">
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase text-slate-500">
                 <th className="px-4 py-3 text-slate-800">Product</th>
                 <th className="px-4 py-3 text-right text-slate-800">
                   Units Sold
@@ -100,17 +98,28 @@ export default function StaffDashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {(stats?.top_products ?? []).map((p) => (
-                <tr key={p.product_id}>
-                  <td className="px-4 py-3 text-slate-800">{p.name}</td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-800">
-                    {p.sold}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-800">
-                    {formatPrice(p.revenue)}
+              {(stats?.top_products ?? []).length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-4 py-8 text-center text-sm text-slate-400"
+                  >
+                    No sales data yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                (stats?.top_products ?? []).map((p) => (
+                  <tr key={p.product_id}>
+                    <td className="px-4 py-3 text-slate-800">{p.name}</td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-800">
+                      {p.sold}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-800">
+                      {formatPrice(p.revenue)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

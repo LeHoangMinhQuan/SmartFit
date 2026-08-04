@@ -288,9 +288,11 @@ export async function processRefund(
     return { status: "success", message: "Refund confirmed by VNPay" };
   }
 
-  // Left as 'refund_requested' — VALID_TRANSITIONS only allows
-  // refund_requested -> refunded, so staff can simply retry from the
-  // dashboard rather than this landing in some other unreachable state.
+  // Left as 'refund_requested' on failure — this function (not
+  // adminUpdateStatus/VALID_TRANSITIONS, see that table's comment on the
+  // 'refund_requested' entry) is the only path that ever sets 'refunded',
+  // so staff can just retry Process Refund from the dashboard; the order
+  // can't get stuck in an unreachable state.
   return {
     status: "failed",
     message: result.vnp_Message ?? "VNPay declined the refund request",

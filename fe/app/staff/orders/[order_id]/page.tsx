@@ -10,6 +10,16 @@ import Spinner from "../../../../components/ui/Spinner";
 import OrderStatusBadge from "../../../../components/order/OrderStatusBadge";
 import type { OrderStatus } from "../../../../interfaces";
 
+// Every status the schema allows, for correctly displaying whichever one
+// an order is currently in (the <select>'s value must match one of its
+// options or React can't show a selection). Which of these are actually
+// selectable as a NEW target from the order's current status is enforced
+// by the backend's VALID_TRANSITIONS (order.service.ts) — invalid picks
+// are rejected with a specific error, surfaced via handleStatusChange's
+// error handling below. "refunded" in particular can only actually be
+// reached through the dedicated Process Refund action further down,
+// which calls VNPay's refund API first; picking it directly here from a
+// non-refunded order will always be rejected by the backend.
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
   "cod_confirmed",
@@ -22,6 +32,12 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "refund_requested",
   "refunded",
 ];
+
+// Terminal states the backend has no outgoing transitions for
+// (VALID_TRANSITIONS[status] === [] for both) — the dropdown is
+// informational only once an order is here, so disable it rather than
+// letting staff pick something that will just 400.
+const TERMINAL_STATUSES: OrderStatus[] = ["cancelled", "refunded"];
 
 export default function StaffOrderDetailPage() {
   const params = useParams<{ order_id: string }>();

@@ -77,11 +77,17 @@ export default function ProfilePage() {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
+  const [confirmTouched, setConfirmTouched] = useState(false);
   const [newPwTouched, setNewPwTouched] = useState(false);
   const debouncedNewPw = useDebounce(newPw, 400);
   const newPwError =
     newPwTouched && debouncedNewPw && !isValidPassword(debouncedNewPw)
       ? PASSWORD_ERROR_MESSAGE
+      : undefined;
+  const debouncedConfirmPw = useDebounce(confirmPw, 400);
+  const confirmPwError =
+    confirmTouched && debouncedConfirmPw && debouncedConfirmPw !== newPw
+      ? "Passwords don't match."
       : undefined;
 
   const changePasswordMutation = useMutation({
@@ -227,24 +233,41 @@ export default function ProfilePage() {
             {/* Change Password */}
             {tab === "password" && (
               <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6 sm:p-8">
-                <h2 className="mb-6 text-lg font-semibold text-slate-900">
-                  Security Settings
-                </h2>
+                <div className="mb-6 flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <Key className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">
+                      Security Settings
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                      Update your password. You&apos;ll need your current
+                      password to confirm the change.
+                    </p>
+                  </div>
+                </div>
                 <form
                   onSubmit={handleChangePassword}
                   className="flex flex-col gap-5"
                 >
                   <Input
+                    variant="indigo"
+                    passwordToggle
                     label="Current Password"
                     type="password"
+                    autoComplete="current-password"
                     value={currentPw}
                     onChange={(e) => setCurrentPw(e.target.value)}
                     required
                   />
-                  <div className="my-2 border-t border-slate-200" />
+                  <div className="my-1 border-t border-slate-200" />
                   <Input
+                    variant="indigo"
+                    passwordToggle
                     label="New Password"
                     type="password"
+                    autoComplete="new-password"
                     value={newPw}
                     onChange={(e) => {
                       setNewPw(e.target.value);
@@ -256,11 +279,18 @@ export default function ProfilePage() {
                     error={newPwError}
                   />
                   <Input
+                    variant="indigo"
+                    passwordToggle
                     label="Confirm New Password"
                     type="password"
+                    autoComplete="new-password"
                     value={confirmPw}
-                    onChange={(e) => setConfirmPw(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPw(e.target.value);
+                      setConfirmTouched(true);
+                    }}
                     required
+                    error={confirmPwError}
                   />
                   <button
                     type="submit"

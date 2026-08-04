@@ -19,7 +19,7 @@ interface StatsCardProps {
 }
 
 const variantStyles: Record<CardVariant, string> = {
-  default: "border-gray-200",
+  default: "border-slate-200 bg-white",
   success: "border-green-200 bg-green-50",
   warning: "border-yellow-200 bg-yellow-50",
   error: "border-red-200 bg-red-50",
@@ -43,23 +43,21 @@ export default function StatsCard({
   return (
     <div
       className={clsx(
-        "rounded-xl border p-5 hover:shadow-xl hover:-translate-y-1",
+        "rounded-xl border p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl",
         variantStyles[variant],
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-900">
+      <p className="text-xs font-semibold uppercase tracking-wider text-slate-900">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold text-gray-900 text-gray-900">
-        {value}
-      </p>
+      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
       {hint && (
         <p
           className={clsx(
             "mt-1 text-xs",
             trend === "up" && "text-green-600",
             trend === "down" && "text-red-600",
-            (!trend || trend === "neutral") && "text-gray-400",
+            (!trend || trend === "neutral") && "text-slate-400",
           )}
         >
           {hint}
