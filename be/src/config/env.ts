@@ -153,8 +153,28 @@ export const env = {
     "gemini-3.5-flash-lite",
   ),
 
-  GEMINI_HEAVY_DAILY_BUDGET: envNumber("GEMINI_HEAVY_DAILY_BUDGET", 1000),
-  GEMINI_LITE_DAILY_BUDGET: envNumber("GEMINI_LITE_DAILY_BUDGET", 1200),
+  // Revisited 2026-08-03 for the 10-user demo deployment. Google no
+  // longer publishes one fixed free-tier RPD table (see the RPM comment
+  // below) — third-party trackers snapshot it monthly and disagree with
+  // each other by up to 6x depending on when they checked (anywhere from
+  // ~250 to ~1,500 RPD for Flash-tier models across sources from
+  // Jan-Jul 2026). The previous defaults here (1000/1200) sat at the
+  // OPTIMISTIC end of that spread, which defeats the point of a
+  // defensive cap — if this project's real project-level quota happens
+  // to be nearer the low end, Google's own 429 would fire before this
+  // budget ever does, so the user sees a raw unhandled error instead of
+  // the friendly 503 model-router.service.ts is built to return.
+  // Dropped to a value safely under even the most conservative reports.
+  // With only ~10 demo users, this is still generous headroom (10 users
+  // x ~30 messages/day each ~= 300 requests) — raise it once you've
+  // confirmed your actual project's live RPD at
+  // https://aistudio.google.com (Projects -> Rate Limits), which is the
+  // only real source of truth for YOUR key.
+  GEMINI_HEAVY_DAILY_BUDGET: envNumber("GEMINI_HEAVY_DAILY_BUDGET", 200),
+  // Flash-Lite-class models consistently report a higher RPD ceiling
+  // than the heavy Flash model across every source checked (roughly
+  // 1.5-2x), so this keeps that same ratio while staying conservative.
+  GEMINI_LITE_DAILY_BUDGET: envNumber("GEMINI_LITE_DAILY_BUDGET", 350),
   // Embedding calls were previously untracked entirely — every
   // search_products turn (retrieval.service.ts) and every admin reindex
   // (embedding.service.ts) hit Gemini with zero budget accounting, so
@@ -163,9 +183,14 @@ export const env = {
   // gemini_usage_counter. Conservative default; see the RPM note below —
   // free-tier numbers drift over time and Google doesn't publish a
   // stable public table, so these are a floor, not a guarantee.
+  // See GEMINI_HEAVY_DAILY_BUDGET's comment above (2026-08-03) — same
+  // reasoning applies here. Every search_products turn costs one
+  // embedding call regardless of which chat model handles the turn, so
+  // this scales with total conversation volume, not with the
+  // heavy/lite split.
   GEMINI_EMBEDDING_DAILY_BUDGET: envNumber(
     "GEMINI_EMBEDDING_DAILY_BUDGET",
-    1000,
+    250,
   ),
 
   // Requests-per-minute ceilings, enforced in-process by

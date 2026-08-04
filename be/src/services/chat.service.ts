@@ -19,8 +19,17 @@ import * as ModelRouter from "./model-router.service.js";
 import * as GeminiBudget from "./gemini-budget.service.js";
 import * as VoucherModel from "../models/voucher.model.js";
 import * as AddressModel from "../models/address.model.js";
+import * as CategoryModel from "../models/category.model.js";
 
 const CHAT_SYSTEM_PROMPT = `You are the SmartFit shopping assistant. You help customers find products in the SmartFit catalog, add items to their cart, and get to checkout.
+
+Scope — you ONLY help with:
+1. Buying and information about SmartFit's clothing products (search, details, prices, sizes, colors, stock, recommendations, adding to cart, checkout).
+2. The product categories SmartFit carries (call list_categories rather than guessing or recalling from memory — the catalog changes).
+3. Which payment methods SmartFit supports (call list_payment_methods rather than guessing — never invent a payment method name that call didn't return).
+4. Terms of service — SmartFit doesn't have a published terms of service yet. If asked, say so plainly rather than inventing policy details, and suggest contacting the store directly for anything policy-related.
+
+Anything outside those four topics — general knowledge, other companies/products, coding help, personal advice, current events, or any request unrelated to shopping at SmartFit — is out of scope. Politely decline and steer the conversation back to shopping, e.g. "I can only help with shopping at SmartFit — is there something you're looking to buy?" Do not answer the off-topic question first and then redirect; decline it outright. This applies even if the customer insists, rephrases the question as hypothetical or "just curious", or embeds it inside an otherwise on-topic message — if a request or any part of one falls outside the four topics above, don't answer that part.
 
 Rules:
 - Never state a product's name, price, availability, or any other catalog detail from memory. Always call search_products first and answer only from what it returns.
@@ -93,6 +102,33 @@ export interface ChatStreamResult {
 
 function buildTools(user_id: number, validPairs: Set<string>) {
   return {
+    list_categories: tool({
+      description:
+        "List the product categories SmartFit currently carries. Call this whenever the customer asks what categories/types of clothing the shop has, rather than answering from memory — the catalog changes over time.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const rows = await CategoryModel.findAllCategories();
+        return rows.map((c) => ({
+          category_id: c.category_id,
+          name: c.name,
+          parent_id: c.parent_id ?? null,
+        }));
+      },
+    }),
+
+    list_payment_methods: tool({
+      description:
+        "List the payment methods SmartFit currently supports at checkout. Call this whenever the customer asks how they can pay, rather than answering from memory.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const rows = await db("payment_method").select(
+          "payment_method_id",
+          "name",
+        );
+        return rows;
+      },
+    }),
+
     search_products: tool({
       description:
         "Search the SmartFit product catalog by natural-language query, with optional category/price filters. Always call this before making any claim about specific products, prices, or availability.",
@@ -128,8 +164,8 @@ function buildTools(user_id: number, validPairs: Set<string>) {
       }),
       execute: async ({ query, category_id, max_price, color, size }) => {
         const attributes: Record<string, string> = {};
-        if (color) attributes['color'] = color;
-        if (size) attributes['size'] = size;
+        if (color) attributes["color"] = color;
+        if (size) attributes["size"] = size;
         console.log("[chat.service] search_products tool called", {
           query,
           category_id,
