@@ -48,6 +48,18 @@ export default function ChatPanel() {
   // and no countdown. See config/env.ts's GEMINI_*_DAILY_BUDGET comments
   // on the backend for what actually resets it (midnight Pacific).
   const [quotaExhausted, setQuotaExhausted] = useState(false);
+  // NEW: the OTHER model-router.service.ts 503 case — `code` is
+  // "rpm_transient" (an RPM window is momentarily saturated, app-wide,
+  // shared across all users). Unlike quotaExhausted this self-clears in
+  // ~60s, same as a 429 — so it gets the same countdown treatment, just
+  // with wording that doesn't blame the user for "too many messages"
+  // (they may have sent exactly one). Added alongside the removal of
+  // model-router.service.ts's light->heavy fallback: an ordinary light
+  // message can now surface this 503 on an ordinary RPM hiccup, which
+  // used to silently upgrade to heavy and succeed instead.
+  const [assistantBusy, setAssistantBusy] = useState(false);
+  const busyCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [busyCountdown, setBusyCountdown] = useState(0);
 
   const { messages, sendMessage, status, error, setMessages } =
     useChat<ChatUIMessage>({
@@ -122,7 +134,9 @@ export default function ChatPanel() {
   // that body text by hand.
   useEffect(() => {
     if (!error) return;
-    let parsed: { statusCode?: number; message?: string } | undefined;
+    let parsed:
+      | { statusCode?: number; message?: string; code?: string }
+      | undefined;
     try {
       parsed = JSON.parse(error.message);
     } catch {
@@ -131,6 +145,8 @@ export default function ChatPanel() {
     }
     if (parsed?.statusCode === 429 && !rateLimited) {
       setQuotaExhausted(false);
+      setAssistantBusy(false);
+      if (busyCountdownRef.current) clearInterval(busyCountdownRef.current);
       setRateLimited(true);
       setCountdown(60);
       countdownRef.current = setInterval(() => {
@@ -143,17 +159,38 @@ export default function ChatPanel() {
           return c - 1;
         });
       }, 1000);
-    } else if (parsed?.statusCode === 503) {
-      // model-router.service.ts's ApiError(503) — both Gemini daily
-      // budgets exhausted, or (less likely) both RPM windows saturated
-      // at once. No countdown: unlike a 429's rolling window, the daily
-      // case doesn't clear for hours, and there's no reliable client-side
-      // way to tell which sub-case it is from the message alone.
+    } else if (parsed?.statusCode === 503 && parsed?.code === "rpm_transient") {
+      // NEW: transient case — a shared RPM window is momentarily
+      // saturated, not a real "out of budget for today" state. Same
+      // countdown treatment as a 429, distinct wording since this can
+      // fire on the very first message of the session.
       setRateLimited(false);
+      setQuotaExhausted(false);
+      setAssistantBusy(true);
+      setBusyCountdown(60);
+      busyCountdownRef.current = setInterval(() => {
+        setBusyCountdown((c) => {
+          if (c <= 1) {
+            clearInterval(busyCountdownRef.current!);
+            setAssistantBusy(false);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+    } else if (parsed?.statusCode === 503) {
+      // model-router.service.ts's ApiError(503) with code "daily_exhausted"
+      // (or no code at all, for backward compatibility with any 503 that
+      // doesn't set one) — today's Gemini daily budget is genuinely gone.
+      // No countdown: the daily case doesn't clear for hours.
+      setRateLimited(false);
+      setAssistantBusy(false);
+      if (busyCountdownRef.current) clearInterval(busyCountdownRef.current);
       setQuotaExhausted(true);
     }
     return () => {
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (busyCountdownRef.current) clearInterval(busyCountdownRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [error]);
@@ -162,7 +199,10 @@ export default function ChatPanel() {
   // made — if the budget genuinely hasn't reset, the same 503 will just
   // fire again and re-set it; this only avoids the banner going stale
   // after Google's midnight-Pacific reset.
-  const clearQuotaExhausted = () => setQuotaExhausted(false);
+  const clearQuotaExhausted = () => {
+    setQuotaExhausted(false);
+    setAssistantBusy(false);
+  };
 
   const isBusy = status === "streaming" || status === "submitted";
 
@@ -211,6 +251,15 @@ export default function ChatPanel() {
           <p className="text-xs text-gray-500">
             Please try again later, or browse the catalog directly in the
             meantime.
+          </p>
+        </div>
+      ) : assistantBusy ? (
+        <div className="border-t border-gray-100 px-4 py-3 text-center">
+          <p className="text-xs font-medium text-orange-600">
+            The assistant is busy right now.
+          </p>
+          <p className="text-xs text-gray-500">
+            Please wait {busyCountdown}s and try again.
           </p>
         </div>
       ) : rateLimited ? (

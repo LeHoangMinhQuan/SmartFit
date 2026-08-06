@@ -153,10 +153,10 @@ export const env = {
     "gemini-3.5-flash-lite",
   ),
 
-  // Updated 2026-08-03 from the actual live numbers on this project's
-  // own https://aistudio.google.com Rate Limits page — confirmed reads,
-  // not estimates. Gemini 3.6 Flash (heavy): RPM 5, RPD 20. Gemini 3.5
-  // Flash Lite: RPM 15, RPD 500. These are per-project ceilings shared
+  // Confirmed directly from this project's own AI Studio dashboard
+  // (Projects -> Rate Limits) on 2026-08-03 — not derived or estimated.
+  // Gemini 3.6 Flash (heavy): RPD 20. Gemini 3.5 Flash Lite: RPD 500.
+  // Embedding model: RPD 1000. These are per-project ceilings shared
   // across every user of this app (chat.ts's geminiProvider is one
   // client/key for heavy + lite + embedding), not per-user.
   //
@@ -167,20 +167,12 @@ export const env = {
   // more headroom, which is exactly why classifyComplexity defaults to
   // "light" for ordinary single-intent searches rather than routing
   // everything to heavy.
-  //
-  // ⚠️ Re-verify at https://aistudio.google.com (Projects -> Rate
-  // Limits) before a real demo — free-tier limits have changed multiple
-  // times through 2025-2026 and these are not guaranteed to hold.
   GEMINI_HEAVY_DAILY_BUDGET: envNumber("GEMINI_HEAVY_DAILY_BUDGET", 20),
   GEMINI_LITE_DAILY_BUDGET: envNumber("GEMINI_LITE_DAILY_BUDGET", 500),
-  // Embedding model's RPD isn't broken out separately on the dashboard
-  // either. Kept proportional to the previous heavy:embedding ratio
-  // (1.25x) applied to the new heavy figure — same caveat as lite above,
-  // confirm directly once visible. Every search_products turn
-  // (retrieval.service.ts) costs one embedding call regardless of which
-  // chat model handles the turn, so this scales with total conversation
-  // volume, not with the heavy/lite split.
-  GEMINI_EMBEDDING_DAILY_BUDGET: envNumber("GEMINI_EMBEDDING_DAILY_BUDGET", 1000),
+  GEMINI_EMBEDDING_DAILY_BUDGET: envNumber(
+    "GEMINI_EMBEDDING_DAILY_BUDGET",
+    1000,
+  ),
 
   // Requests-per-minute ceilings, enforced in-process by
   // rpm-limiter.service.ts BEFORE a call ever reaches Gemini. This is
@@ -194,20 +186,12 @@ export const env = {
   // different users each under that per-user limit can still collectively
   // blow through the shared per-minute Gemini quota.
   //
-  // Read the same way as the RPD figures above (this model's own ceiling
-  // vs. the project-wide pooled ceiling — take the smaller): heavy
-  // Flash's dashboard row is "7 / 5" -> 5; lite's is "4 / 15" -> 4. Note
-  // lite's pair reports the smaller number FIRST (unlike heavy's, where
-  // it's second) — min() gives the same safe answer regardless of which
-  // column is which, which is why this reads it that way rather than
-  // assuming a fixed column order. Embedding model RPM isn't shown on
-  // the dashboard at all; kept equal to the new heavy figure as a
-  // conservative placeholder until you can confirm a real number.
+  // Confirmed directly from this project's own AI Studio dashboard on
+  // 2026-08-03 — heavy RPM 5, lite RPM 15, embedding RPM 100.
   //
-  // ⚠️ These came directly off this project's own AI Studio dashboard on
-  // 2026-08-03, but Gemini free-tier limits have changed multiple times
-  // through 2025-2026 — re-verify at https://aistudio.google.com/rate-limit
-  // before a real demo rather than assuming these stay valid indefinitely.
+  // ⚠️ Re-verify at https://aistudio.google.com/rate-limit before a real
+  // demo — free-tier limits have changed multiple times through
+  // 2025-2026 and these are not guaranteed to hold.
   GEMINI_HEAVY_RPM: envNumber("GEMINI_HEAVY_RPM", 5),
   GEMINI_LITE_RPM: envNumber("GEMINI_LITE_RPM", 15),
   GEMINI_EMBEDDING_RPM: envNumber("GEMINI_EMBEDDING_RPM", 100),

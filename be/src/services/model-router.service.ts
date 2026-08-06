@@ -2,27 +2,61 @@
  * services/model-router.service.ts
  *
  * Routes each chat turn to one of two Gemini models based on (1) how
- * complex the turn looks and (2) how much of today's free-tier budget is
- * left for each model. Added 2026-08-01 alongside the gemini-2.5 →
- * gemini-3.6/3.1 migration (see CHATBOT_BUILD_PLAN.md's model note) —
- * once two models were in play anyway, routing between them by task
- * weight gets more mileage out of the same free-tier ceiling instead of
- * spending "heavy" model budget on messages that didn't need it.
+ * complex the turn looks, (2) how much of today's free-tier budget is
+ * left for each model, and (3) how much of the HEAVY model's tiny daily
+ * budget this specific user has already used today.
  *
  * Classification is a zero-cost heuristic (regex/length checks), not an
- * LLM call — an LLM-based classifier would itself burn free-tier budget
- * on every single turn just to decide which model to use for that turn,
- * which works against the entire point of this router. It won't be
- * perfect; see classifyComplexity's doc comment for the specific signals
- * and their rationale.
+ * LLM call — see classifyComplexity's doc comment for the specific
+ * signals and their rationale.
+ *
+ * UPDATE (per-user heavy cap): heavy is a few RPD, shared across every
+ * user of the app (see config/env.ts). chatLimiter
+ * (middleware/rateLimiter.ts, 15 msgs/10min/user) throttles raw message
+ * volume but has no concept of which messages are heavy-classified — a
+ * single user sending cart/comparison-intent turns could otherwise
+ * consume most of the day's global heavy budget alone. selectModel now
+ * takes a userId and checks models/user-heavy-usage.model.ts's per-user
+ * daily cap BEFORE taking a slot from the global heavy pool, so no
+ * global reservation is wasted on a request that's about to be denied
+ * anyway.
+ *
+ * UPDATE (fallback removed): the previous "light request, lite exhausted
+ * -> upgrade to heavy" fallback has been removed. With heavy's daily
+ * budget an order of magnitude smaller than lite's, lite exhaustion is a
+ * real-load signal, not a fluke — letting ordinary searches overflow
+ * into the heavy pool would defeat the per-user heavy cap above and
+ * starve genuine cart/comparison-intent turns of the budget they need
+ * most. The reverse fallback (heavy request, heavy exhausted -> downgrade
+ * to lite) is UNCHANGED — heavy can always handle a light-shaped task at
+ * worst quality cost, so downgrading beats refusing while lite budget
+ * still exists.
+ *
+ * UPDATE (reason codes): every ApiError(503) thrown here now carries a
+ * `code` of either "rpm_transient" (an RPM window is saturated — clears
+ * in ~60s on its own) or "daily_exhausted" (today's daily budget is
+ * genuinely spent). Added because the frontend (ChatPanel.tsx) branches
+ * on statusCode alone today and shows a flat "come back later" banner
+ * for every 503 — with the light-upgrade fallback removed, an ordinary
+ * RPM hiccup on the (much more common) light path now surfaces as a 503
+ * too, and deserves the same short-wait UI treatment a 429 gets, not the
+ * "come back tomorrow" one. See ChatPanel.tsx for the matching branch.
  */
 import { ApiError } from "../utils/ApiError.js";
 import { chatConfig } from "../config/chat.js";
 import * as GeminiBudget from "./gemini-budget.service.js";
 import type { ReserveFailureReason } from "./gemini-budget.service.js";
+import * as UserHeavyUsage from "../models/user-heavy-usage.model.js";
 import type { ChatMessageRow } from "../models/chat-session.model.js";
 
 export type ChatComplexity = "light" | "heavy";
+
+// Sized against the global heavy daily budget (config/env.ts,
+// GEMINI_HEAVY_DAILY_BUDGET) for a ~10-user demo — a few requests per
+// user leaves slack for whoever's actively testing without letting one
+// person eat the whole daily pool alone. Revisit if the real user count
+// or the free-tier heavy RPD changes.
+const HEAVY_PER_USER_DAILY_CAP = 3;
 
 export interface ModelSelection {
   model: string;
@@ -30,7 +64,7 @@ export interface ModelSelection {
   requestedComplexity: ChatComplexity;
   /** The tier actually used, after budget fallback. */
   usedComplexity: ChatComplexity;
-  /** True if budget pressure forced a different tier than requested. */
+  /** True if budget pressure (global OR per-user) forced a different tier than requested. */
   degraded: boolean;
   /** Pass to GeminiBudget.refund() if the actual Gemini call fails. */
   reservation: GeminiBudget.BudgetReservation;
@@ -86,31 +120,35 @@ export function classifyComplexity(
 }
 
 /**
- * Decides which model this turn actually calls, applying budget-aware
- * fallback on top of classifyComplexity's request:
- *   - heavy request, heavy budget available  -> heavy
- *   - heavy request, heavy exhausted         -> lite (downgrade)
+ * Decides which model this turn actually calls:
+ *   - heavy request, user under their per-user cap, heavy budget
+ *     available                              -> heavy
+ *   - heavy request, user AT their per-user cap for today
+ *     (global heavy budget not even attempted) -> lite (downgrade)
+ *   - heavy request, under cap but heavy budget exhausted -> lite (downgrade)
  *   - light request, lite budget available   -> lite
- *   - light request, lite exhausted          -> heavy (upgrade — heavy can
- *     always handle a light task, it's just costlier, so this is a better
- *     failure mode than refusing a simple request while heavy budget
- *     still exists)
- *   - both exhausted                         -> throws ApiError(503)
+ *   - light request, lite exhausted          -> throws ApiError(503)
+ *     (NO upgrade to heavy — see module doc comment)
+ *   - heavy requested, allowed, but BOTH the heavy attempt and the lite
+ *     fallback are exhausted                 -> throws ApiError(503)
  *
  * Reserves gemini_usage_counter budget (and an RPM slot) for whichever
  * model is actually chosen via GeminiBudget.tryReserve — a single atomic
- * operation, not a separate check-then-write, so two simultaneous
- * requests landing on the last unit of budget can't both succeed (see
- * model-usage.model.ts's tryIncrement doc comment).
+ * operation (see model-usage.model.ts's tryIncrement doc comment). The
+ * per-user heavy cap check (UserHeavyUsage.tryIncrement) is the same
+ * atomic pattern, checked first so a user at cap never takes a global
+ * heavy slot they're about to be denied anyway.
  *
  * The returned selection carries a `reservation` — if the actual Gemini
  * call this was reserved for ends up failing, the caller MUST call
- * GeminiBudget.refund(selection.reservation) so that failed call doesn't
- * permanently count against today's budget.
+ * GeminiBudget.refund(selection.reservation) AND, if
+ * selection.usedComplexity === "heavy", UserHeavyUsage.decrement(userId)
+ * — so a failed call doesn't permanently count against either budget.
  */
 export async function selectModel(
   message: string,
   history: ChatMessageRow[],
+  userId: number,
 ): Promise<ModelSelection> {
   const requestedComplexity = classifyComplexity(message, history);
   const { chatModel: heavyModel, liteModel, budgets, rpm } = chatConfig;
@@ -132,8 +170,26 @@ export async function selectModel(
     };
   };
 
+  // Per-user heavy cap — checked before touching the global heavy pool.
+  // A user already at cap is treated exactly like "global heavy budget
+  // exhausted" from here on: this turn is attempted on lite instead.
+  let heavyAllowedForUser = true;
+  if (requestedComplexity === "heavy") {
+    const userCount = await UserHeavyUsage.tryIncrement(
+      userId,
+      HEAVY_PER_USER_DAILY_CAP,
+    );
+    heavyAllowedForUser = userCount !== null;
+    if (!heavyAllowedForUser) {
+      console.warn("[model-router] per-user heavy cap reached", {
+        userId,
+        cap: HEAVY_PER_USER_DAILY_CAP,
+      });
+    }
+  }
+
   const primary =
-    requestedComplexity === "heavy"
+    requestedComplexity === "heavy" && heavyAllowedForUser
       ? await tryUse(heavyModel, "heavy", budgets.heavy, rpm.heavy)
       : await tryUse(liteModel, "light", budgets.lite, rpm.lite);
   if (typeof primary !== "string") {
@@ -141,35 +197,55 @@ export async function selectModel(
     return primary;
   }
 
-  // Primary tier's budget/RPM is gone — fall back to the other tier.
-  const fallback =
-    requestedComplexity === "heavy"
-      ? await tryUse(liteModel, "light", budgets.lite, rpm.lite)
-      : await tryUse(heavyModel, "heavy", budgets.heavy, rpm.heavy);
-  if (typeof fallback !== "string") {
-    console.warn("[model-router] budget fallback engaged", fallback);
-    return fallback;
+  // Only one fallback direction remains: a heavy request whose actual
+  // global heavy attempt failed (RPM or daily budget) falls back to
+  // lite. A light request (or a heavy request denied by the per-user cap
+  // and then failing on lite) has nowhere left to fall back to.
+  if (requestedComplexity === "heavy" && heavyAllowedForUser) {
+    const fallback = await tryUse(liteModel, "light", budgets.lite, rpm.lite);
+    if (typeof fallback !== "string") {
+      console.warn("[model-router] budget fallback engaged", fallback);
+      return fallback;
+    }
+
+    console.error("[model-router] both models exhausted for today", {
+      heavyModel,
+      liteModel,
+      primaryReason: primary,
+      fallbackReason: fallback,
+    });
+
+    const bothDailyExhausted =
+      primary === "daily_budget" && fallback === "daily_budget";
+
+    throw new ApiError(
+      503,
+      bothDailyExhausted
+        ? "The shopping assistant has reached today's free usage limit. Please try again later."
+        : "The shopping assistant is handling a lot of requests right now. Please try again in a minute.",
+      undefined,
+      bothDailyExhausted ? "daily_exhausted" : "rpm_transient",
+    );
   }
 
-  console.error("[model-router] both models exhausted for today", {
-    heavyModel,
+  // Light request (or per-user-capped heavy request) failed on lite,
+  // with no upgrade path. RPM windows self-clear in ~60s; daily
+  // exhaustion means genuinely come back later.
+  console.warn("[model-router] lite exhausted, no fallback available", {
     liteModel,
-    primaryReason: primary,
-    fallbackReason: fallback,
+    reason: primary,
+    requestedComplexity,
+    heavyAllowedForUser,
   });
 
-  // If EITHER tier failed only on RPM (a rolling 60s window that clears
-  // itself), this is transient and worth telling the customer to just
-  // wait a moment. Only if BOTH failed on the daily budget is this a
-  // real "come back tomorrow" situation (RPD quotas reset at midnight
-  // Pacific — see config/env.ts's GEMINI_*_RPM comment).
-  const bothDailyExhausted =
-    primary === "daily_budget" && fallback === "daily_budget";
+  const dailyExhausted = primary === "daily_budget";
 
   throw new ApiError(
     503,
-    bothDailyExhausted
+    dailyExhausted
       ? "The shopping assistant has reached today's free usage limit. Please try again later."
       : "The shopping assistant is handling a lot of requests right now. Please try again in a minute.",
+    undefined,
+    dailyExhausted ? "daily_exhausted" : "rpm_transient",
   );
 }

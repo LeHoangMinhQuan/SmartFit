@@ -18,12 +18,13 @@ import { env } from "../config/env.js";
  *   return { RspCode } directly, never call next(err).
  *
  * Response shape (§8):
- *   { status: 'error', statusCode, message, details?: [{ field, message }] }
+ *   { status: 'error', statusCode, message, details?: [{ field, message }], code?: string }
  */
 export const errorHandler = (
   err: Error & {
     statusCode?: number;
     details?: Array<{ field: string; message: string }>;
+    code?: string;
   },
   _req: Request,
   res: Response,
@@ -68,7 +69,12 @@ export const errorHandler = (
       statusCode: err.statusCode,
       message: err.message,
     };
-    if (err.details) body['details'] = err.details;
+    if (err.details) body["details"] = err.details;
+    // NEW: optional machine-readable reason — see ApiError.ts's doc
+    // comment. Only added to the body when the thrower actually set one;
+    // omitted (not null) otherwise so existing clients that don't know
+    // about `code` see no shape change at all.
+    if (err.code) body["code"] = err.code;
     res.status(err.statusCode).json(body);
     return;
   }

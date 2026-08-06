@@ -17,6 +17,7 @@ import * as RetrievalService from "./retrieval.service.js";
 import * as CartService from "./cart.service.js";
 import * as ModelRouter from "./model-router.service.js";
 import * as GeminiBudget from "./gemini-budget.service.js";
+import * as UserHeavyUsage from "../models/user-heavy-usage.model.js";
 import * as VoucherModel from "../models/voucher.model.js";
 import * as AddressModel from "../models/address.model.js";
 import * as CategoryModel from "../models/category.model.js";
@@ -474,7 +475,7 @@ export async function sendMessage(
     model: selectedModel,
     reservation,
     ...routing
-  } = await ModelRouter.selectModel(message, history);
+  } = await ModelRouter.selectModel(message, history, user_id);
   console.log("[chat.service] model routing decision", routing, {
     model: selectedModel,
   });
@@ -519,6 +520,14 @@ export async function sendMessage(
         model: selectedModel,
         error: event.error,
       });
+      // Mirror the global-budget refund on the per-user heavy cap too —
+      // otherwise a failed heavy call still permanently costs this user
+      // one of their HEAVY_PER_USER_DAILY_CAP slots for nothing.
+      if (routing.usedComplexity === "heavy") {
+        void UserHeavyUsage.decrement(user_id).catch((err) =>
+          console.error("[chat.service] failed to refund user heavy cap", err),
+        );
+      }
       void GeminiBudget.refund(reservation);
     },
     onFinish: async (event) => {
