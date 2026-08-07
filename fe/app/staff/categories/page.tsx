@@ -241,13 +241,13 @@ export default function StaffCategoriesPage() {
               <button
                 onClick={() => handleSaveFeatured(c)}
                 disabled={editSaving}
-                className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+                className="rounded-lg bg-indigo-500 px-4 py-1.5 text-xs font-medium text-white transition hover:cursor-pointer hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {editSaving ? "…" : "Save"}
               </button>
               <button
                 onClick={() => setEditingId(null)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100"
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 transition hover:cursor-pointer hover:bg-slate-100"
               >
                 Cancel
               </button>

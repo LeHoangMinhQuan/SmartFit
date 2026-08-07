@@ -107,7 +107,7 @@ export default function StaffProductsPage() {
             setSearch(q);
             setPage(1);
           }}
-          className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700 hover:cursor-pointer active:bg-slate-800"
+          className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg"
         >
           Search
         </button>

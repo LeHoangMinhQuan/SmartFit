@@ -121,11 +121,12 @@ export default function StaffSidebar() {
           );
         })}
       </nav>
-      <div className="border-t px-2 py-4">
+      <div className="border-t border-slate-200 px-2 py-4">
         <button
           onClick={handleLogout}
-          className="block bg-red-100 w-full rounded-lg px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50 hover:cursor-pointer"
+          className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-red-500 transition-colors hover:cursor-pointer hover:bg-red-50"
         >
+          <LogOut size={18} />
           Log Out
         </button>
       </div>
