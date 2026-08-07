@@ -231,7 +231,7 @@ export default function StaffCategoriesPage() {
                     onChange={(e) =>
                       setEditImageFile(e.target.files?.[0] ?? null)
                     }
-                    className="text-xs text-gray-600"
+                    className="text-xs text-slate-600"
                   />
                 </div>
               </>

@@ -44,12 +44,19 @@ export default function StaffVouchersPage() {
   const [addingVoucher, setAddingVoucher] = useState(false);
 
   // Discount state
+  const { data: discounts = [] } = useQuery({
+    queryKey: ["staff-discounts"],
+    queryFn: () => voucherAdminService.listDiscounts(),
+  });
   const [discountForm, setDiscountForm] = useState(emptyDiscountForm);
   const [assignForm, setAssignForm] = useState({
     discount_id: "",
     product_id: "",
     variant_id: "",
   });
+  const [deletingDiscountId, setDeletingDiscountId] = useState<number | null>(
+    null,
+  );
 
   const createVoucherMutation = useMutation({
     mutationFn: () =>
@@ -91,6 +98,7 @@ export default function StaffVouchersPage() {
     onSuccess: () => {
       toast.success("Discount created.");
       setDiscountForm(emptyDiscountForm);
+      queryClient.invalidateQueries({ queryKey: ["staff-discounts"] });
     },
     onError: () => toast.error("Failed to create discount."),
   });
@@ -118,6 +126,23 @@ export default function StaffVouchersPage() {
   async function handleAssignDiscount(e: React.FormEvent) {
     e.preventDefault();
     assignDiscountMutation.mutate();
+  }
+
+  const deleteDiscountMutation = useMutation({
+    mutationFn: (discount_id: number) =>
+      voucherAdminService.deleteDiscount(discount_id),
+    onMutate: (discount_id) => setDeletingDiscountId(discount_id),
+    onSuccess: () => {
+      toast.success("Discount deleted.");
+      queryClient.invalidateQueries({ queryKey: ["staff-discounts"] });
+    },
+    onError: () => toast.error("Failed to delete discount."),
+    onSettled: () => setDeletingDiscountId(null),
+  });
+
+  function handleDeleteDiscount(discount_id: number) {
+    if (!confirm("Delete this discount? This cannot be undone.")) return;
+    deleteDiscountMutation.mutate(discount_id);
   }
 
   return (
@@ -308,6 +333,50 @@ export default function StaffVouchersPage() {
       {/* Discounts tab */}
       {tab === "discounts" && (
         <div className="flex flex-col gap-6">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <DataTable
+              columns={[
+                { key: "discount_id", header: "ID", className: "w-16" },
+                { key: "voucher_code", header: "Code" },
+                { key: "voucher_type", header: "Type" },
+                { key: "voucher_value", header: "Value" },
+                {
+                  key: "start_date",
+                  header: "Start",
+                  render: (r) => formatDate(r.start_date as string),
+                },
+                {
+                  key: "end_date",
+                  header: "End",
+                  render: (r) => formatDate(r.end_date as string),
+                },
+                {
+                  key: "actions",
+                  header: "",
+                  className: "w-24",
+                  render: (r) => {
+                    const id = r.discount_id as number;
+                    return (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteDiscount(id);
+                        }}
+                        disabled={deletingDiscountId === id}
+                        className="text-xs font-medium text-red-500 hover:cursor-pointer hover:underline disabled:opacity-50"
+                      >
+                        {deletingDiscountId === id ? "…" : "Delete"}
+                      </button>
+                    );
+                  },
+                },
+              ]}
+              rows={discounts as unknown as Record<string, unknown>[]}
+              rowKey={(r) => r.discount_id as number}
+              emptyMessage="No discounts yet. Create one below, then assign it to a variant."
+            />
+          </div>
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Create discount */}
             <form

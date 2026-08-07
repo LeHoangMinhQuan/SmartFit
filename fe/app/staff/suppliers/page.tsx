@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { clsx } from "clsx";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
@@ -112,7 +113,12 @@ export default function StaffSuppliersPage() {
         </div>
         <button
           onClick={() => setAdding((v) => !v)}
-          className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800 hover:cursor-pointer"
+          className={clsx(
+            "rounded-xl px-4 py-2 text-sm font-medium transition hover:cursor-pointer",
+            adding
+              ? "border border-slate-300 text-slate-600 hover:bg-slate-100"
+              : "bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5 hover:shadow-xl",
+          )}
         >
           {adding ? "Cancel" : "+ Add Supplier"}
         </button>
@@ -125,6 +131,7 @@ export default function StaffSuppliersPage() {
         >
           <div className="w-64">
             <Input
+              variant="indigo"
               label="Supplier name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -135,7 +142,7 @@ export default function StaffSuppliersPage() {
           <button
             type="submit"
             disabled={creating}
-            className="rounded-lg bg-black px-5 py-2 text-sm text-white disabled:opacity-50 hover:bg-gray-800"
+            className="rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition hover:-translate-y-0.5 hover:cursor-pointer hover:shadow-xl active:translate-y-0 active:shadow-lg disabled:pointer-events-none disabled:opacity-50"
           >
             {creating ? "Saving…" : "Create"}
           </button>
@@ -159,7 +166,7 @@ export default function StaffSuppliersPage() {
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       maxLength={30}
-                      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
@@ -183,13 +190,13 @@ export default function StaffSuppliersPage() {
                           <button
                             onClick={() => handleSaveEdit(id)}
                             disabled={savingEdit}
-                            className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50"
+                            className="text-xs font-medium text-emerald-600 hover:cursor-pointer hover:underline disabled:opacity-50"
                           >
                             {savingEdit ? "Saving…" : "Save"}
                           </button>
                           <button
                             onClick={() => setEditingId(null)}
-                            className="text-xs text-slate-400 hover:underline"
+                            className="text-xs text-slate-400 hover:cursor-pointer hover:underline"
                           >
                             Cancel
                           </button>
@@ -198,14 +205,14 @@ export default function StaffSuppliersPage() {
                         <>
                           <button
                             onClick={() => startEdit(r as unknown as Supplier)}
-                            className="text-xs font-medium text-blue-600 hover:underline"
+                            className="text-xs font-medium text-blue-600 hover:cursor-pointer hover:underline"
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => handleDelete(id)}
                             disabled={deletingId === id}
-                            className="text-xs font-medium text-red-500 hover:underline disabled:opacity-50"
+                            className="text-xs font-medium text-red-500 hover:cursor-pointer hover:underline disabled:opacity-50"
                           >
                             {deletingId === id ? "…" : "Delete"}
                           </button>

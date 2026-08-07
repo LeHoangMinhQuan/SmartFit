@@ -82,6 +82,7 @@ export default function StaffListPage() {
           <Input
             label="Password"
             type="password"
+            passwordToggle
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             required

@@ -23,6 +23,15 @@ interface CreateDiscountBody {
   end_date: string;
 }
 
+export interface Discount {
+  discount_id: number;
+  voucher_code: string;
+  voucher_type: string;
+  voucher_value: number;
+  start_date: string;
+  end_date: string;
+}
+
 export const voucherAdminService = {
   // ── Vouchers (promo codes) ──
   createVoucher: (body: CreateVoucherBody) =>
@@ -39,15 +48,29 @@ export const voucherAdminService = {
       .then((r) => r.data),
 
   // ── Discounts (variant markdowns) ──
+  // BUG FIX: these three all called bare /discounts... with no /admin
+  // prefix. Every discount route (admin.routes.ts) is mounted under
+  // /api/admin — there's no bare /api/discounts — so every one of these
+  // 404'd, surfaced to staff as a generic "Failed to create/assign
+  // discount." toast with no indication it was a routing bug rather
+  // than bad input.
+  listDiscounts: () =>
+    api.get<{ data: Discount[] }>("/admin/discounts").then((r) => r.data.data),
+
   createDiscount: (body: CreateDiscountBody) =>
-    api.post<{ discount_id: number }>("/discounts", body).then((r) => r.data),
+    api
+      .post<{ discount_id: number }>("/admin/discounts", body)
+      .then((r) => r.data),
 
   // Links a discount to a specific product variant via product_discount table
   assignDiscount: (
     discount_id: number,
     body: { product_id: number; variant_id: number },
-  ) => api.post(`/discounts/${discount_id}/products`, body).then((r) => r.data),
+  ) =>
+    api
+      .post(`/admin/discounts/${discount_id}/products`, body)
+      .then((r) => r.data),
 
   deleteDiscount: (discount_id: number) =>
-    api.delete(`/discounts/${discount_id}`).then((r) => r.data),
+    api.delete(`/admin/discounts/${discount_id}`).then((r) => r.data),
 };

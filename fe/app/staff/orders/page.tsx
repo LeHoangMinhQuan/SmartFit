@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import {
   useQuery,
   useMutation,
@@ -28,6 +29,11 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "refund_requested",
   "refunded",
 ];
+
+// Terminal states the backend has no outgoing transitions for
+// (VALID_TRANSITIONS[status] === [] — see order.service.ts). Kept in
+// sync with the same check in orders/[order_id]/page.tsx.
+const TERMINAL_STATUSES: OrderStatus[] = ["cancelled", "refunded"];
 
 export default function StaffOrdersPage() {
   const router = useRouter();
@@ -66,7 +72,12 @@ export default function StaffOrdersPage() {
       );
       toast.success("Status updated.");
     },
-    onError: () => toast.error("Failed to update status."),
+    onError: (err) => {
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data?.message ?? "Failed to update status.")
+        : "Failed to update status.";
+      toast.error(message);
+    },
   });
   const updatingId = updateStatusMutation.isPending
     ? updateStatusMutation.variables?.order_id
@@ -97,7 +108,7 @@ export default function StaffOrdersPage() {
               setStatusFilter(e.target.value as OrderStatus | "");
               setPage(1);
             }}
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">All statuses</option>
             {STATUS_OPTIONS.map((s) => (
@@ -145,27 +156,33 @@ export default function StaffOrdersPage() {
             {
               key: "update_status",
               header: "Update Status",
-              render: (r) => (
-                <select
-                  value={r.status as string}
-                  disabled={updatingId === r.order_id}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleStatusChange(
-                      r.order_id as number,
-                      e.target.value as OrderStatus,
-                    );
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
-              ),
+              render: (r) => {
+                const isTerminal = TERMINAL_STATUSES.includes(
+                  r.status as OrderStatus,
+                );
+                return (
+                  <select
+                    value={r.status as string}
+                    disabled={updatingId === r.order_id || isTerminal}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      handleStatusChange(
+                        r.order_id as number,
+                        e.target.value as OrderStatus,
+                      );
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    title={isTerminal ? "This status is final." : undefined}
+                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                );
+              },
             },
           ]}
           rows={orders as unknown as Record<string, unknown>[]}
