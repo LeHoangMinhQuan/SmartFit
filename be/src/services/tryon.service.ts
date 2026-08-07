@@ -81,6 +81,30 @@ export async function requestPreview(params: {
     throw new ApiError(410, "Try-on session has expired");
   }
 
+  // BUG FIX: nothing previously stopped this from being called more than
+  // once for the same session_id. tryonQueue.ts's concurrency:1 means
+  // jobs run strictly in enqueue order, so a duplicate call queued after
+  // a first job that already succeeded could still run afterward and
+  // overwrite a good 'ready' result with a stale 'failed' — silently
+  // downgrading a session that had already worked. Blocking re-triggers
+  // once a session has reached a terminal state (ready/failed) closes
+  // that specific case, which is the one that can actually corrupt a
+  // previously-good result; it does NOT fully close a rapid pair of
+  // concurrent FIRST calls both arriving while status is still
+  // 'processing' (the column's own default from insertSession, so it
+  // reads the same whether this is truly the first call or a second one
+  // racing it) — that would need a schema change (e.g. a distinct
+  // "already enqueued" marker) to close completely. The rate limiter on
+  // this route (tryonPreviewLimiter, rateLimiter.ts) mitigates the
+  // realistic version of that gap (a double-click) even though it can't
+  // fully eliminate it.
+  if (session.status === "ready" || session.status === "failed") {
+    throw new ApiError(
+      409,
+      "This session already has a result. Start a new try-on to generate another.",
+    );
+  }
+
   const garmentUrl = await TryonSession.findGarmentImageUrl(
     session.product_id,
     session.variant_id,

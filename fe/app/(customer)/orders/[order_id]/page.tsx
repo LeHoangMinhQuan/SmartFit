@@ -103,7 +103,16 @@ export default function OrderDetailPage() {
 
   async function handleCancel() {
     if (!order) return;
-    const isCOD = order.status === "cod_confirmed";
+    // BUG FIX: this used to check order.status === "cod_confirmed", which
+    // is only true for a COD order in its very first status. Once a COD
+    // order progresses to "preparing" (still cancellable — see canCancel
+    // below), that check goes false and this showed the wrong
+    // ("already paid, this will submit a refund request") message for an
+    // order that was never charged at all. The backend
+    // (order.service.ts's cancelOrder) has always correctly checked
+    // payment_method_name instead, independent of status — matching that
+    // here instead of re-deriving it from status.
+    const isCOD = order.payment_method_name.toLowerCase() === "cod";
     const message = isCOD
       ? "Cancel this order? This cannot be undone."
       : "Cancel this order? Since it's already paid, this will submit a refund request for our team to review — it won't refund automatically.";

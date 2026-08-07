@@ -88,16 +88,60 @@ export async function createOrder(
     discountAmount = VoucherModel.computeVoucherDiscount(voucher, rawTotal);
   }
 
+  // BUG FIX: shipping_fee used to be taken directly from the client with
+  // no server-side verification at all — since it flows straight into
+  // total_amount (and VNPay reads total_amount directly, see the comment
+  // below), a customer could submit any shipping_fee they liked,
+  // including 0, and simply not pay for delivery. Recomputed here via
+  // the same GHN autoSelectService() the checkout page's ShippingSelector
+  // already calls to SHOW the customer a fee in the first place — this
+  // is the authoritative source of truth, not a second opinion, so the
+  // client-supplied data.shipping_fee is no longer used for the actual
+  // charge. Dynamic import to avoid a circular import (ghn.service.ts
+  // already imports OrderModel from this module's sibling files, and
+  // this file's own COD path below already imports ghn.service.ts the
+  // same way for the same reason).
+  const ward = await db("ward")
+    .where({ ward_id: data.ward_id })
+    .first("district_id");
+  if (!ward) throw new ApiError(400, "Invalid ward_id");
+
+  let shipping_fee: number;
+  try {
+    const { autoSelectService } = await import("./ghn.service.js");
+    const quote = await autoSelectService(
+      user_id,
+      ward.district_id,
+      String(data.ward_id),
+    );
+    shipping_fee = quote.fee;
+  } catch (err) {
+    // Can't safely charge for shipping without a verified fee — this is
+    // the one place in checkout where failing safe means rejecting the
+    // order, not falling back to trusting client input, since that
+    // input is exactly what this fix exists to stop trusting. Unlike the
+    // COD shipment-creation failure below (which happens AFTER money/
+    // stock are already committed and would cost the customer a full
+    // re-checkout to roll back), this runs before anything is written.
+    console.error(
+      `[order] shipping fee verification failed for user ${user_id}:`,
+      err,
+    );
+    throw new ApiError(
+      502,
+      "Couldn't verify the shipping cost for this address — please try again.",
+    );
+  }
+
   // Bug fix: this used to be Math.max(0, rawTotal - discountAmount), which
   // is just the cart subtotal minus any voucher discount — shipping_fee
   // was never added, so every order (and every VNPay charge, since
   // vnpay.service.ts reads total_amount directly) silently excluded the
-  // delivery fee entirely. shipping_fee is client-supplied (see the schema
-  // comment on createOrderSchema for the known trust gap there — not
-  // server-recomputed via GHN in this pass).
+  // delivery fee entirely. shipping_fee is now the server-verified value
+  // computed just above, not client input (see the fix above).
   const total_amount = Math.max(
     0,
-    rawTotal + data.shipping_fee - discountAmount,
+    rawTotal + shipping_fee - discountAmount,
   );
 
   // 3. Build order items list
@@ -166,7 +210,7 @@ export async function createOrder(
           ward_id: data.ward_id,
           recipient_phone: data.recipient_phone,
           total_amount,
-          shipping_fee: data.shipping_fee,
+          shipping_fee,
           status: initialStatus,
         })
         .returning("order_id");

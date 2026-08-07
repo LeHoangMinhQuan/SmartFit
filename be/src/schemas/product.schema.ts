@@ -44,7 +44,17 @@ export const listProductsSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().positive().optional(),
     limit: z.coerce.number().int().positive().max(100).optional(),
-    sort: z.string().optional(),
+    // BUG FIX: this was z.string().optional() — any string at all — and
+    // flowed straight into Knex's .orderBy(sort, order) in
+    // findAllProducts (product.model.ts). Knex quotes it as a column
+    // identifier rather than concatenating raw SQL, so this was never
+    // actually SQL-injectable, but it was still a free-text field doing
+    // a job that should be an explicit allow-list — the only values the
+    // frontend ever legitimately sends (product.service.ts's
+    // getNewArrivals) are "p.product_id"/"p.name"/"p.description", and
+    // nothing should be able to sort by, or error-message-probe the
+    // existence of, an arbitrary joined column.
+    sort: z.enum(["p.product_id", "p.name", "p.description"]).optional(),
     order: z.enum(["asc", "desc"]).optional(),
     category_id: z.coerce.number().int().positive().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),

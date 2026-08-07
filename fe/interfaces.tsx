@@ -171,6 +171,11 @@ export interface Order {
   user_id: number;
   staff_id: number;
   payment_method_id: number;
+  // BUG FIX: the API (findOrderByIdAndUser, order.model.ts) already joins
+  // and returns this — it just wasn't declared here, which is how
+  // order-detail-page.tsx ended up inferring "is this COD" from
+  // order.status instead of this field directly (see that page's fix).
+  payment_method_name: string;
   status: OrderStatus;
   created_at: string;
   updated_at: string | null;

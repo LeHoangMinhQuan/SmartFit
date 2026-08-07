@@ -25,7 +25,7 @@ export default function Home() {
               of style.
             </p>
             <Link
-              href="/categories/all"
+              href="/category/all"
               className="inline-block w-full rounded-full bg-black px-10 py-4 text-center font-medium text-white transition-colors hover:bg-gray-800 md:w-auto"
             >
               Shop Now

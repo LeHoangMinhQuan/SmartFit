@@ -55,22 +55,40 @@ export default function PaymentResultPage({
   const router = useRouter();
 
   const isSuccess = responseCode === SUCCESS_CODE;
+  // BUG FIX: previously, isSuccess alone gated the whole "Payment
+  // Successful!" screen. vnp_ResponseCode is an unsigned URL query
+  // param — nothing here verifies VNPay's signature the way the
+  // server-side IPN handler does (vnpayClient.verifyIpnCall) — so
+  // anyone could hand-craft a URL like
+  // /payment/result?vnp_ResponseCode=00 and see this screen with zero
+  // server confirmation. The polling below (which reads the real,
+  // authenticated order status) was supposed to be that confirmation,
+  // but it never even ran when orderId couldn't be resolved
+  // (`enabled: isSuccess && !!orderId`) — a malformed or missing
+  // vnp_TxnRef parses to orderId = 0, `!!orderId` is false, and the
+  // fake success screen would just sit there permanently, unverified.
+  // This doesn't change what's actually charged or what order.status
+  // says server-side (only the signature-verified IPN/reconciliation
+  // path ever sets that) — it only stops the client from claiming
+  // "success" when it has no order to even ask about.
+  const hasVerifiableOrder = Number.isFinite(orderId) && orderId > 0;
+  const showSuccess = isSuccess && hasVerifiableOrder;
 
   // Small initial delay before the first check, same as before — gives
   // IPN a head start before we even look.
   const [delayElapsed, setDelayElapsed] = useState(false);
   useEffect(() => {
-    if (!isSuccess || !orderId) return;
+    if (!showSuccess) return;
     const timer = setTimeout(() => setDelayElapsed(true), 2000);
     return () => clearTimeout(timer);
-  }, [isSuccess, orderId]);
+  }, [showSuccess]);
 
   const pollAttemptsRef = useRef(0);
 
   const orderStatusQuery = useQuery({
     queryKey: ["payment-result-order", orderId],
     queryFn: () => orderService.getOrder(Number(orderId)),
-    enabled: isSuccess && !!orderId && delayElapsed,
+    enabled: showSuccess && delayElapsed,
     retry: false,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
@@ -88,8 +106,7 @@ export default function PaymentResultPage({
   const pollingTimedOut =
     stillPending && pollAttemptsRef.current >= MAX_POLL_ATTEMPTS;
   const polling =
-    isSuccess &&
-    !!orderId &&
+    showSuccess &&
     (!delayElapsed || orderStatusQuery.isFetching) &&
     !pollingTimedOut;
 
@@ -114,7 +131,7 @@ export default function PaymentResultPage({
     );
   }
 
-  if (isSuccess) {
+  if (showSuccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 py-10 px-4">
         <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm animate-in zoom-in-95 duration-500 sm:px-10">
@@ -181,6 +198,46 @@ export default function PaymentResultPage({
                 View Order
               </button>
             )}
+            <button
+              onClick={() => router.push("/")}
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+            >
+              Continue Shopping
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // BUG FIX: isSuccess-but-not-hasVerifiableOrder previously fell through
+  // to the "Failure State" below, which flatly claims "Payment Failed —
+  // no charges have been made." That's just as unverified a claim as the
+  // false-success screen this whole fix is about — we don't actually
+  // know anything happened, we just can't check. Show a neutral "we
+  // can't verify this" state instead of asserting either outcome.
+  if (isSuccess && !hasVerifiableOrder) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 py-10 px-4">
+        <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm sm:px-10">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 ring-8 ring-slate-100/50">
+            <AlertCircle className="h-10 w-10 text-slate-400" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            We couldn&rsquo;t verify this payment link
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            This link is missing the information we need to look up your order.
+            If you just completed a payment, check your orders page for the
+            latest status.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => router.push("/orders")}
+              className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30"
+            >
+              My Orders
+            </button>
             <button
               onClick={() => router.push("/")}
               className="flex-1 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"

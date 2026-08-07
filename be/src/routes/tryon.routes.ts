@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authenticate.js";
 import { validate } from "../middleware/validate.js";
-import { tryonLimiter } from "../middleware/rateLimiter.js";
+import {
+  tryonLimiter,
+  tryonPreviewLimiter,
+} from "../middleware/rateLimiter.js";
 import { tryonUpload } from "../middleware/tryonUpload.js";
 import {
   tryonSessionUploadSchema,
@@ -26,6 +29,7 @@ router.post(
 router.post(
   "/preview",
   authenticate,
+  tryonPreviewLimiter,
   validate(tryonPreviewSchema),
   tryonController.requestPreview,
 );

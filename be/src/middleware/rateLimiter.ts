@@ -51,6 +51,32 @@ export const tryonLimiter = rateLimit({
 });
 
 /**
+ * BUG FIX: POST /tryon/preview previously had NO rate limiter at all —
+ * only /tryon/session (photo upload) did. Since tryonQueue.ts's single
+ * shared GPU worker (concurrency: 1) serves every user, an unthrottled
+ * /preview meant one user could flood the one scarce inference slot with
+ * repeated calls (double-clicks, or a direct API caller) with nothing to
+ * stop it short of tryon.service.ts's own status guard (see that file's
+ * fix — which only blocks re-triggering an already-CONCLUDED session,
+ * not a rapid burst of first-time calls). Keyed by user_id rather than
+ * IP, same reasoning as chatLimiter below: what's being protected is the
+ * shared GPU queue per account, not raw request volume per network.
+ */
+export const tryonPreviewLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    req.user?.user_id.toString() ?? ipKeyGenerator(req.ip ?? ""),
+  message: {
+    status: "error",
+    statusCode: 429,
+    message: "Too many try-on requests. Please wait a few minutes.",
+  },
+});
+
+/**
  * Password-reset limiter — extra tight for forgot-password endpoint.
  * 5 requests per hour per IP.
  */

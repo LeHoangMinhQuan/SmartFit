@@ -213,6 +213,14 @@ export default function ProductPage() {
             />
 
             {/* Quantity stepper */}
+            {/* BUG FIX: the "+" button previously had no upper bound at
+                all -- not even tied to selected.stock -- so a customer
+                could click past what's actually available and the item
+                would silently go into the cart anyway (cart.service.ts
+                didn't check stock at add-time either -- see that file's
+                fix). Both the visual cap and the disabled state below
+                are enforced client-side for immediate feedback; the real
+                guarantee is still cart.service.ts's server-side check. */}
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-gray-700">
                 Quantity
@@ -228,12 +236,22 @@ export default function ProductPage() {
                   {quantity}
                 </span>
                 <button
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:bg-slate-100"
+                  onClick={() =>
+                    setQuantity((q) =>
+                      selected?.stock ? Math.min(selected.stock, q + 1) : q + 1,
+                    )
+                  }
+                  disabled={!!selected?.stock && quantity >= selected.stock}
+                  className="flex h-10 w-10 items-center justify-center text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   +
                 </button>
               </div>
+              {!!selected?.stock && quantity >= selected.stock && (
+                <span className="text-xs text-slate-500">
+                  Only {selected.stock} in stock
+                </span>
+              )}
             </div>
 
             {/* Actions */}

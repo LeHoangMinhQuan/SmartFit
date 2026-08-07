@@ -1,5 +1,23 @@
 import db from "../config/db.js";
 
+/**
+ * Current stock for one (product_id, variant_id) at a given store.
+ * Returns 0 if no store_product row exists at all (never stocked there),
+ * distinct from a row that exists with quantity 0 (was stocked, now
+ * depleted) — callers only need "how many can I actually sell right now",
+ * so both cases collapse to the same answer here.
+ */
+export async function findQuantity(
+  product_id: number,
+  variant_id: number,
+  store_id: number,
+): Promise<number> {
+  const row = await db("store_product")
+    .where({ product_id, variant_id, store_id })
+    .first("quantity");
+  return row ? Number(row.quantity) : 0;
+}
+
 export async function findInventory(filters: {
   store_id?: number;
   min_quantity?: number;

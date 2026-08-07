@@ -13,12 +13,15 @@ export const createOrderSchema = z.object({
     // at order placement, same as it already builds shipping_address from
     // the chosen address.
     recipient_phone: z.string().regex(VN_PHONE_REGEX, VN_PHONE_ERROR_MESSAGE),
-    // Bug fix: total_amount previously excluded this entirely — every
-    // VNPay charge silently undercharged by the delivery fee. Trusting
-    // client input for a monetary amount is a known gap (see order.service.ts
-    // createOrder comment) rather than recomputing server-side via GHN,
-    // since that needs package weight data this schema doesn't currently
-    // track — flagged as a follow-up, not solved here.
+    // BUG FIX: this field is still accepted from the client (so the
+    // frontend's existing checkout payload shape doesn't need to change)
+    // but is NO LONGER used for the actual charge — order.service.ts's
+    // createOrder now recomputes the authoritative fee server-side via
+    // GHN before computing total_amount, closing what used to be a
+    // trust-client-input-for-a-monetary-amount gap (a customer could
+    // previously submit shipping_fee: 0 and simply not pay for
+    // delivery). Kept in the schema purely so existing clients don't
+    // break; treat it as informational/display-only from here on.
     shipping_fee: z.number().min(0).default(0),
     voucher_code: z.string().optional(),
   }),
