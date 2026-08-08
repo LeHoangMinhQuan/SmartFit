@@ -260,8 +260,22 @@ export async function seed(knex: Knex): Promise<void> {
   const store = await knex("store").first();
 
   for (const p of products) {
+    // BUG FIX (2026-08-08): weight_grams/length_cm/width_cm/height_cm were
+    // defined on every product object above (with a comment explaining
+    // they're deliberately varied to exercise both GHN service tiers) but
+    // never actually made it into this insert — every seeded product's
+    // dimensions silently stayed NULL, so ghn.service.ts's placeholder
+    // fallback (500g/20x20x10cm) applied uniformly and the light/heavy
+    // tier variation the comment describes never actually happened.
     const [prodRow] = await knex("product")
-      .insert({ name: p.name, description: p.description })
+      .insert({
+        name: p.name,
+        description: p.description,
+        weight_grams: p.weight_grams,
+        length_cm: p.length_cm,
+        width_cm: p.width_cm,
+        height_cm: p.height_cm,
+      })
       .returning("product_id");
     const product_id: number = prodRow.product_id;
 

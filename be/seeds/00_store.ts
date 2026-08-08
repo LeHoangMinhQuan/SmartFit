@@ -13,10 +13,19 @@ import { Knex } from "knex";
  *
  * store.address is VARCHAR(20) — keep addresses short.
  *
+ * is_active (added 2026-08-08) is explicitly set to true below rather than
+ * left to the column's DB DEFAULT TRUE — the seeded store is meant to be
+ * the one active store admin/staff pages operate against day one, and
+ * relying on an implicit default here would silently stop being obviously
+ * correct if the column's default ever changed. See FR-12 / Store
+ * Management in ecommerce-api-plan.md for the soft-deactivate feature
+ * this column supports (PATCH /admin/stores/:store_id/status) — there is
+ * no hard-delete route for stores.
+ *
  * 🔮 Future work (multi-store): add more entries back to STORES once a
  * second GHN shop exists — see §12.
  */
-const STORES = [{ name: "Main Store", address: "12 Le Loi" }];
+const STORES = [{ name: "Main Store", address: "12 Le Loi", is_active: true }];
 
 export async function seed(knex: Knex): Promise<void> {
   const existingCount = await knex("store").count("* as count").first();
@@ -30,7 +39,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   for (const s of STORES) {
     const [row] = await knex("store")
-      .insert({ name: s.name, address: s.address })
+      .insert({ name: s.name, address: s.address, is_active: s.is_active })
       .returning("store_id");
     console.log(`Seeded store: ${s.name} (store_id=${row.store_id})`);
   }
