@@ -211,15 +211,32 @@ export default function StaffOrderDetailPage() {
           {order.items.map((item) => (
             <div
               key={`${item.product_id}-${item.variant_id}`}
-              className="flex justify-between py-2 text-slate-700"
+              className="flex items-center gap-3 py-3 text-slate-700"
             >
-              <span>
-                Product #{item.product_id} / Variant #{item.variant_id} ×{" "}
-                {item.quantity}
-              </span>
-              <span className="font-medium text-slate-900">
-                {formatPrice(item.subtotal)}
-              </span>
+              {item.image_url ? (
+                <img
+                  src={item.image_url}
+                  alt={item.product_name}
+                  className="h-14 w-14 shrink-0 rounded-lg border border-slate-100 bg-slate-50 object-cover"
+                />
+              ) : (
+                <div className="h-14 w-14 shrink-0 rounded-lg bg-slate-100" />
+              )}
+              <div className="flex flex-1 items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium text-slate-900">
+                    {item.product_name}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {item.variant_name}
+                    <span className="mx-1.5 text-slate-300">•</span>
+                    Qty: {item.quantity}
+                  </p>
+                </div>
+                <span className="font-medium text-slate-900">
+                  {formatPrice(item.subtotal)}
+                </span>
+              </div>
             </div>
           ))}
           <div className="flex justify-between pt-3 font-semibold text-slate-900">

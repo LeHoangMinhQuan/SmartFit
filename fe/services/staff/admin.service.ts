@@ -417,6 +417,11 @@ export const adminService = {
       .patch<ApiResponse<Store>>(`/admin/stores/${store_id}`, body)
       .then((r) => r.data.data),
 
+  setStoreActive: (store_id: number, is_active: boolean) =>
+    api
+      .patch(`/admin/stores/${store_id}/status`, { is_active })
+      .then((r) => r.data),
+
   getStoreInventory: (store_id: number) =>
     api
       .get<

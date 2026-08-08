@@ -48,7 +48,16 @@ export const createDiscountSchema = z.object({
 export const assignDiscountSchema = z.object({
   params: z.object({ discount_id: z.coerce.number().int().positive() }),
   body: z.object({
-    product_id: z.number().int().positive(),
-    variant_id: z.number().int().positive(),
+    // Kept as an array-only shape rather than "single pair OR array" —
+    // one request shape for the route to validate is simpler than two,
+    // and a single assignment is just assignments: [{...}].
+    assignments: z
+      .array(
+        z.object({
+          product_id: z.number().int().positive(),
+          variant_id: z.number().int().positive(),
+        }),
+      )
+      .min(1, "At least one product/variant assignment is required"),
   }),
 });

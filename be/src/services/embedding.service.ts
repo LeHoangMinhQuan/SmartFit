@@ -102,7 +102,7 @@ export async function upsertProductEmbedding(
   let embedding: number[];
   try {
     ({ embedding } = await embed({
-      model: geminiProvider.textEmbeddingModel(model),
+      model: geminiProvider.embeddingModel(model),
       value: content,
       providerOptions: {
         google: {

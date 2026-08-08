@@ -6,6 +6,7 @@ export interface Store {
   store_id?: number; // IDENTITY
   name: string; // VARCHAR(40)
   address: string; // VARCHAR(20)
+  is_active?: boolean; // DEFAULT TRUE — see 2026-08-08 comment on the table DDL
 }
 
 export async function createStore(
@@ -28,6 +29,10 @@ export async function updateStore(
   data: Partial<Omit<Store, "store_id">>,
 ) {
   return db("store").where({ store_id }).update(data);
+}
+
+export async function setStoreActive(store_id: number, is_active: boolean) {
+  return db("store").where({ store_id }).update({ is_active });
 }
 
 // ─── Staff Working History (append-only audit log) ────────────────────────────

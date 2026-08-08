@@ -27,6 +27,27 @@ export async function assignDiscountToVariant(
     .ignore();
 }
 
+// Bulk variant assigns of ONE discount to MANY variants — a single insert
+// rather than N round-trips, and the same onConflict-ignore as the single
+// version above so re-submitting a partially-applied bulk assign (e.g.
+// after a network error) is safe to retry.
+export async function assignDiscountToVariants(
+  discount_id: number,
+  items: { product_id: number; variant_id: number }[],
+) {
+  if (items.length === 0) return;
+  return db("product_discount")
+    .insert(
+      items.map(({ product_id, variant_id }) => ({
+        discount_id,
+        product_id,
+        variant_id,
+      })),
+    )
+    .onConflict(["discount_id", "product_id", "variant_id"])
+    .ignore();
+}
+
 export async function findActiveDiscountForVariant(
   product_id: number,
   variant_id: number,

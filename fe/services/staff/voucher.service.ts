@@ -62,13 +62,16 @@ export const voucherAdminService = {
       .post<{ discount_id: number }>("/admin/discounts", body)
       .then((r) => r.data),
 
-  // Links a discount to a specific product variant via product_discount table
+  // Links a discount to one or more product variants via product_discount
+  // table. Always sends an array — even a single assignment is
+  // assignments: [{...}] — matching the backend's one-shape contract
+  // (schemas/voucher.schema.ts).
   assignDiscount: (
     discount_id: number,
-    body: { product_id: number; variant_id: number },
+    assignments: { product_id: number; variant_id: number }[],
   ) =>
     api
-      .post(`/admin/discounts/${discount_id}/products`, body)
+      .post(`/admin/discounts/${discount_id}/products`, { assignments })
       .then((r) => r.data),
 
   deleteDiscount: (discount_id: number) =>

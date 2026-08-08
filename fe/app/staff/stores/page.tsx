@@ -92,6 +92,41 @@ export default function StaffStoresPage() {
     updateMutation.mutate({ store_id, body });
   }
 
+  const setActiveMutation = useMutation({
+    mutationFn: (vars: { store_id: number; is_active: boolean }) =>
+      adminService.setStoreActive(vars.store_id, vars.is_active),
+    onSuccess: (_data, vars) => {
+      toast.success(
+        vars.is_active ? "Store reactivated." : "Store deactivated.",
+      );
+      queryClient.setQueryData<Store[]>(["staff-stores-list"], (old) =>
+        old?.map((s) =>
+          s.store_id === vars.store_id
+            ? { ...s, is_active: vars.is_active }
+            : s,
+        ),
+      );
+    },
+    onError: () => toast.error("Failed to update store status."),
+  });
+  const updatingActiveId = setActiveMutation.isPending
+    ? setActiveMutation.variables?.store_id
+    : null;
+
+  function handleToggleActive(store: Store) {
+    if (
+      store.is_active &&
+      !confirm(
+        `Deactivate "${store.name}"? It'll be hidden from staff assignment and inventory pickers, but its history is kept and you can reactivate it anytime.`,
+      )
+    )
+      return;
+    setActiveMutation.mutate({
+      store_id: store.store_id,
+      is_active: !store.is_active,
+    });
+  }
+
   if (loading)
     return (
       <div className="flex justify-center py-24">
@@ -160,37 +195,75 @@ export default function StaffStoresPage() {
         {/* Store list */}
         <div className="flex flex-col gap-2 lg:col-span-1">
           {stores.map((s) => (
-            <button
-              key={s.store_id}
-              onClick={() => handleSelectStore(s)}
-              className={clsx(
-                "rounded-2xl border p-4 text-left transition hover:cursor-pointer",
-                selectedStore?.store_id === s.store_id
-                  ? "border-transparent bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25"
-                  : "border-slate-200 bg-white shadow-sm hover:border-slate-300",
-              )}
-            >
-              <p
+            <div key={s.store_id} className="relative">
+              <button
+                onClick={() => handleSelectStore(s)}
                 className={clsx(
-                  "text-sm font-medium",
+                  "w-full rounded-2xl border p-4 pr-24 text-left transition hover:cursor-pointer",
+                  !s.is_active && "opacity-60",
                   selectedStore?.store_id === s.store_id
-                    ? "text-white"
-                    : "text-slate-900",
+                    ? "border-transparent bg-gradient-to-r from-indigo-500 to-blue-500 text-white shadow-lg shadow-indigo-500/25"
+                    : "border-slate-200 bg-white shadow-sm hover:border-slate-300",
                 )}
               >
-                {s.name}
-              </p>
-              <p
+                <div className="flex items-center gap-2">
+                  <p
+                    className={clsx(
+                      "text-sm font-medium",
+                      selectedStore?.store_id === s.store_id
+                        ? "text-white"
+                        : "text-slate-900",
+                    )}
+                  >
+                    {s.name}
+                  </p>
+                  {!s.is_active && (
+                    <span
+                      className={clsx(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                        selectedStore?.store_id === s.store_id
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-100 text-slate-500",
+                      )}
+                    >
+                      Inactive
+                    </span>
+                  )}
+                </div>
+                <p
+                  className={clsx(
+                    "text-xs mt-0.5 truncate",
+                    selectedStore?.store_id === s.store_id
+                      ? "text-indigo-100"
+                      : "text-slate-500",
+                  )}
+                >
+                  {s.address}
+                </p>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleActive(s);
+                }}
+                disabled={updatingActiveId === s.store_id}
+                title={s.is_active ? "Deactivate store" : "Reactivate store"}
                 className={clsx(
-                  "text-xs mt-0.5 truncate",
+                  "absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-medium transition hover:cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
                   selectedStore?.store_id === s.store_id
-                    ? "text-indigo-100"
-                    : "text-slate-500",
+                    ? "text-white/80 hover:bg-white/10 hover:text-white"
+                    : s.is_active
+                      ? "text-red-500 hover:bg-red-50"
+                      : "text-emerald-600 hover:bg-emerald-50",
                 )}
               >
-                {s.address}
-              </p>
-            </button>
+                {updatingActiveId === s.store_id
+                  ? "…"
+                  : s.is_active
+                    ? "Deactivate"
+                    : "Reactivate"}
+              </button>
+            </div>
           ))}
           {stores.length === 0 && (
             <p className="text-sm text-slate-500">No stores yet.</p>
@@ -201,9 +274,16 @@ export default function StaffStoresPage() {
         {selectedStore && (
           <div className="flex flex-col gap-4 lg:col-span-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">
-                {selectedStore.name}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {selectedStore.name}
+                </h2>
+                {!selectedStore.is_active && (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Inactive
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => {
                   const newName = prompt("New name:", selectedStore.name);

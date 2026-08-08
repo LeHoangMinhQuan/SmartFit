@@ -42,6 +42,7 @@ router.get("/stores", Admin.listStores);
 router.post("/stores", Admin.createStore);
 router.get("/stores/:store_id", Admin.getStore);
 router.patch("/stores/:store_id", Admin.updateStore);
+router.patch("/stores/:store_id/status", Admin.setStoreActive);
 router.get("/stores/:store_id/inventory", Admin.getStoreInventory);
 router.get("/stores/:store_id/staff", Admin.getStoreStaff);
 

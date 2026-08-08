@@ -209,6 +209,16 @@ export const updateStore = catchAsync(async (req: Request, res: Response) => {
   res.json({ data: { message: "Store updated" } });
 });
 
+export const setStoreActive = catchAsync(
+  async (req: Request, res: Response) => {
+    await StaffService.setStoreActive(
+      Number(req.params["store_id"]),
+      req.body.is_active,
+    );
+    res.json({ data: { message: "Store status updated" } });
+  },
+);
+
 export const getStoreInventory = catchAsync(
   async (req: Request, res: Response) => {
     const inventory = await StoreProductModel.findInventoryByStore(
@@ -466,8 +476,7 @@ export const assignDiscount = catchAsync(
   async (req: Request, res: Response) => {
     await VoucherService.assignDiscount(
       Number(req.params["discount_id"]),
-      req.body.product_id,
-      req.body.variant_id,
+      req.body.assignments,
     );
     res.status(201).json({ data: { message: "Discount assigned" } });
   },

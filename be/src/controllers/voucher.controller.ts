@@ -34,7 +34,7 @@ export const adminCreateVoucher = catchAsync(
 export const adminUpdateVoucher = catchAsync(
   async (req: Request, res: Response) => {
     await VoucherService.adminUpdateVoucher(
-      Number(req.params['voucher_id']),
+      Number(req.params["voucher_id"]),
       req.body,
     );
     res.json({ data: { message: "Voucher updated" } });
@@ -60,9 +60,8 @@ export const createDiscount = catchAsync(
 export const assignDiscount = catchAsync(
   async (req: Request, res: Response) => {
     await VoucherService.assignDiscount(
-      Number(req.params['discount_id']),
-      req.body.product_id,
-      req.body.variant_id,
+      Number(req.params["discount_id"]),
+      req.body.assignments,
     );
     res.status(201).json({ data: { message: "Discount assigned" } });
   },
@@ -70,7 +69,7 @@ export const assignDiscount = catchAsync(
 
 export const deleteDiscount = catchAsync(
   async (req: Request, res: Response) => {
-    await VoucherService.deleteDiscount(Number(req.params['discount_id']));
+    await VoucherService.deleteDiscount(Number(req.params["discount_id"]));
     res.status(204).send();
   },
 );

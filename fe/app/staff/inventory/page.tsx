@@ -419,11 +419,13 @@ export default function StaffInventoryPage() {
                   required
                 >
                   <option value="">Select…</option>
-                  {stores.map((s) => (
-                    <option key={s.store_id} value={s.store_id}>
-                      {s.name}
-                    </option>
-                  ))}
+                  {stores
+                    .filter((s) => s.is_active)
+                    .map((s) => (
+                      <option key={s.store_id} value={s.store_id}>
+                        {s.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 

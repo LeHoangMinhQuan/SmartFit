@@ -59,18 +59,13 @@ export async function createDiscount(data: {
 
 export async function assignDiscount(
   discount_id: number,
-  product_id: number,
-  variant_id: number,
+  assignments: { product_id: number; variant_id: number }[],
 ) {
   const discount = await DiscountModel.findAllDiscounts().then((all) =>
     all.find((d: any) => d.discount_id === discount_id),
   );
   if (!discount) throw new ApiError(404, "Discount not found");
-  await DiscountModel.assignDiscountToVariant(
-    discount_id,
-    product_id,
-    variant_id,
-  );
+  await DiscountModel.assignDiscountToVariants(discount_id, assignments);
 }
 
 export async function deleteDiscount(discount_id: number) {

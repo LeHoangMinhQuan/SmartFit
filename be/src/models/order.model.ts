@@ -102,14 +102,20 @@ export async function findAllOrders(filters: {
   const { status, user_id, from, to, page = 1, limit = 20 } = filters;
   const offset = (page - 1) * limit;
 
-  let query = db("ORDER").select("*");
-  if (status) query = query.where({ status });
-  if (user_id) query = query.where({ user_id });
-  if (from) query = query.where("created_at", ">=", from);
-  if (to) query = query.where("created_at", "<=", to);
+  // LEFT JOIN (not inner) — a deleted/orphaned user_id shouldn't make an
+  // otherwise-valid order vanish from the admin list, it should just show
+  // no username. "ORDER".* keeps every existing consumer's field shape
+  // intact; username is additive.
+  let query = db("ORDER")
+    .leftJoin("USER", "USER.user_id", "ORDER.user_id")
+    .select("ORDER.*", "USER.username");
+  if (status) query = query.where({ "ORDER.status": status });
+  if (user_id) query = query.where({ "ORDER.user_id": user_id });
+  if (from) query = query.where("ORDER.created_at", ">=", from);
+  if (to) query = query.where("ORDER.created_at", "<=", to);
 
   const rows = await query
-    .orderBy("created_at", "desc")
+    .orderBy("ORDER.created_at", "desc")
     .limit(limit)
     .offset(offset);
 

@@ -169,6 +169,11 @@ export type OrderStatus =
 export interface Order {
   order_id: number;
   user_id: number;
+  // Only present on the staff-facing GET /admin/orders list (order.model.ts's
+  // findAllOrders LEFT JOINs USER for this) — undefined on the
+  // customer-facing endpoints, which return items scoped to the
+  // authenticated user and have no reason to look their own name up.
+  username?: string | null;
   staff_id: number;
   payment_method_id: number;
   // BUG FIX: the API (findOrderByIdAndUser, order.model.ts) already joins
@@ -205,6 +210,15 @@ export interface OrderItem {
   quantity: number;
   unit_price: number;
   subtotal: number;
+  // BUG FIX: order.model.ts's findOrderItems already JOINs product +
+  // product_variant + product_image and SELECTs these — they just
+  // weren't declared here, which is how the staff order-detail page
+  // ended up rendering "Product #6 / Variant #1" instead of the actual
+  // names it already had in hand. Not present on any endpoint besides
+  // order detail (findOrderItems is only called from there).
+  product_name: string;
+  variant_name: string;
+  image_url: string | null;
 }
 
 // Payment
@@ -380,6 +394,7 @@ export interface Store {
   store_id: number;
   name: string;
   address: string;
+  is_active: boolean;
 }
 
 // Pagination meta (matches API response shape)

@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {ApiError} from "../utils/ApiError.js";
+import { ApiError } from "../utils/ApiError.js";
 import * as StaffModel from "../models/staff.model.js";
 import * as StoreModel from "../models/store.model.js";
 
@@ -132,4 +132,10 @@ export async function updateStore(
   const existing = await StoreModel.findStoreById(store_id);
   if (!existing) throw new ApiError(404, "Store not found");
   await StoreModel.updateStore(store_id, data);
+}
+
+export async function setStoreActive(store_id: number, is_active: boolean) {
+  const existing = await StoreModel.findStoreById(store_id);
+  if (!existing) throw new ApiError(404, "Store not found");
+  await StoreModel.setStoreActive(store_id, is_active);
 }

@@ -58,7 +58,7 @@ export default function StaffCategoriesPage() {
           : {}),
       });
 
-      if (isFeatured && imageFile) {
+      if (imageFile) {
         try {
           await adminService.uploadCategoryImage(category_id, imageFile);
         } catch {
@@ -108,7 +108,7 @@ export default function StaffCategoriesPage() {
         display_order: editFeatured && editOrder ? Number(editOrder) : null,
       });
 
-      if (editFeatured && editImageFile) {
+      if (editImageFile) {
         await adminService.uploadCategoryImage(c.category_id, editImageFile);
       }
     },
@@ -162,7 +162,7 @@ export default function StaffCategoriesPage() {
           style={{ paddingLeft: `${depth * 20 + 16}px` }}
         >
           <div className="flex items-center gap-2">
-            {c.is_featured && c.image_url ? (
+            {c.image_url ? (
               <img
                 src={c.image_url}
                 alt={c.name}
@@ -183,7 +183,7 @@ export default function StaffCategoriesPage() {
               onClick={() => startEditing(c)}
               className="rounded-lg bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100 hover:cursor-pointer"
             >
-              {c.is_featured ? "Manage" : "Feature"}
+              {c.is_featured ? "Manage" : "Edit"}
             </button>
             <button
               onClick={() => handleDelete(c.category_id, c.name)}
@@ -199,6 +199,18 @@ export default function StaffCategoriesPage() {
             className="flex flex-wrap items-start gap-4 border-b border-slate-100 bg-slate-50 p-4"
             style={{ paddingLeft: `${depth * 20 + 16}px` }}
           >
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">
+                {c.image_url ? "Replace image" : "Category image"}
+              </label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setEditImageFile(e.target.files?.[0] ?? null)}
+                className="text-xs text-slate-600"
+              />
+            </div>
+
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -209,32 +221,17 @@ export default function StaffCategoriesPage() {
             </label>
 
             {editFeatured && (
-              <>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">
-                    Display order
-                  </label>
-                  <input
-                    type="number"
-                    value={editOrder}
-                    onChange={(e) => setEditOrder(e.target.value)}
-                    className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm text-black"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">
-                    {c.image_url ? "Replace image" : "Homepage image"}
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) =>
-                      setEditImageFile(e.target.files?.[0] ?? null)
-                    }
-                    className="text-xs text-slate-600"
-                  />
-                </div>
-              </>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">
+                  Display order
+                </label>
+                <input
+                  type="number"
+                  value={editOrder}
+                  onChange={(e) => setEditOrder(e.target.value)}
+                  className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm text-black"
+                />
+              </div>
             )}
 
             <div className="flex gap-2 self-center">
@@ -319,6 +316,22 @@ export default function StaffCategoriesPage() {
           </div>
 
           <div className="flex w-full flex-col gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">
+                Image (optional)
+              </label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                className="text-xs"
+              />
+              <p className="text-[11px] text-slate-400">
+                Shown on the category&apos;s browse page, and on the homepage
+                too if featured below.
+              </p>
+            </div>
+
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -339,17 +352,6 @@ export default function StaffCategoriesPage() {
                     value={displayOrder}
                     onChange={(e) => setDisplayOrder(e.target.value)}
                     className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm text-black"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">
-                    Homepage image
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                    className="text-xs"
                   />
                 </div>
               </div>

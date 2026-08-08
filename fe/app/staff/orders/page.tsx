@@ -135,7 +135,17 @@ export default function StaffOrdersPage() {
         <DataTable
           columns={[
             { key: "order_id", header: "Order", className: "w-20" },
-            { key: "user_id", header: "User", className: "w-20" },
+            {
+              key: "user_id",
+              header: "User",
+              className: "w-32",
+              render: (r) => (
+                <span title={`User #${r.user_id as number}`}>
+                  {(r.username as string | null | undefined) ??
+                    `#${r.user_id as number}`}
+                </span>
+              ),
+            },
             {
               key: "created_at",
               header: "Date",
