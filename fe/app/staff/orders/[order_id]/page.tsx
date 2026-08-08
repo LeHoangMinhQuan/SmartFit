@@ -9,6 +9,7 @@ import { formatDate, formatPrice } from "../../../../lib/utils";
 import { toast } from "../../../../components/ui/Toast";
 import Spinner from "../../../../components/ui/Spinner";
 import OrderStatusBadge from "../../../../components/order/OrderStatusBadge";
+import { useStaffAuthStore } from "../../../../store/useStaffAuthStore";
 import type { OrderStatus } from "../../../../interfaces";
 
 // Every status the schema allows, for correctly displaying whichever one
@@ -45,6 +46,8 @@ export default function StaffOrderDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const orderId = Number(params.order_id);
+  const currentStaffId = useStaffAuthStore((s) => s.staffId);
+  const isAdmin = useStaffAuthStore((s) => s.isAdmin)();
 
   const orderQuery = useQuery({
     queryKey: ["staff-order", orderId],
@@ -62,9 +65,13 @@ export default function StaffOrderDetailPage() {
     mutationFn: (status: OrderStatus) =>
       adminService.updateOrderStatus(order!.order_id, status),
     onSuccess: (_data, status) => {
-      queryClient.setQueryData(["staff-order", orderId], (old: typeof order) =>
-        old ? { ...old, status } : old,
-      );
+      // A successful call may have just claimed this order (first
+      // staff/admin to advance it past SYSTEM_STAFF_ID — see
+      // adminUpdateStatus in order.service.ts), so refetch rather than
+      // just patch status locally; that's the only way to pick up the new
+      // handler_name/staff_id/is_unclaimed without duplicating the
+      // backend's claim logic here.
+      queryClient.invalidateQueries({ queryKey: ["staff-order", orderId] });
       queryClient.invalidateQueries({ queryKey: ["staff-orders"] });
       toast.success("Status updated.");
     },
@@ -127,6 +134,13 @@ export default function StaffOrderDetailPage() {
   if (!order) return <div className="p-8 text-slate-500">Order not found.</div>;
 
   const isTerminal = TERMINAL_STATUSES.includes(order.status);
+  // STAFF-ROLE FEATURE: pre-emptive lock check, so a staff account sees
+  // *why* the dropdown is disabled instead of only finding out after
+  // submitting and getting the backend's 403 (adminUpdateStatus in
+  // order.service.ts is still the real enforcement — this is just UX).
+  // Admins are never locked out by another staff's claim.
+  const lockedByOther =
+    !order.is_unclaimed && !isAdmin && order.staff_id !== currentStaffId;
 
   return (
     <div className="flex flex-col gap-6 p-8 max-w-3xl">
@@ -145,6 +159,21 @@ export default function StaffOrderDetailPage() {
           <p className="mt-1 text-sm text-slate-500">
             {formatDate(order.created_at)} · User #{order.user_id}
           </p>
+          <p className="mt-1 text-sm">
+            {order.is_unclaimed ? (
+              <span className="text-slate-400 italic">
+                Unassigned — not yet claimed
+              </span>
+            ) : (
+              <span className="text-slate-500">
+                Handled by{" "}
+                <span className="font-medium text-slate-700">
+                  {order.handler_name ?? `Staff #${order.staff_id}`}
+                </span>
+                {order.staff_id === currentStaffId && " (you)"}
+              </span>
+            )}
+          </p>
         </div>
         <OrderStatusBadge status={order.status} />
       </div>
@@ -156,7 +185,7 @@ export default function StaffOrderDetailPage() {
         </span>
         <select
           value={order.status}
-          disabled={updating || isTerminal}
+          disabled={updating || isTerminal || lockedByOther}
           onChange={(e) => handleStatusChange(e.target.value as OrderStatus)}
           className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -170,6 +199,12 @@ export default function StaffOrderDetailPage() {
         {isTerminal && !updating && (
           <span className="text-xs text-slate-400">
             {order.status} is a final status — no further changes possible.
+          </span>
+        )}
+        {lockedByOther && !isTerminal && !updating && (
+          <span className="text-xs text-amber-600">
+            Locked to {order.handler_name ?? `Staff #${order.staff_id}`} — only
+            they or an admin can update this order.
           </span>
         )}
       </div>

@@ -201,6 +201,14 @@ export interface Order {
     vnpay_response_code: string | null;
     created_at: string;
   } | null;
+  // STAFF-ROLE FEATURE: who's handling fulfillment. Present on both the
+  // staff list (findAllOrders) and detail (adminGetOrderDetail) endpoints.
+  // is_unclaimed is true while staff_id still holds the SYSTEM_STAFF_ID
+  // placeholder set at checkout — the first staff/admin to advance the
+  // order's status claims it (see order.service.ts's adminUpdateStatus),
+  // after which only that staff (or any admin) can change it further.
+  handler_name?: string | null;
+  is_unclaimed?: boolean;
 }
 
 export interface OrderItem {

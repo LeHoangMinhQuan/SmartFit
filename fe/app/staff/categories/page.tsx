@@ -199,7 +199,7 @@ export default function StaffCategoriesPage() {
             className="flex flex-wrap items-start gap-4 border-b border-slate-100 bg-slate-50 p-4"
             style={{ paddingLeft: `${depth * 20 + 16}px` }}
           >
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-slate-600">
                 {c.image_url ? "Replace image" : "Category image"}
               </label>
@@ -207,7 +207,7 @@ export default function StaffCategoriesPage() {
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 onChange={(e) => setEditImageFile(e.target.files?.[0] ?? null)}
-                className="text-xs text-slate-600"
+                className="text-xs text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200 focus:outline-none transition"
               />
             </div>
 

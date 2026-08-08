@@ -15,7 +15,7 @@ import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import OrderStatusBadge from "../../../components/order/OrderStatusBadge";
 import Input from "../../../components/ui/Input";
-import type { Order, OrderStatus } from "../../../interfaces";
+import type { OrderStatus } from "../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
@@ -59,17 +59,12 @@ export default function StaffOrdersPage() {
   const updateStatusMutation = useMutation({
     mutationFn: (vars: { order_id: number; status: OrderStatus }) =>
       adminService.updateOrderStatus(vars.order_id, vars.status),
-    onSuccess: (_data, vars) => {
-      queryClient.setQueriesData<{ data: Order[]; meta: unknown } | undefined>(
-        { queryKey: ["staff-orders"] },
-        (old) =>
-          old && {
-            ...old,
-            data: old.data.map((o) =>
-              o.order_id === vars.order_id ? { ...o, status: vars.status } : o,
-            ),
-          },
-      );
+    onSuccess: () => {
+      // Invalidate rather than hand-patch status locally — a successful
+      // call may have just claimed the order (see adminUpdateStatus in
+      // order.service.ts), which would also change handler_name/staff_id/
+      // is_unclaimed on this row, not just status.
+      queryClient.invalidateQueries({ queryKey: ["staff-orders"] });
       toast.success("Status updated.");
     },
     onError: (err) => {
@@ -162,6 +157,19 @@ export default function StaffOrdersPage() {
               render: (r) => (
                 <OrderStatusBadge status={r.status as OrderStatus} />
               ),
+            },
+            {
+              key: "handler_name",
+              header: "Handled By",
+              render: (r) =>
+                r.is_unclaimed ? (
+                  <span className="text-slate-400 italic">Unassigned</span>
+                ) : (
+                  <span title="Locked to this staff member until an admin overrides it">
+                    {(r.handler_name as string | null) ??
+                      `Staff #${r.staff_id as number}`}
+                  </span>
+                ),
             },
             {
               key: "update_status",

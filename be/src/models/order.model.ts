@@ -34,6 +34,20 @@ export async function findOrderById(order_id: number) {
 }
 
 /**
+ * STAFF-ROLE FEATURE: resolves the display name of whoever is currently
+ * handling an order (order.staff_id), for the staff order-detail page.
+ * Kept separate from findOrderById (used in many non-admin contexts —
+ * webhooks, VNPay flows — where this join would be wasted work) rather
+ * than folded into it.
+ */
+export async function findOrderHandlerName(
+  staff_id: number,
+): Promise<string | null> {
+  const row = await db("staff").where({ staff_id }).select("name").first();
+  return row?.name ?? null;
+}
+
+/**
  * Same order row, plus the payment method's name and the customer's
  * display name (from USER) — needed anywhere that has to tell COD from
  * prepaid apart (payment_method.name) or actually reach the customer
@@ -91,6 +105,15 @@ export async function findOrdersByUser(user_id: number, page = 1, limit = 20) {
   return { rows, total: Number(total) };
 }
 
+// STAFF-ROLE FEATURE: order.staff_id is the fulfillment owner (who
+// picks/packs/hands off to the shipper), not who placed the order. Every
+// order starts on staff_id = 1 (SYSTEM_STAFF_ID, see order.service.ts) as
+// a placeholder — it means "unclaimed", not "assigned to staff #1". This
+// constant is duplicated here (rather than imported from order.service.ts)
+// to avoid a circular import between the model and service layers; if it
+// ever changes, keep both in sync.
+const SYSTEM_STAFF_ID = 1;
+
 export async function findAllOrders(filters: {
   status?: string;
   user_id?: number;
@@ -106,9 +129,15 @@ export async function findAllOrders(filters: {
   // otherwise-valid order vanish from the admin list, it should just show
   // no username. "ORDER".* keeps every existing consumer's field shape
   // intact; username is additive.
+  //
+  // Second LEFT JOIN pulls the handling staff's name for display — LEFT
+  // (not inner) so a row is never dropped if a staff account is ever
+  // deleted, and because the placeholder SYSTEM_STAFF_ID row may not be a
+  // "real" staff account worth resolving a name for anyway.
   let query = db("ORDER")
     .leftJoin("USER", "USER.user_id", "ORDER.user_id")
-    .select("ORDER.*", "USER.username");
+    .leftJoin("staff", "staff.staff_id", "ORDER.staff_id")
+    .select("ORDER.*", "USER.username", "staff.name as handler_name");
   if (status) query = query.where({ "ORDER.status": status });
   if (user_id) query = query.where({ "ORDER.user_id": user_id });
   if (from) query = query.where("ORDER.created_at", ">=", from);
@@ -119,19 +148,42 @@ export async function findAllOrders(filters: {
     .limit(limit)
     .offset(offset);
 
+  // is_unclaimed lets the frontend show "Unassigned" instead of a
+  // misleading "System" handler name, without needing to know the magic
+  // placeholder ID itself.
+  const rowsWithClaim = rows.map((r: any) => ({
+    ...r,
+    is_unclaimed: r.staff_id === SYSTEM_STAFF_ID,
+  }));
+
   let countQ = db("ORDER").count("order_id as total");
   if (status) countQ = countQ.where({ status });
   if (user_id) countQ = countQ.where({ user_id });
   const totalResult = await countQ;
   const total = totalResult[0]?.["total"] ?? 0;
 
-  return { rows, total: Number(total) };
+  return { rows: rowsWithClaim, total: Number(total) };
 }
 
 export async function updateOrderStatus(order_id: number, status: OrderStatus) {
   return db("ORDER")
     .where({ order_id })
     .update({ status, updated_at: db.fn.now() });
+}
+
+/**
+ * STAFF-ROLE FEATURE: assigns real fulfillment ownership on an order that
+ * was still sitting on the SYSTEM_STAFF_ID placeholder set at checkout
+ * (see order.service.ts's createOrder — customer-facing requests have no
+ * staff in context, so that placeholder just satisfies ORDER.staff_id's
+ * NOT NULL constraint until someone actually starts working the order).
+ * Called once, by adminUpdateStatus, the first time any staff/admin
+ * advances an order past that placeholder.
+ */
+export async function claimOrder(order_id: number, staff_id: number) {
+  return db("ORDER")
+    .where({ order_id })
+    .update({ staff_id, updated_at: db.fn.now() });
 }
 
 /**

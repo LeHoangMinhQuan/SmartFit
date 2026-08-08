@@ -509,18 +509,51 @@ export async function adminUpdateStatus(
     );
   }
 
-  if (ADMIN_ONLY_TARGET_STATUSES.has(newStatus)) {
-    const roles = await findStaffRoles(actingStaffId);
-    const isAdmin = roles.some((r: { name: string }) => r.name === "admin");
-    if (!isAdmin) {
-      throw new ApiError(
-        403,
-        `Only admin can set order status to '${newStatus}'`,
-      );
-    }
+  const roles = await findStaffRoles(actingStaffId);
+  const isAdmin = roles.some((r: { name: string }) => r.name === "admin");
+
+  if (ADMIN_ONLY_TARGET_STATUSES.has(newStatus) && !isAdmin) {
+    throw new ApiError(
+      403,
+      `Only admin can set order status to '${newStatus}'`,
+    );
+  }
+
+  // ─── Order ownership (STAFF-ROLE FEATURE) ────────────────────────────────
+  // order.staff_id records who is actually handling fulfillment — packing
+  // and handing off to the shipper — not who placed the order (that's
+  // user_id). createOrder() has no staff in its request context (it's a
+  // customer-facing checkout call), so every order is inserted with
+  // SYSTEM_STAFF_ID as a placeholder to satisfy the NOT NULL constraint;
+  // that value means "unclaimed", not "actually assigned to staff #1".
+  //
+  // Ownership rule, per design decision:
+  //   - First staff/admin to advance an order past that placeholder claims
+  //     it — staff_id is set to actingStaffId at that point.
+  //   - Once claimed by a specific staff member (not the system
+  //     placeholder), only that same staff member OR any admin may make
+  //     further status changes. A different staff account is blocked, even
+  //     for otherwise-staff-allowed target statuses like "shipping" or
+  //     "delivered" — this prevents two staff accounts from both working
+  //     the same order and stepping on each other mid-fulfillment.
+  //   - Admins are never blocked by another staff's claim (they can always
+  //     act), but acting as admin on someone else's claimed order does NOT
+  //     transfer ownership — staff_id stays with whoever originally
+  //     claimed it, since admin intervention here is oversight/override,
+  //     not taking over day-to-day fulfillment.
+  const isClaimed = order.staff_id !== SYSTEM_STAFF_ID;
+  if (isClaimed && order.staff_id !== actingStaffId && !isAdmin) {
+    throw new ApiError(
+      403,
+      "This order is already being handled by another staff member",
+    );
   }
 
   await OrderModel.updateOrderStatus(order_id, newStatus as any);
+
+  if (!isClaimed) {
+    await OrderModel.claimOrder(order_id, actingStaffId);
+  }
 }
 
 export async function adminGetOrderDetail(order_id: number) {
@@ -537,6 +570,14 @@ export async function adminGetOrderDetail(order_id: number) {
   const items = await OrderModel.findOrderItems(order_id);
   const shipping = await ShippingModel.findShippingOrderByOrderId(order_id);
 
+  // STAFF-ROLE FEATURE: who's currently handling fulfillment. is_unclaimed
+  // lets the frontend show "Unassigned" without hardcoding the
+  // SYSTEM_STAFF_ID placeholder itself.
+  const is_unclaimed = order.staff_id === SYSTEM_STAFF_ID;
+  const handler_name = is_unclaimed
+    ? null
+    : await OrderModel.findOrderHandlerName(order.staff_id);
+
   // Only relevant once a refund has actually been attempted — lets staff
   // see why a previous attempt failed (e.g. VNPay declined) instead of
   // just seeing the order stuck at 'refund_requested' with no context.
@@ -547,5 +588,12 @@ export async function adminGetOrderDetail(order_id: number) {
     latest_refund = (await findRefundByOrderId(order_id)) ?? null;
   }
 
-  return { ...order, items, shipping, latest_refund };
+  return {
+    ...order,
+    items,
+    shipping,
+    latest_refund,
+    handler_name,
+    is_unclaimed,
+  };
 }
