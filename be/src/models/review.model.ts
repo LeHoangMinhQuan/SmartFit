@@ -54,6 +54,45 @@ export async function findReview(
     .first();
 }
 
+// There's no unique constraint on (product_id, variant_id, user_id) — the
+// table's PK includes review_id (its own identity column), so the DB alone
+// won't stop the same user from submitting the same variant twice. This is
+// the app-level guard submitReview (product.service.ts) checks before
+// inserting.
+export async function hasReviewed(
+  product_id: number,
+  variant_id: number,
+  user_id: number,
+): Promise<boolean> {
+  const row = await db("review")
+    .where({ product_id, variant_id, user_id })
+    .first("review_id");
+  return !!row;
+}
+
+// "Verified purchase" gate for submitReview: true only if this user has an
+// order — in any status that means the item actually reached them, not
+// just "in cart" or "still in transit" — containing this exact
+// product/variant. Deliberately excludes cancelled/refunded/pending/
+// shipping orders: an order that was cancelled or never delivered isn't
+// grounds to review the product itself.
+export async function hasPurchased(
+  product_id: number,
+  variant_id: number,
+  user_id: number,
+): Promise<boolean> {
+  const row = await db("order_item as oi")
+    .join("ORDER as o", "oi.order_id", "o.order_id")
+    .where({
+      "oi.product_id": product_id,
+      "oi.variant_id": variant_id,
+      "o.user_id": user_id,
+      "o.status": "delivered",
+    })
+    .first("oi.order_id");
+  return !!row;
+}
+
 export async function updateReview(
   product_id: number,
   variant_id: number,

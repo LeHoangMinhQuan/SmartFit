@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import axios from "axios";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { productService } from "../../services/product.service";
 import { reviewService } from "../../services/review.service";
@@ -38,6 +39,10 @@ export default function ReviewSection({
     if (isError) toast.error("Failed to load reviews.");
   }, [isError]);
 
+  const alreadyReviewed = !!(
+    user && reviews.some((r) => r.user_id === user.user_id)
+  );
+
   const submitReviewMutation = useMutation({
     mutationFn: () =>
       reviewService.submitReview(product_id, variant_id as number, {
@@ -51,7 +56,17 @@ export default function ReviewSection({
       setHoverRating(0);
       queryClient.invalidateQueries({ queryKey: ["reviews", product_id] });
     },
-    onError: () => toast.error("Failed to submit review."),
+    onError: (err) => {
+      // Backend now rejects reviews from customers who haven't purchased
+      // the item (403) or who already reviewed it (409) — surface those
+      // specific messages instead of a generic "failed" toast, since
+      // they're actionable-to-understand, not transient failures worth
+      // retrying.
+      const message = axios.isAxiosError(err)
+        ? (err.response?.data?.message ?? "Failed to submit review.")
+        : "Failed to submit review.";
+      toast.error(message);
+    },
   });
   const submitting = submitReviewMutation.isPending;
 
@@ -100,7 +115,12 @@ export default function ReviewSection({
       )}
 
       {/* Review Form */}
-      {user && (
+      {user && alreadyReviewed && (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+          You've already reviewed this item. Thanks for sharing your thoughts!
+        </div>
+      )}
+      {user && !alreadyReviewed && (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             <h3 className="text-lg font-semibold text-slate-900">

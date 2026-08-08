@@ -38,6 +38,27 @@ export default function ProductPage() {
   const product = productQuery.data ?? null;
   const loading = productQuery.isLoading;
 
+  // BUG FIX: useWishlistStore was previously only ever populated by
+  // WishlistGrid.tsx (the Profile page). Landing here directly — from
+  // search, a category page, or a fresh reload, all more common than
+  // visiting Profile first — left the store empty, so the heart icon
+  // always showed "not saved" even for items already wishlisted, and a
+  // click would silently re-POST rather than being caught by the
+  // isWishlisted() guard in handleWishlist below. Sharing the same
+  // ["wishlist"] query key as WishlistGrid means react-query dedupes this
+  // against a concurrent/cached fetch rather than hitting the endpoint
+  // twice if both happen to be mounted.
+  const setWishlistItems = useWishlistStore((s) => s.setItems);
+  useQuery({
+    queryKey: ["wishlist"],
+    queryFn: async () => {
+      const data = await wishlistService.getWishlist();
+      setWishlistItems(data);
+      return data;
+    },
+    enabled: !!user,
+  });
+
   // Pre-select first in-stock variant once the product loads.
   useEffect(() => {
     if (!product) return;

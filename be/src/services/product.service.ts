@@ -359,6 +359,32 @@ export async function submitReview(
   const variant = await ProductModel.findVariant(product_id, variant_id);
   if (!variant) throw new ApiError(404, "Product variant not found");
 
+  // BUG FIX: previously anyone signed in could review any product any
+  // number of times — no purchase check and no duplicate guard (the
+  // review table's PK includes its own identity column, so the DB itself
+  // never stopped a second submission). Both checks run before the insert
+  // so a rejected review never touches the table.
+  const purchased = await ReviewModel.hasPurchased(
+    product_id,
+    variant_id,
+    user_id,
+  );
+  if (!purchased) {
+    throw new ApiError(
+      403,
+      "You can only review items you've purchased and received.",
+    );
+  }
+
+  const alreadyReviewed = await ReviewModel.hasReviewed(
+    product_id,
+    variant_id,
+    user_id,
+  );
+  if (alreadyReviewed) {
+    throw new ApiError(409, "You've already reviewed this item.");
+  }
+
   const review_id = await ReviewModel.createReview({
     product_id,
     variant_id,
