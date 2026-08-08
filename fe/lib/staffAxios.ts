@@ -44,7 +44,10 @@ export async function refreshStaffAccessToken(): Promise<string> {
       { withCredentials: true },
     );
     const accessToken = data.data.accessToken;
+    // staffRefresh returns roles fresh (same as login) — apply it here too
+    // so a role change picked up on reload/silent-refresh, not just login.
     useStaffAuthStore.getState().setAccessToken(accessToken);
+    useStaffAuthStore.getState().setRoles(data.data.roles ?? []);
     resolveQueue(accessToken);
     return accessToken;
   } catch (err) {

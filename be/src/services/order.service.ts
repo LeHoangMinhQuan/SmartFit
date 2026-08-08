@@ -6,6 +6,7 @@ import * as VoucherModel from "../models/voucher.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
 import { DEFAULT_STORE_ID } from "../config/store.js";
+import { findStaffRoles } from "../models/staff.model.js";
 
 const SYSTEM_STAFF_ID = 1;
 // Single-store scope (see ecommerce-api-plan.md scope note + §12): GHN has one
@@ -139,10 +140,7 @@ export async function createOrder(
   // vnpay.service.ts reads total_amount directly) silently excluded the
   // delivery fee entirely. shipping_fee is now the server-verified value
   // computed just above, not client input (see the fix above).
-  const total_amount = Math.max(
-    0,
-    rawTotal + shipping_fee - discountAmount,
-  );
+  const total_amount = Math.max(0, rawTotal + shipping_fee - discountAmount);
 
   // 3. Build order items list
   const orderItems = cartItems.map((item: any) => ({
@@ -465,7 +463,41 @@ export async function adminListOrders(
   return OrderModel.findAllOrders(filters);
 }
 
-export async function adminUpdateStatus(order_id: number, newStatus: string) {
+// STAFF-ROLE FEATURE: which target statuses require the 'admin' role,
+// versus which any staff account (admin or staff) may set. Route-level
+// authorize('admin', 'staff') on PATCH /orders/:order_id/status lets both
+// roles hit this endpoint at all — this set is the finer-grained split
+// requested on top of that, keyed by the TARGET status rather than the
+// (from, to) pair, since these three are sensitive regardless of which
+// status the order is coming from:
+//   - "cancelled"        — a cancellation, per the "cancel/refund is
+//                           admin-only" decision.
+//   - "refund_requested" — the first step of a refund; same reasoning.
+//   - "paid"             — NOT a cancel or refund, but a manual override
+//                           marking an order as paid without going
+//                           through the real VNPay confirmation flow
+//                           (see VALID_TRANSITIONS's own comment on why
+//                           "refunded" is deliberately excluded from this
+//                           table for the same kind of reason — a manual
+//                           status change standing in for a real payment
+//                           event is a financial-trust action, not an
+//                           operational one). This wasn't explicitly
+//                           named in the cancel/refund instruction — flag
+//                           this one if you want "paid" opened up to
+//                           staff too.
+// Any other target (payment_failed, cod_confirmed, preparing, shipping,
+// delivered) is left staff-allowed as ordinary fulfillment progress.
+const ADMIN_ONLY_TARGET_STATUSES = new Set([
+  "paid",
+  "cancelled",
+  "refund_requested",
+]);
+
+export async function adminUpdateStatus(
+  order_id: number,
+  newStatus: string,
+  actingStaffId: number,
+) {
   const order = await OrderModel.findOrderById(order_id);
   if (!order) throw new ApiError(404, "Order not found");
 
@@ -475,6 +507,17 @@ export async function adminUpdateStatus(order_id: number, newStatus: string) {
       400,
       `Cannot transition from '${order.status}' to '${newStatus}'`,
     );
+  }
+
+  if (ADMIN_ONLY_TARGET_STATUSES.has(newStatus)) {
+    const roles = await findStaffRoles(actingStaffId);
+    const isAdmin = roles.some((r: { name: string }) => r.name === "admin");
+    if (!isAdmin) {
+      throw new ApiError(
+        403,
+        `Only admin can set order status to '${newStatus}'`,
+      );
+    }
   }
 
   await OrderModel.updateOrderStatus(order_id, newStatus as any);

@@ -16,62 +16,79 @@ import {
   Store,
   LogOut,
 } from "lucide-react";
+// adminOnly items mirror the backend's admin-only route groups in
+// admin.routes.ts (Staff management, Roles, Stores, Vouchers, Discounts,
+// Users are all authorize("admin") only there) — hiding them here is just
+// UX (the API still gates it), so keep this list in sync with that file
+// if the backend split ever changes.
 const NAV_ITEMS = [
   {
     href: "/staff",
     label: "Dashboard",
     icon: LayoutDashboard,
+    adminOnly: false,
   },
   {
     href: "/staff/products",
     label: "Products",
     icon: Package,
+    adminOnly: false,
   },
   {
     href: "/staff/categories",
     label: "Categories",
     icon: FolderTree,
+    adminOnly: false,
   },
   {
     href: "/staff/orders",
     label: "Orders",
     icon: ShoppingBag,
+    adminOnly: false,
   },
   {
     href: "/staff/inventory",
     label: "Inventory",
     icon: Boxes,
+    adminOnly: false,
   },
   {
     href: "/staff/suppliers",
     label: "Suppliers",
     icon: Truck,
+    adminOnly: false,
   },
   {
     href: "/staff/vouchers",
     label: "Vouchers",
     icon: TicketPercent,
+    adminOnly: true,
   },
   {
     href: "/staff/users",
     label: "Users",
     icon: Users,
+    adminOnly: true,
   },
   {
     href: "/staff/staff",
     label: "Staffs",
     icon: UserCog,
+    adminOnly: true,
   },
   {
     href: "/staff/stores",
     label: "Stores",
     icon: Store,
+    adminOnly: true,
   },
 ];
 export default function StaffSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { name, logout } = useStaffAuthStore();
+  const { name, logout, isAdmin } = useStaffAuthStore();
+  const admin = isAdmin();
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || admin);
   function handleLogout() {
     logout();
     router.push("/staff/login");
@@ -90,7 +107,7 @@ export default function StaffSidebar() {
         </div>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const active =
             item.href === "/staff"
               ? pathname === "/staff"

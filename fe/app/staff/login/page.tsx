@@ -23,7 +23,7 @@ export default function StaffLoginPage() {
 
     try {
       // POST /admin/auth/login — body: { staff_id, password }
-      // Response payload carries { staff_id, name, accessToken } per the staff JWT shape.
+      // Response payload carries { staff_id, name, roles, accessToken }.
       const { data } = await staffApi.post("/admin/auth/login", {
         staff_id: Number(staffId),
         password,
@@ -33,6 +33,7 @@ export default function StaffLoginPage() {
         extractedData.staff_id,
         extractedData.name,
         extractedData.accessToken,
+        extractedData.roles ?? [],
       );
       router.push("/staff");
     } catch (err) {

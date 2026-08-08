@@ -344,6 +344,7 @@ export const adminUpdateOrderStatus = catchAsync(
     await OrderService.adminUpdateStatus(
       Number(req.params["order_id"]),
       req.body.status,
+      (req as any).staff.staff_id,
     );
     res.json({ data: { message: "Status updated" } });
   },

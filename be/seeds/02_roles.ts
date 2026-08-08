@@ -1,6 +1,6 @@
 import { Knex } from "knex";
 
-const DEFAULT_ROLES = ["admin"];
+const DEFAULT_ROLES = ["admin", "staff"];
 
 // staff_id=1 is the System account seeded in 01_system_staff.ts, which
 // runs before this file (alphabetical seed order) — safe to reference here.
