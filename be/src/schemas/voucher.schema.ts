@@ -7,6 +7,12 @@ export const validateVoucherSchema = z.object({
   }),
 });
 
+export const listAvailableVouchersSchema = z.object({
+  query: z.object({
+    order_amount: z.coerce.number().positive().optional(),
+  }),
+});
+
 export const createVoucherSchema = z.object({
   body: z.object({
     code: z.string().min(1).max(15),

@@ -37,7 +37,7 @@ export async function findAllVouchers(page = 1, limit = 20) {
     .limit(limit)
     .offset(offset);
   const totalResult = await db("voucher").count("voucher_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
+  const total = totalResult[0]?.["total"] ?? 0;
   return { rows, total: Number(total) };
 }
 
@@ -63,6 +63,21 @@ export async function validateVoucher(code: string, order_amount: number) {
   if (order_amount < voucher.min_amount) return null;
 
   return voucher;
+}
+
+/**
+ * All vouchers a customer could currently pick from a "browse vouchers"
+ * list: not expired, not started in the future, and not already
+ * exhausted globally. Per-user eligibility (min_amount vs. the current
+ * cart, already-used) is left to the service layer — this only filters
+ * on what's true regardless of who's asking.
+ */
+export async function findActiveVouchers() {
+  return db("voucher")
+    .whereRaw("start_date <= now()")
+    .andWhereRaw("end_date >= now()")
+    .andWhereRaw("usage_count < usage_limit")
+    .orderBy("value", "desc");
 }
 
 /**

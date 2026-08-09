@@ -2,6 +2,7 @@ import type { UIMessage } from "ai";
 import ChatProductCard from "./ChatProductCard";
 import ChatCartRedirect from "./ChatCartRedirect";
 import ChatCheckoutRedirect from "./ChatCheckoutRedirect";
+import FormattedChatText from "./FormattedChatText";
 import type {
   ChatAddToCartOutput,
   ChatPrepareCheckoutOutput,
@@ -34,7 +35,7 @@ export default function ChatMessageBubble({ message }: ChatMessageBubbleProps) {
           if (part.type === "text") {
             return (
               <p key={i} className="whitespace-pre-wrap">
-                {part.text}
+                <FormattedChatText text={part.text} />
               </p>
             );
           }

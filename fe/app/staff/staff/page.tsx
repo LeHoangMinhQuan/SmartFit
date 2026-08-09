@@ -15,7 +15,7 @@ export default function StaffListPage() {
     queryKey: ["staff-staff-list"],
     queryFn: () => adminService.getStaffList(),
   });
-  const staffList = data?.data ?? [];
+  const staffList = data ?? [];
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({
     name: "",

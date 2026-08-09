@@ -65,7 +65,19 @@ export async function seed(knex: Knex): Promise<void> {
     image_url:
       "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800",
   });
-  const jacketsId = await getOrCreateCategory("Jackets", null); // not featured — exercises the "unfeatured category" path
+  const jacketsId = await getOrCreateCategory("Jackets", null, {
+    // Still unfeatured on purpose — exercises the "unfeatured category"
+    // path independently of image presence. Previously had no image_url
+    // at all, which exercised the categories page's no-image fallback
+    // (plain gray tile, no broken <img> icon — see (customer)/categories/
+    // page.tsx's `{category.image_url && (...)}` guard) but looked like a
+    // rendering bug in a screenshot next to every other category having a
+    // photo. Giving it a real image here removes that visual gap; the
+    // no-image code path itself is still exercised by any category a real
+    // admin creates via POST /categories without uploading an image.
+    image_url:
+      "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800",
+  });
   await getOrCreateCategory("Formal", shirtsId); // nested under Shirts — exercises tree depth, no products assigned
 
   // "All" and "Brands" back the Header's nav links (/category/all,

@@ -391,8 +391,17 @@ export const adminService = {
       .then((r) => r.data.data),
 
   // ── Staff ──
-  getStaffList: () =>
-    api.get<ApiResponse<Staff[]>>("/admin/staff").then((r) => r.data),
+  // assignable=true excludes the SYSTEM_STAFF_ID placeholder ("System")
+  // — selecting it from the order-assign combobox would write staff_id
+  // back to the exact value that means "unclaimed", making the assignment
+  // silently no-op. General staff-management pages should call this
+  // without the param, since an admin does need to see/manage that row.
+  getStaffList: (opts?: { assignable?: boolean }) =>
+    api
+      .get<ApiResponse<Staff[]>>("/admin/staff", {
+        params: opts?.assignable ? { assignable: "true" } : undefined,
+      })
+      .then((r) => r.data.data),
 
   createStaff: (body: CreateStaffBody) =>
     api

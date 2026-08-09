@@ -3,6 +3,48 @@ import { DEFAULT_STORE_ID } from "../../config/store.js";
 
 // ─── Product ────────────────────────────────────────────────────────────────
 
+// Correlated-subquery SQL fragments for surfacing a product's cheapest
+// currently-active discount on any list-style query (findAllProducts,
+// findTopSellingProducts) without joining product_discount/discount
+// directly into an already-GROUP-BY'd query — a direct join would
+// multiply rows across variant×discount combinations before MIN()/MAX()
+// ever runs. Both fragments must be selected together — discounted_price
+// null implies discount_original_price is null too, and vice versa.
+// Referenced only via p.product_id, so safe to reuse verbatim in any
+// query that aliases the product table as "p".
+const DISCOUNTED_PRICE_SQL = `(
+  select pp2.base_price - case when d.voucher_type = 'percent'
+    then pp2.base_price * d.voucher_value / 100
+    else d.voucher_value
+  end
+  from product_discount pd2
+  join discount d on d.discount_id = pd2.discount_id
+  join product_price pp2
+    on pp2.product_id = pd2.product_id and pp2.variant_id = pd2.variant_id
+  where pd2.product_id = p.product_id
+    and d.start_date <= now() and d.end_date >= now()
+  order by (pp2.base_price - case when d.voucher_type = 'percent'
+    then pp2.base_price * d.voucher_value / 100
+    else d.voucher_value
+  end) asc
+  limit 1
+) as discounted_price`;
+
+const DISCOUNT_ORIGINAL_PRICE_SQL = `(
+  select pp2.base_price
+  from product_discount pd2
+  join discount d on d.discount_id = pd2.discount_id
+  join product_price pp2
+    on pp2.product_id = pd2.product_id and pp2.variant_id = pd2.variant_id
+  where pd2.product_id = p.product_id
+    and d.start_date <= now() and d.end_date >= now()
+  order by (pp2.base_price - case when d.voucher_type = 'percent'
+    then pp2.base_price * d.voucher_value / 100
+    else d.voucher_value
+  end) asc
+  limit 1
+) as discount_original_price`;
+
 export interface Product {
   product_id?: number;
   name: string;
@@ -75,6 +117,12 @@ export async function findAllProducts(filters: {
       "pi.s3_url as preview_image",
       db.raw("min(pp.base_price) as min_price"),
       db.raw("max(pp.base_price) as max_price"),
+      // Discount surfacing (was previously entirely missing — list
+      // endpoints always returned originalPrice=undefined/
+      // discountActive=false hardcoded on the frontend, see
+      // product.service.ts's toSummary).
+      db.raw(DISCOUNTED_PRICE_SQL),
+      db.raw(DISCOUNT_ORIGINAL_PRICE_SQL),
     )
     .leftJoin("product_image as pi", function () {
       this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
@@ -148,6 +196,8 @@ export async function findTopSellingProducts(limit = 8) {
       db.raw("min(pp.base_price) as min_price"),
       db.raw("max(pp.base_price) as max_price"),
       db.raw("coalesce(sum(oi.quantity), 0) as sold_count"),
+      db.raw(DISCOUNTED_PRICE_SQL),
+      db.raw(DISCOUNT_ORIGINAL_PRICE_SQL),
     )
     .leftJoin("product_image as pi", function () {
       this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
@@ -253,6 +303,27 @@ export async function findVariantsByProduct(product_id: number) {
       // previously missing entirely, so every variant showed as out of
       // stock in the UI regardless of actual store_product rows.
       db.raw("COALESCE(sp.quantity, 0) as stock"),
+      // Active discount for this variant, if any — same "currently
+      // active" window as findActiveDiscountForVariant in
+      // product_discount.model.ts (start_date <= now <= end_date), reused
+      // here as an aggregate rather than a follow-up per-variant query.
+      // jsonb_agg + DISTINCT (matching the attributes/images pattern
+      // above) rather than json_build_object bare, in case a variant is
+      // ever assigned more than one discount that happens to overlap in
+      // time — picks one deterministically instead of erroring or
+      // silently multiplying variant rows the way a plain join would.
+      // `-> 0` unwraps the single-element array back to an object (or
+      // null if the filter matched nothing).
+      db.raw(
+        `(jsonb_agg(DISTINCT jsonb_build_object(
+            'discount_id', d.discount_id,
+            'voucher_code', d.voucher_code,
+            'voucher_type', d.voucher_type,
+            'voucher_value', d.voucher_value,
+            'start_date', d.start_date,
+            'end_date', d.end_date
+          )) filter (where d.discount_id is not null))[1] as discount`,
+      ),
     )
     .leftJoin("product_attribute as pa", function () {
       this.on("pv.product_id", "pa.product_id").andOn(
@@ -276,6 +347,26 @@ export async function findVariantsByProduct(product_id: number) {
       this.on("pv.product_id", "sp.product_id")
         .andOn("pv.variant_id", "sp.variant_id")
         .andOnVal("sp.store_id", DEFAULT_STORE_ID);
+    })
+    .leftJoin("product_discount as pd", function () {
+      this.on("pv.product_id", "pd.product_id").andOn(
+        "pv.variant_id",
+        "pd.variant_id",
+      );
+    })
+    .leftJoin("discount as d", function () {
+      // Active-window filter belongs in the JOIN condition, not a WHERE
+      // clause — WHERE would silently turn this into an inner join and
+      // drop every variant with no currently-active discount, the same
+      // storefront regression this whole feature is meant to fix.
+      // Raw comparisons rather than andOnVal's operator overload, since
+      // every other andOnVal call in this codebase is equality-only —
+      // using the less-common 3-arg form here would be inconsistent with
+      // that convention and harder to be sure behaves as expected with
+      // db.fn.now() as the compared value.
+      this.on("pd.discount_id", "d.discount_id")
+        .andOn(db.raw("d.start_date <= now()"))
+        .andOn(db.raw("d.end_date >= now()"));
     })
     .where("pv.product_id", product_id)
     .groupBy(

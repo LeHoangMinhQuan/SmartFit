@@ -14,6 +14,21 @@ export const validateVoucher = catchAsync(
   },
 );
 
+export const listAvailableVouchers = catchAsync(
+  async (req: Request, res: Response) => {
+    // validate() middleware (listAvailableVouchersSchema) already coerced
+    // this to a number via z.coerce.number() and reassigned req.query.
+    const order_amount = req.query["order_amount"] as unknown as
+      | number
+      | undefined;
+    const result = await VoucherService.listAvailableVouchers(
+      (req as any).user.user_id,
+      order_amount,
+    );
+    res.json({ data: result });
+  },
+);
+
 // ─── Admin — Vouchers ─────────────────────────────────────────────────────────
 
 export const adminListVouchers = catchAsync(

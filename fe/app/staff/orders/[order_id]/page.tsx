@@ -81,10 +81,13 @@ export default function StaffOrderDetailPage() {
 
   const staffListQuery = useQuery({
     queryKey: ["staff-list-for-assign"],
-    queryFn: () => adminService.getStaffList(),
+    // assignable: true — excludes the "System" placeholder account, whose
+    // staff_id IS the value that means "unclaimed". Selecting it here
+    // used to silently no-op the assignment (see admin.service.ts).
+    queryFn: () => adminService.getStaffList({ assignable: true }),
     enabled: canAssign,
   });
-  const staffList = staffListQuery.data?.data ?? [];
+  const staffList = staffListQuery.data ?? [];
 
   const assignStaffMutation = useMutation({
     mutationFn: (staff_id: number) =>

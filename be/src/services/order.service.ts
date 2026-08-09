@@ -646,6 +646,18 @@ export async function adminAssignStaff(
   order_id: number,
   targetStaffId: number,
 ) {
+  if (targetStaffId === SYSTEM_STAFF_ID) {
+    // Defensive guard — the assign-combobox now excludes this account at
+    // the source (GET /admin/staff?assignable=true), but this endpoint
+    // shouldn't rely solely on the frontend never sending it. Assigning to
+    // the placeholder is a no-op that looks like success (the write
+    // happens, is_unclaimed stays true) — reject it explicitly instead.
+    throw new ApiError(
+      400,
+      "Cannot assign an order to the system placeholder account",
+    );
+  }
+
   const order = await OrderModel.findOrderById(order_id);
   if (!order) throw new ApiError(404, "Order not found");
 

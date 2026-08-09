@@ -1,5 +1,13 @@
 import db from "../config/db.js";
 
+// SYSTEM_STAFF_ID (duplicated rather than imported — same convention
+// order.model.ts/order.service.ts already use for this constant, to avoid
+// a circular import between model/service layers) — staff_id=1, the
+// placeholder "System" account every order starts on. Must never be
+// offered as an assignment target, since selecting it would just write
+// the order's staff_id back to the exact value that means "unclaimed".
+const SYSTEM_STAFF_ID = 1;
+
 // ─── Staff ────────────────────────────────────────────────────────────────────
 
 export interface Staff {
@@ -21,14 +29,26 @@ export async function findStaffById(staff_id: number) {
   return db("staff").where({ staff_id }).first();
 }
 
-export async function findAllStaff(page = 1, limit = 20) {
+export async function findAllStaff(
+  page = 1,
+  limit = 20,
+  excludeSystem = false,
+) {
   const offset = (page - 1) * limit;
-  const rows = await db("staff")
-    .select("staff_id", "name", "birth_date", "start_time")
-    .limit(limit)
-    .offset(offset);
-  const totalResult = await db("staff").count("staff_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
+  let query = db("staff").select(
+    "staff_id",
+    "name",
+    "birth_date",
+    "start_time",
+  );
+  let countQuery = db("staff").count("staff_id as total");
+  if (excludeSystem) {
+    query = query.whereNot({ staff_id: SYSTEM_STAFF_ID });
+    countQuery = countQuery.whereNot({ staff_id: SYSTEM_STAFF_ID });
+  }
+  const rows = await query.limit(limit).offset(offset);
+  const totalResult = await countQuery;
+  const total = totalResult[0]?.["total"] ?? 0;
   return { rows, total: Number(total) };
 }
 

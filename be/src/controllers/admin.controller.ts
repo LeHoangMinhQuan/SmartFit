@@ -112,8 +112,20 @@ export const staffLogout = catchAsync(async (req: Request, res: Response) => {
 // ─── Staff CRUD ───────────────────────────────────────────────────────────────
 
 export const listStaff = catchAsync(async (req: Request, res: Response) => {
-  const { page, limit } = req.query as any;
-  const result = await StaffService.listStaff(page, limit);
+  const { page, limit, assignable } = req.query as any;
+  // assignable=true excludes the SYSTEM_STAFF_ID placeholder account
+  // ("System", staff_id=1) — used by the order-assign combobox, which must
+  // never offer it as a real handler. Selecting it would silently write
+  // staff_id back to the exact value that means "unclaimed" (see
+  // OrderService.adminAssignStaff), making the assignment look like a
+  // no-op even though the write succeeded. The general staff-management
+  // list intentionally keeps showing the System row (page unaffected),
+  // since an admin does still need to see/manage it there.
+  const result = await StaffService.listStaff(
+    page,
+    limit,
+    assignable === "true",
+  );
   res.json({ data: result.rows, meta: { total: result.total } });
 });
 

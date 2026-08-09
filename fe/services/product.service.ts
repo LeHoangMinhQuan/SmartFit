@@ -16,6 +16,11 @@ interface RawProductListItem {
   preview_image: string | null; // pi.s3_url as preview_image
   min_price: string | null; // Knex numeric aggregate → string
   max_price: string | null;
+  // Present when this product has at least one currently-active discount
+  // on some variant (see findAllProducts's correlated subqueries) — both
+  // null together if no active discount exists.
+  discounted_price: string | null;
+  discount_original_price: string | null;
 }
 
 /**
@@ -23,14 +28,33 @@ interface RawProductListItem {
  * Option A: avg_rating is always null on list pages.
  */
 function toSummary(item: RawProductListItem): ProductSummary {
+  // Was previously hardcoded to undefined/false here regardless of what
+  // the API returned, because the list endpoint never computed a
+  // discount at all. Now that findAllProducts does, surface it — but the
+  // card should show the *lower* of "cheapest variant" vs "cheapest
+  // discounted variant" as the headline price; they're not necessarily
+  // the same variant, so don't just always prefer the discounted one.
+  const minPrice = item.min_price != null ? Number(item.min_price) : null;
+  const discountedPrice =
+    item.discounted_price != null ? Number(item.discounted_price) : null;
+  const discountOriginalPrice =
+    item.discount_original_price != null
+      ? Number(item.discount_original_price)
+      : null;
+
+  const discountActive =
+    discountedPrice != null &&
+    discountOriginalPrice != null &&
+    (minPrice == null || discountedPrice <= minPrice);
+
   return {
     product_id: item.product_id,
     name: item.name,
     description: item.description,
     image: item.preview_image,
-    price: item.min_price != null ? Number(item.min_price) : null,
-    originalPrice: undefined, // not returned by list endpoints
-    discountActive: false, // not returned by list endpoints
+    price: discountActive ? discountedPrice : minPrice,
+    originalPrice: discountActive ? discountOriginalPrice : undefined,
+    discountActive,
     avg_rating: null, // Option A: only populated on product detail page
   };
 }

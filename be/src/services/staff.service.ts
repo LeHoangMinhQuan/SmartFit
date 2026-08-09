@@ -19,8 +19,12 @@ export async function verifyStaffPassword(staff_id: number, password: string) {
 
 // ─── Staff CRUD ───────────────────────────────────────────────────────────────
 
-export async function listStaff(page?: number, limit?: number) {
-  return StaffModel.findAllStaff(page, limit);
+export async function listStaff(
+  page?: number,
+  limit?: number,
+  excludeSystem?: boolean,
+) {
+  return StaffModel.findAllStaff(page, limit, excludeSystem);
 }
 
 export async function getStaff(staff_id: number) {

@@ -22,6 +22,66 @@ export async function validateVoucher(code: string, order_amount: number) {
   };
 }
 
+/**
+ * Powers the customer-facing "browse vouchers" list (checkout's
+ * VoucherInput) — everything validateVoucher() would eventually accept or
+ * reject for this order_amount, up front, instead of the customer having
+ * to guess codes and try them one at a time.
+ *
+ * order_amount is optional: the list can be shown before the cart total
+ * is known (e.g. an entry point outside checkout) — in that case every
+ * voucher is just reported without eligible/discount_amount rather than
+ * failing the whole request.
+ */
+export async function listAvailableVouchers(
+  user_id: number,
+  order_amount?: number,
+) {
+  const vouchers = await VoucherModel.findActiveVouchers();
+
+  const results = await Promise.all(
+    vouchers.map(async (voucher) => {
+      const already_used = await VoucherModel.hasUserUsedVoucher(
+        voucher.voucher_id!,
+        user_id,
+      );
+      const eligible =
+        order_amount == null ? null : order_amount >= voucher.min_amount;
+      const discount_amount =
+        order_amount != null && eligible
+          ? VoucherModel.computeVoucherDiscount(voucher, order_amount)
+          : null;
+
+      return {
+        voucher_id: voucher.voucher_id,
+        code: voucher.code,
+        description: voucher.description,
+        type: voucher.type,
+        value: voucher.value,
+        max_discount: voucher.max_discount,
+        min_amount: voucher.min_amount,
+        end_date: voucher.end_date,
+        already_used,
+        eligible,
+        discount_amount,
+      };
+    }),
+  );
+
+  // Best offers first: eligible-and-unused ahead of everything else, then
+  // by discount size (falling back to raw value when order_amount wasn't
+  // given, so the list still has a sensible order).
+  return results.sort((a, b) => {
+    const aUsable = a.eligible !== false && !a.already_used;
+    const bUsable = b.eligible !== false && !b.already_used;
+    if (aUsable !== bUsable) return aUsable ? -1 : 1;
+    return (
+      (b.discount_amount ?? Number(b.value)) -
+      (a.discount_amount ?? Number(a.value))
+    );
+  });
+}
+
 export async function adminListVouchers(page?: number, limit?: number) {
   return VoucherModel.findAllVouchers(page, limit);
 }

@@ -129,22 +129,20 @@ export default function StaffOrdersPage() {
           placeholder="Filter by user…"
           className="w-36"
         />
-        <label className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+        <label
+          className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+          title="Confirmed orders (paid / cod_confirmed) with no GHN shipment created yet"
+        >
           <input
             type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
             checked={needsFulfillmentOnly}
             onChange={(e) => {
               setNeedsFulfillmentOnly(e.target.checked);
               setPage(1);
             }}
           />
-          Needs fulfillment
-          <span
-            className="text-xs font-normal text-amber-600"
-            title="Confirmed orders (paid / cod_confirmed) with no GHN shipment created yet"
-          >
-            (shipment missing)
-          </span>
+          Missing GHN Shipment
         </label>
       </div>
 
