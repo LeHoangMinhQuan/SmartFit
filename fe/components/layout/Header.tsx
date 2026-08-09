@@ -1,19 +1,17 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useCartStore } from "@/store/useCartStore";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import LoginModal from "@/components/auth/LoginModal";
 import RegisterModal from "@/components/auth/RegisterModal";
 import ForgotPasswordModal from "@/components/auth/ForgotPasswordModal";
 import UserMenu from "@/components/UserMenu";
+import SearchBar from "@/components/layout/SearchBar";
 
 export default function Header() {
-  const router = useRouter();
   const cartItems = useCartStore((state) => state.items ?? []);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const [searchValue, setSearchValue] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const {
@@ -28,12 +26,8 @@ export default function Header() {
     closeForgotPassword,
   } = useAuthModalStore();
 
-  function submitSearch(e?: React.FormEvent) {
-    e?.preventDefault();
-    const q = searchValue.trim();
-    if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}`);
-    setMobileSearchOpen(false);
+  function toggleMobileSearch() {
+    setMobileSearchOpen((v) => !v);
   }
 
   return (
@@ -78,29 +72,11 @@ export default function Header() {
 
           {/* Search & Icons */}
           <div className="flex items-center gap-4 flex-1 justify-end md:flex-none">
-            <form
-              onSubmit={submitSearch}
-              className="hidden sm:flex items-center bg-[#F0F0F0] rounded-full px-4 py-2 w-full max-w-[300px] sm:w-[180px] md:w-[220px] lg:w-[300px]"
-            >
-              <button
-                type="submit"
-                aria-label="Search"
-                className="text-gray-400 mr-2 shrink-0"
-              >
-                🔍
-              </button>
-              <input
-                type="text"
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                placeholder="Search for products..."
-                className="bg-transparent outline-none w-full text-black placeholder-gray-400"
-              />
-            </form>
+            <SearchBar className="hidden sm:block w-full max-w-[300px] sm:w-[180px] md:w-[220px] lg:w-[300px]" />
             <button
               type="button"
               aria-label="Search"
-              onClick={() => setMobileSearchOpen((v) => !v)}
+              onClick={toggleMobileSearch}
               className="sm:hidden text-xl"
             >
               🔍
@@ -122,26 +98,10 @@ export default function Header() {
             rather than being a second, separate implementation. */}
         {mobileSearchOpen && (
           <div className="sm:hidden border-t border-gray-100 px-4 py-3">
-            <form
-              onSubmit={submitSearch}
-              className="flex items-center bg-[#F0F0F0] rounded-full px-4 py-2"
-            >
-              <button
-                type="submit"
-                aria-label="Search"
-                className="text-gray-400 mr-2 shrink-0"
-              >
-                🔍
-              </button>
-              <input
-                type="text"
-                autoFocus
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                placeholder="Search for products..."
-                className="bg-transparent outline-none w-full text-black placeholder-gray-400"
-              />
-            </form>
+            <SearchBar
+              autoFocus
+              onNavigate={() => setMobileSearchOpen(false)}
+            />
           </div>
         )}
       </header>

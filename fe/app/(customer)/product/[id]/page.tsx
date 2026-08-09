@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { productService } from "../../../../services/product.service";
 import { cartService } from "../../../../services/cart.service";
 import { wishlistService } from "../../../../services/wishlist.service";
@@ -17,7 +17,7 @@ import VariantSelector from "../../../../components/product/VariantSelector";
 import PriceDisplay from "../../../../components/product/PriceDisplay";
 import ReviewSection from "../../../../components/product/ReviewSection";
 import { Heart, LogIn } from "lucide-react";
-import type { ProductVariant } from "../../../../interfaces";
+import type { ProductVariant, WishlistItem } from "../../../../interfaces";
 
 export default function ProductPage() {
   const params = useParams();
@@ -26,7 +26,12 @@ export default function ProductPage() {
   const user = useAuthStore((s) => s.user);
   const openLogin = useAuthModalStore((s) => s.openLogin);
   const { addItem: addLocalItem, setCartData } = useCartStore();
-  const { addItem: addWishlistItem, isWishlisted } = useWishlistStore();
+  const {
+    addItem: addWishlistItem,
+    removeItem: removeWishlistItem,
+    isWishlisted,
+  } = useWishlistStore();
+  const queryClient = useQueryClient();
 
   const [selected, setSelected] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -141,7 +146,7 @@ export default function ProductPage() {
         variant_id: vars.variant_id,
       }),
     onSuccess: (_data, vars) => {
-      addWishlistItem({
+      const newItem: WishlistItem = {
         product_id: productId,
         variant_id: vars.variant_id,
         created_at: new Date().toISOString(),
@@ -149,12 +154,41 @@ export default function ProductPage() {
         variant_name: selected?.name,
         base_price: String(selected?.base_price),
         image_url: displayImages[0]?.s3_url ?? null,
-      });
+      };
+      addWishlistItem(newItem);
+      queryClient.setQueryData(
+        ["wishlist"],
+        (prev: WishlistItem[] | undefined) => [...(prev ?? []), newItem],
+      );
       toast.success("Saved to wishlist!");
     },
     onError: () => toast.error("Failed to update wishlist."),
   });
-  const wishBusy = addWishlistMutation.isPending;
+
+  // BUG FIX: there was previously no way to remove from this page at
+  // all — handleWishlist would just toast "Already in your wishlist."
+  // and stop, so clicking the (visibly filled/active) heart again did
+  // nothing. Mirrors WishlistGrid.tsx's removeMutation.
+  const removeWishlistMutation = useMutation({
+    mutationFn: (vars: { variant_id: number }) =>
+      wishlistService.removeFromWishlist(productId, vars.variant_id),
+    onSuccess: (_data, vars) => {
+      removeWishlistItem(productId, vars.variant_id);
+      queryClient.setQueryData(
+        ["wishlist"],
+        (prev: WishlistItem[] | undefined) =>
+          (prev ?? []).filter(
+            (i) =>
+              !(i.product_id === productId && i.variant_id === vars.variant_id),
+          ),
+      );
+      toast.success("Removed from wishlist.");
+    },
+    onError: () => toast.error("Failed to remove from wishlist."),
+  });
+
+  const wishBusy =
+    addWishlistMutation.isPending || removeWishlistMutation.isPending;
 
   async function handleWishlist() {
     if (!user) {
@@ -166,7 +200,7 @@ export default function ProductPage() {
       return;
     }
     if (isWishlisted(productId, selected.variant_id)) {
-      toast.info("Already in your wishlist.");
+      removeWishlistMutation.mutate({ variant_id: selected.variant_id });
       return;
     }
     addWishlistMutation.mutate({ variant_id: selected.variant_id });

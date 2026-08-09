@@ -23,7 +23,7 @@ export default function PriceDisplay({
     <div className="flex items-baseline gap-3">
       {discounted !== null ? (
         <>
-          <span className="text-2xl font-bold text-gray-900 text-red-600">
+          <span className="text-2xl font-bold text-red-600">
             {formatPrice(discounted)}
           </span>
           <span className="text-base text-gray-400 line-through">
