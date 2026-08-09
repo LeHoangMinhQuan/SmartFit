@@ -29,7 +29,25 @@ import { useAuthStore } from "@/store/useAuthStore";
  * Mirrors SessionVerifier.tsx's "run once after hydration" shape.
  */
 export default function GoogleSessionBridge() {
-  const { data: session, status } = useSession();
+  // FIXED (2026-08-09): only destructure `status` (a plain string), not
+  // `data: session`. next-auth's SessionProvider context frequently hands
+  // back a new `session` object reference on renders where the data is
+  // otherwise unchanged. With `session` in this effect's dependency
+  // array, ANY unrelated re-render of this always-mounted component
+  // (toast, cart update, route change — anything) could recreate the
+  // session reference, which reran the effect's cleanup mid-flight
+  // (`cancelled = true`) while the sync fetch was still in the air. The
+  // fetch would complete, see `cancelled === true`, and silently drop
+  // `setAuth(body.user)` — but `syncedRef.current` was already `true`
+  // and nothing resets it on that path, so the bridge could never retry
+  // without a full page reload (a fresh mount ⇒ fresh ref). That's
+  // exactly the "logs in with Google, UI never updates until I refresh
+  // (or it randomly catches up a few seconds later if no re-render
+  // happened to land in that window)" bug. `sync-google-user` doesn't
+  // even read anything from the client `session` object — it re-derives
+  // everything server-side via `auth()` — so nothing here actually
+  // needed it in the first place.
+  const { status } = useSession();
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const storeUser = useAuthStore((s) => s.user);
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -41,7 +59,7 @@ export default function GoogleSessionBridge() {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    if (status !== "authenticated" || !session) return;
+    if (status !== "authenticated") return;
     // Already have a real backend-authenticated user (either they logged
     // in with email/password, or a previous sync already ran and
     // populated this) — nothing to bridge.
@@ -73,7 +91,9 @@ export default function GoogleSessionBridge() {
     return () => {
       cancelled = true;
     };
-  }, [hasHydrated, status, session, storeUser, setAuth]);
+    // `status` is intentionally the only session-derived dependency —
+    // see the comment above.
+  }, [hasHydrated, status, storeUser, setAuth]);
 
   return null;
 }

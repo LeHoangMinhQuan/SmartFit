@@ -31,28 +31,32 @@ export default function UserMenu({
   const handleLogout = async () => {
     setOpen(false);
 
-    // 1. Clear the backend session (accessToken/refreshToken cookies +
-    // the DB-side refresh token row). GoogleSessionBridge.tsx means
-    // `user` is populated identically regardless of login method now, so
-    // this always runs for anyone actually signed in — the clearAuth()
-    // fallback only matters for the rare case where a NextAuth session
-    // exists but the bridge sync hasn't resolved/succeeded yet.
-    if (user) {
-      await logoutService();
-    } else {
-      clearAuth();
-    }
-
-    // 2. Clear the NextAuth session itself (Google sign-in still creates
-    // one alongside the backend session — see GoogleSessionBridge.tsx).
-    if (session) {
-      await nextAuthSignOut({ redirect: false });
-    }
-
-    // 3. Reset chat UI state — closes the panel and drops sessionId, so
-    // the next open starts a fresh conversation rather than trying to
-    // continue one tied to a session that's no longer authenticated.
+    // FIXED (2026-08-09): clear local UI state FIRST and SYNCHRONOUSLY,
+    // before any network call. The previous version gated clearAuth()
+    // behind `await logoutService()` and only *then* awaited
+    // `nextAuthSignOut()` — two sequential network round-trips with zero
+    // loading feedback in between. On anything but a very fast
+    // connection, the header still showed the old avatar/name for the
+    // full duration of both calls, which reads as "logout did nothing",
+    // so people clicked again — and a second logout firing while the
+    // first is still in flight is exactly how you get inconsistent
+    // in-between states. Clearing local state up front makes the UI
+    // reflect "logged out" instantly and unconditionally, independent of
+    // how long the server-side cleanup takes.
+    clearAuth();
     useChatUiStore.getState().reset();
+
+    // Fire both server-side invalidations in parallel — the backend
+    // cookie/refresh-token cleanup and the NextAuth session cleanup are
+    // independent of each other, so there's no reason to make one wait
+    // on the other. logoutService() already calls clearAuth() again
+    // internally once it settles; that's harmless/idempotent and acts as
+    // a safety net if this optimistic clear above ever raced with
+    // something re-populating the store.
+    await Promise.allSettled([
+      user ? logoutService() : Promise.resolve(),
+      session ? nextAuthSignOut({ redirect: false }) : Promise.resolve(),
+    ]);
   };
 
   // Close when clicking outside

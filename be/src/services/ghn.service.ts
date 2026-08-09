@@ -3,6 +3,7 @@ import * as OrderModel from "../models/order.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
 import * as CartModel from "../models/cart.model.js";
 import { ghnClient } from "../config/ghn.js";
+import type { GhnCreateOrderPayload, GhnRequiredNote } from "../config/ghn.js";
 import { env } from "../config/env.js";
 
 // ─── Parcel sizing (real product dimensions, not a hardcoded guess) ───────────
@@ -78,9 +79,21 @@ function setCache(key: string, data: any) {
   cache.set(key, { data, expires: Date.now() + 24 * 60 * 60 * 1000 });
 }
 
+// Default when nobody has picked one — used for the fully-automatic
+// creation path right after order confirmation, where there's no staff
+// interaction yet to ask. "Buyer can see but not try" is the safest
+// middle ground: it doesn't block a legitimate look at the item, but
+// still stops the try-then-refuse pattern that CHOTHUHANG allows. Staff
+// can change it afterward via updateShipmentRequiredNote below, or pick
+// a different one up front on the "Retry Shipment" recovery flow.
+const DEFAULT_REQUIRED_NOTE: GhnRequiredNote = "CHOXEMHANGKHONGTHU";
+
 // ─── Shipment creation (triggered from IPN after payment) ─────────────────────
 
-export async function createShipmentForOrder(order_id: number) {
+export async function createShipmentForOrder(
+  order_id: number,
+  required_note: GhnRequiredNote = DEFAULT_REQUIRED_NOTE,
+) {
   const order = await OrderModel.findOrderWithCustomerInfo(order_id);
   if (!order) throw new Error(`Order ${order_id} not found`);
 
@@ -89,7 +102,12 @@ export async function createShipmentForOrder(order_id: number) {
 
   const isCOD = order.payment_method_name.toLowerCase() === "cod";
 
-  const payload = {
+  // BUG FIX: explicitly typed against GhnCreateOrderPayload (previously
+  // untyped, which is exactly how required_note's invalid value slipped
+  // through — the interface already had the correct literal union, but
+  // nothing here was checked against it). Keep this annotation so a
+  // similar typo fails the build instead of failing silently at GHN.
+  const payload: GhnCreateOrderPayload = {
     payment_type_id: 2, // recipient pays the shipping fee (see comment above)
     // cod_amount is a SEPARATE concept from payment_type_id — this is the
     // cash GHN should actually collect from the recipient for the ORDER
@@ -98,7 +116,17 @@ export async function createShipmentForOrder(order_id: number) {
     // (nothing to collect — already paid via VNPay).
     cod_amount: isCOD ? Number(order.total_amount) : 0,
     note: "",
-    required_note: "CHOXEMHANGKHONG",
+    // BUG FIX: GHN only accepts exactly three values here — CHOTHUHANG,
+    // CHOXEMHANGKHONGTHU, KHONGCHOXEMHANG (see GHN's Create Order docs,
+    // "required_note" field). The old value "CHOXEMHANGKHONG" (missing
+    // "THU") isn't one of them, so GHN rejected every single shipment
+    // creation call with 400 "Sai thông tin Required Note" — this was
+    // the actual root cause of the "order confirmed, no shipment
+    // created" bug, not an intermittent GHN outage.
+    //
+    // Now a real parameter instead of hardcoded — see DEFAULT_REQUIRED_NOTE
+    // and the staff-facing "required note" picker on the order detail page.
+    required_note,
     from_district_id: Number(env.GHN_FROM_DISTRICT),
     from_ward_code: env.GHN_FROM_WARD,
     // Previously hardcoded to "Customer" / "0900000000" for every
@@ -136,6 +164,7 @@ export async function createShipmentForOrder(order_id: number) {
     tracking_code: ghnOrder.order_code,
     shipping_fee: Number(ghnOrder.total_fee ?? 0),
     service_id: null,
+    required_note,
   });
 
   // Update ORDER.shipping_order_id (circular FK resolved — ORDER created first with NULL)
@@ -145,6 +174,40 @@ export async function createShipmentForOrder(order_id: number) {
   await ShippingModel.insertShippingLog(shipping_order_id, "ready_to_pick");
 
   return { shipping_order_id, tracking_code: ghnOrder.order_code };
+}
+
+// ─── Update required_note on an existing shipment ──────────────────────────────
+//
+// GHN's Update Order API accepts required_note as one of the fields it can
+// change on an already-created shipment ("Only available when shipping
+// status" allows it — i.e. before the shipper has picked it up). This lets
+// staff/admin change their mind about CHOTHUHANG / CHOXEMHANGKHONGTHU /
+// KHONGCHOXEMHANG after the shipment already exists, instead of only being
+// able to set it once at creation time.
+export async function updateShipmentRequiredNote(
+  order_id: number,
+  required_note: GhnRequiredNote,
+) {
+  const shippingOrder =
+    await ShippingModel.findShippingOrderByOrderId(order_id);
+  if (!shippingOrder) {
+    throw new ApiError(
+      404,
+      "This order has no shipment yet — nothing to update.",
+    );
+  }
+
+  // Let GHN's own error (e.g. "already picked up, can't change") propagate
+  // as-is, same reasoning as retryShipment: this is a direct staff action,
+  // they should see exactly why it failed.
+  await ghnClient.post("/shipping-order/update", {
+    order_code: shippingOrder.tracking_code,
+    required_note,
+  });
+
+  await ShippingModel.updateShippingOrderRequiredNote(order_id, required_note);
+
+  return { tracking_code: shippingOrder.tracking_code, required_note };
 }
 
 // ─── Fee estimation ───────────────────────────────────────────────────────────

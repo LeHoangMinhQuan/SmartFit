@@ -2,7 +2,12 @@ import { Router } from "express";
 import { authenticateStaff } from "../middleware/authenticateStaff.js";
 import { authorize } from "../middleware/authorize.js";
 import * as Admin from "../controllers/admin.controller.js";
-import { updateOrderStatusSchema } from "../schemas/order.schema.js";
+import {
+  updateOrderStatusSchema,
+  assignOrderStaffSchema,
+  retryShipmentSchema,
+  updateShipmentRequiredNoteSchema,
+} from "../schemas/order.schema.js";
 import { validate } from "../middleware/validate.js";
 import {
   recordImportSchema,
@@ -127,10 +132,39 @@ router.patch(
   validate(updateOrderStatusSchema),
   Admin.adminUpdateOrderStatus,
 );
+// Admin-only, direct assignment of an UNCLAIMED order to a specific staff
+// member — see OrderService.adminAssignStaff's doc comment. Distinct from
+// the implicit "first staff to touch it claims it" behavior baked into
+// adminUpdateStatus above.
+router.patch(
+  "/orders/:order_id/assign",
+  authorize("admin"),
+  validate(assignOrderStaffSchema),
+  Admin.adminAssignOrderStaff,
+);
 router.post(
   "/orders/:order_id/refund",
   authorize("admin"),
   Admin.adminProcessRefund,
+);
+// Retry GHN shipment creation for an order that was confirmed (paid or
+// cod_confirmed) but never got a tracking code — staff-allowed, same as
+// the rest of ordinary fulfillment work. required_note is optional in
+// the body (staff-picked, see the order detail page's picker).
+router.post(
+  "/orders/:order_id/retry-shipment",
+  authorize("admin", "staff"),
+  validate(retryShipmentSchema),
+  Admin.adminRetryShipment,
+);
+// Change required_note on an already-created shipment (GHN allows this
+// via its Update Order API up until the shipment is picked up) —
+// staff-allowed, same tier as retry-shipment above.
+router.patch(
+  "/orders/:order_id/shipment-note",
+  authorize("admin", "staff"),
+  validate(updateShipmentRequiredNoteSchema),
+  Admin.adminUpdateShipmentRequiredNote,
 );
 
 // ─── Reviews ─────────────────────────────────────────────────────────────────

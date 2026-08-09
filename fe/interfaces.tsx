@@ -250,12 +250,21 @@ export interface Supplier {
 }
 
 // Shipping
+export type GhnRequiredNote =
+  | "CHOTHUHANG"
+  | "CHOXEMHANGKHONGTHU"
+  | "KHONGCHOXEMHANG";
+
 export interface ShippingOrder {
   shipping_order_id: number;
   order_id: number;
   service_id: number | null;
   tracking_code: string;
   shipping_fee: number;
+  // Which "buyer can inspect goods" option this shipment was created (or
+  // last updated) with. Nullable — shipments created before this column
+  // existed have no value here.
+  required_note: GhnRequiredNote | null;
   created_at: string;
 }
 

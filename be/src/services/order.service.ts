@@ -6,7 +6,7 @@ import * as VoucherModel from "../models/voucher.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
 import { DEFAULT_STORE_ID } from "../config/store.js";
-import { findStaffRoles } from "../models/staff.model.js";
+import { findStaffRoles, findStaffById } from "../models/staff.model.js";
 
 const SYSTEM_STAFF_ID = 1;
 // Single-store scope (see ecommerce-api-plan.md scope note + §12): GHN has one
@@ -463,6 +463,79 @@ export async function adminListOrders(
   return OrderModel.findAllOrders(filters);
 }
 
+// Statuses a confirmed order can be in while still missing its GHN
+// shipment — kept in sync with order.model.ts's STUCK_SHIPMENT_STATUSES
+// (duplicated rather than imported for the same reason SYSTEM_STAFF_ID is
+// duplicated there: avoiding a circular import between model and service).
+const RETRYABLE_SHIPMENT_STATUSES = ["paid", "cod_confirmed"];
+
+/**
+ * Manual recovery for the "confirmed but GHN shipment creation failed"
+ * case (see applyPaymentResult in vnpay.service.ts and the COD path
+ * above) — staff-triggered from the order detail page once GHN is back
+ * up or whatever caused the failure (bad address, GHN outage, etc.) has
+ * been resolved. Refuses to run on an order that already has a shipment
+ * (would create a duplicate GHN order and double-charge shipping) or one
+ * that was never confirmed in the first place.
+ *
+ * required_note is staff-chosen at this point (see the order detail
+ * page's picker) rather than always falling back to
+ * ghn.service.ts's DEFAULT_REQUIRED_NOTE — by the time something needs a
+ * manual retry, staff are already looking at the order and can decide
+ * what's appropriate for it.
+ */
+export async function retryShipment(
+  order_id: number,
+  required_note?: "CHOTHUHANG" | "CHOXEMHANGKHONGTHU" | "KHONGCHOXEMHANG",
+) {
+  const order = await OrderModel.findOrderById(order_id);
+  if (!order) throw new ApiError(404, "Order not found");
+
+  if (order.shipping_order_id) {
+    throw new ApiError(
+      400,
+      "This order already has a shipment — nothing to retry.",
+    );
+  }
+  if (!RETRYABLE_SHIPMENT_STATUSES.includes(order.status)) {
+    throw new ApiError(
+      400,
+      `Order is in status "${order.status}" — shipment retry only applies to confirmed orders (paid/cod_confirmed) that are missing a shipment.`,
+    );
+  }
+
+  // Let a failure here propagate as-is (GHN's actual error message, e.g.
+  // invalid address) rather than swallowing it like the original
+  // fire-and-forget paths do — this is a direct staff action, so they
+  // should see exactly why it failed and can retry again once fixed.
+  const { createShipmentForOrder } = await import("./ghn.service.js");
+  const result = required_note
+    ? await createShipmentForOrder(order_id, required_note)
+    : await createShipmentForOrder(order_id);
+
+  const { notifyStaffOfConfirmedOrder } =
+    await import("./notification.service.js");
+  await notifyStaffOfConfirmedOrder(order_id).catch(() => {});
+
+  return result;
+}
+
+/**
+ * Lets staff/admin change which GHN required_note option an EXISTING
+ * shipment was created with (CHOTHUHANG / CHOXEMHANGKHONGTHU /
+ * KHONGCHOXEMHANG) — see ghn.service.ts's updateShipmentRequiredNote for
+ * why this is possible post-creation (GHN's Update Order API) and its
+ * limits (only while the shipment hasn't been picked up yet).
+ */
+export async function updateShipmentRequiredNote(
+  order_id: number,
+  required_note: "CHOTHUHANG" | "CHOXEMHANGKHONGTHU" | "KHONGCHOXEMHANG",
+) {
+  const { updateShipmentRequiredNote: doUpdate } =
+    await import("./ghn.service.js");
+  return doUpdate(order_id, required_note);
+}
+
 // STAFF-ROLE FEATURE: which target statuses require the 'admin' role,
 // versus which any staff account (admin or staff) may set. Route-level
 // authorize('admin', 'staff') on PATCH /orders/:order_id/status lets both
@@ -554,6 +627,39 @@ export async function adminUpdateStatus(
   if (!isClaimed) {
     await OrderModel.claimOrder(order_id, actingStaffId);
   }
+}
+
+// STAFF-ROLE FEATURE: lets an admin directly hand an unclaimed order to a
+// specific staff member, rather than the only previous path — waiting for
+// *some* staff/admin to happen to advance its status, which auto-claims it
+// for whoever clicked first (see adminUpdateStatus above). The staff order
+// list already shows a handler name / "Unassigned" per order, but had no
+// way to actually assign one — this is that missing action.
+//
+// Admin-only (matches the rest of the ownership-sensitive actions in this
+// file) and only permitted while the order is still unclaimed: once a real
+// staff member has it, reassigning is a bigger decision (taking work away
+// from someone) that isn't in scope for this simple combobox — an admin
+// can already override via ordinary status changes per the ownership rule
+// in adminUpdateStatus.
+export async function adminAssignStaff(
+  order_id: number,
+  targetStaffId: number,
+) {
+  const order = await OrderModel.findOrderById(order_id);
+  if (!order) throw new ApiError(404, "Order not found");
+
+  if (order.staff_id !== SYSTEM_STAFF_ID) {
+    throw new ApiError(
+      400,
+      "This order is already assigned — reassign it via a status change instead.",
+    );
+  }
+
+  const staff = await findStaffById(targetStaffId);
+  if (!staff) throw new ApiError(404, "Staff member not found");
+
+  await OrderModel.claimOrder(order_id, targetStaffId);
 }
 
 export async function adminGetOrderDetail(order_id: number) {

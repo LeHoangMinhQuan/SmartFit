@@ -114,6 +114,17 @@ export async function findOrdersByUser(user_id: number, page = 1, limit = 20) {
 // ever changes, keep both in sync.
 const SYSTEM_STAFF_ID = 1;
 
+// Orders that were confirmed (COD or VNPay) but never got a GHN shipment —
+// createShipmentForOrder() failed (or was never attempted) after the order
+// was already committed as paid/cod_confirmed, so the customer's money (or
+// COD promise) is locked in but there's no tracking_code and the order
+// won't naturally progress through fulfillment. See order.service.ts's
+// applyPaymentResult / createOrder comments for why this is a
+// "gate, don't roll back" situation rather than something that fails the
+// order outright. Staff need a way to find these without paging through
+// every order manually — that's what needs_fulfillment filters for.
+const STUCK_SHIPMENT_STATUSES = ["paid", "cod_confirmed"];
+
 export async function findAllOrders(filters: {
   status?: string;
   user_id?: number;
@@ -121,8 +132,17 @@ export async function findAllOrders(filters: {
   to?: string;
   page?: number;
   limit?: number;
+  needs_fulfillment?: boolean;
 }) {
-  const { status, user_id, from, to, page = 1, limit = 20 } = filters;
+  const {
+    status,
+    user_id,
+    from,
+    to,
+    page = 1,
+    limit = 20,
+    needs_fulfillment,
+  } = filters;
   const offset = (page - 1) * limit;
 
   // LEFT JOIN (not inner) — a deleted/orphaned user_id shouldn't make an
@@ -142,6 +162,11 @@ export async function findAllOrders(filters: {
   if (user_id) query = query.where({ "ORDER.user_id": user_id });
   if (from) query = query.where("ORDER.created_at", ">=", from);
   if (to) query = query.where("ORDER.created_at", "<=", to);
+  if (needs_fulfillment) {
+    query = query
+      .whereIn("ORDER.status", STUCK_SHIPMENT_STATUSES)
+      .whereNull("ORDER.shipping_order_id");
+  }
 
   const rows = await query
     .orderBy("ORDER.created_at", "desc")
@@ -159,6 +184,13 @@ export async function findAllOrders(filters: {
   let countQ = db("ORDER").count("order_id as total");
   if (status) countQ = countQ.where({ status });
   if (user_id) countQ = countQ.where({ user_id });
+  if (from) countQ = countQ.where("created_at", ">=", from);
+  if (to) countQ = countQ.where("created_at", "<=", to);
+  if (needs_fulfillment) {
+    countQ = countQ
+      .whereIn("status", STUCK_SHIPMENT_STATUSES)
+      .whereNull("shipping_order_id");
+  }
   const totalResult = await countQ;
   const total = totalResult[0]?.["total"] ?? 0;
 

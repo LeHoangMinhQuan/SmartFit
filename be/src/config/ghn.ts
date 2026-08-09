@@ -74,9 +74,16 @@ export interface GhnFeeResult {
   r2s_fee: number;
 }
 
+export type GhnRequiredNote =
+  | "CHOTHUHANG"
+  | "CHOXEMHANGKHONGTHU"
+  | "KHONGCHOXEMHANG";
+
 export interface GhnCreateOrderPayload {
   payment_type_id: 1 | 2; // 1 = shop pays, 2 = receiver pays
-  required_note: "CHOTHUHANG" | "CHOXEMHANGKHONGTHU" | "KHONGCHOXEMHANG";
+  required_note: GhnRequiredNote;
+  from_district_id: number;
+  from_ward_code: string;
   to_name: string;
   to_phone: string;
   to_address: string;
@@ -87,7 +94,7 @@ export interface GhnCreateOrderPayload {
   width?: number; // cm
   height?: number; // cm
   service_type_id: number;
-  insurance_value: number; // VND
+  insurance_value?: number; // VND — not currently sent; GHN defaults to 0
   cod_amount: number; // 0 for prepaid orders
   note?: string;
   items: GhnOrderItem[];

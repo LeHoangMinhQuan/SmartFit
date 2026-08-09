@@ -26,6 +26,10 @@ export interface ShippingOrderData {
   tracking_code: string;
   shipping_fee: number;
   service_id?: number | null;
+  // Which GHN required_note option this shipment was created with — see
+  // the column comment on shipping_order in the schema for why this is
+  // now recorded instead of only living in the one-off GHN API call.
+  required_note?: string | null;
 }
 
 export async function createShippingOrder(
@@ -43,6 +47,16 @@ export async function findShippingOrderByOrderId(order_id: number) {
 
 export async function findShippingOrderByTrackingCode(tracking_code: string) {
   return db("shipping_order").where({ tracking_code }).first();
+}
+
+// Called after successfully updating required_note on GHN's side via
+// /shipping-order/update, so our local record stays in sync with what
+// GHN actually has on file for this shipment.
+export async function updateShippingOrderRequiredNote(
+  order_id: number,
+  required_note: string,
+) {
+  return db("shipping_order").where({ order_id }).update({ required_note });
 }
 
 // ─── Shipping Logs ────────────────────────────────────────────────────────────

@@ -327,8 +327,41 @@ export const adminDeleteReview = catchAsync(
 
 export const adminListOrders = catchAsync(
   async (req: Request, res: Response) => {
-    const result = await OrderService.adminListOrders(req.query as any);
+    // needs_fulfillment arrives as the string "true"/"false" over the
+    // querystring — coerce explicitly rather than passing the raw string
+    // through, since a truthy-string check would treat "false" as true too.
+    const { needs_fulfillment, ...rest } = req.query as any;
+    const result = await OrderService.adminListOrders({
+      ...rest,
+      needs_fulfillment: needs_fulfillment === "true",
+    });
     res.json({ data: result.rows, meta: { total: result.total } });
+  },
+);
+
+// Manual "retry GHN shipment" action — see OrderService.retryShipment's
+// doc comment. Surfaced on the order detail page for orders that were
+// confirmed but never got a tracking code. required_note is optional —
+// staff can pick one, or leave it to the service's default.
+export const adminRetryShipment = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await OrderService.retryShipment(
+      Number(req.params["order_id"]),
+      req.body?.required_note,
+    );
+    res.json({ data: result });
+  },
+);
+
+// Change which required_note option an EXISTING shipment was created
+// with — see OrderService.updateShipmentRequiredNote's doc comment.
+export const adminUpdateShipmentRequiredNote = catchAsync(
+  async (req: Request, res: Response) => {
+    const result = await OrderService.updateShipmentRequiredNote(
+      Number(req.params["order_id"]),
+      req.body.required_note,
+    );
+    res.json({ data: result });
   },
 );
 
@@ -347,6 +380,16 @@ export const adminUpdateOrderStatus = catchAsync(
       (req as any).staff.staff_id,
     );
     res.json({ data: { message: "Status updated" } });
+  },
+);
+
+export const adminAssignOrderStaff = catchAsync(
+  async (req: Request, res: Response) => {
+    await OrderService.adminAssignStaff(
+      Number(req.params["order_id"]),
+      Number(req.body.staff_id),
+    );
+    res.json({ data: { message: "Order assigned" } });
   },
 );
 

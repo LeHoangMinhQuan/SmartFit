@@ -1,5 +1,6 @@
 import api from "../../lib/staffAxios";
 import type {
+  GhnRequiredNote,
   Order,
   OrderStatus,
   PaginatedResponse,
@@ -278,6 +279,11 @@ export const adminService = {
     status?: OrderStatus;
     user_id?: number;
     created_at?: string;
+    // Confirmed (paid/cod_confirmed) orders whose GHN shipment was never
+    // created — see order.model.ts's STUCK_SHIPMENT_STATUSES. Surfaced as
+    // a "Needs fulfillment" filter on the staff orders list so these
+    // don't silently fall through the cracks.
+    needs_fulfillment?: boolean;
   }) =>
     api
       .get<PaginatedResponse<Order>>("/admin/orders", { params })
@@ -297,6 +303,43 @@ export const adminService = {
       .patch<
         ApiResponse<unknown>
       >(`/admin/orders/${order_id}/status`, { status })
+      .then((r) => r.data.data),
+
+  // PATCH /admin/orders/:order_id/assign — admin-only, direct handoff of
+  // an unclaimed order to a specific staff member (see the order detail
+  // page's "Assign staff" combobox, shown when is_unclaimed is true).
+  assignOrderStaff: (order_id: number, staff_id: number) =>
+    api
+      .patch<
+        ApiResponse<unknown>
+      >(`/admin/orders/${order_id}/assign`, { staff_id })
+      .then((r) => r.data.data),
+
+  // POST /admin/orders/:order_id/retry-shipment — manual recovery for an
+  // order that was confirmed but never got a GHN shipment (no
+  // tracking_code). See OrderService.retryShipment's doc comment. Shown
+  // on the order detail page whenever shipping_order_id is null on a
+  // paid/cod_confirmed order. required_note is optional — staff can pick
+  // one via the picker, or leave it to the backend's default.
+  retryShipment: (order_id: number, required_note?: GhnRequiredNote) =>
+    api
+      .post<
+        ApiResponse<{ shipping_order_id: number; tracking_code: string }>
+      >(`/admin/orders/${order_id}/retry-shipment`, { required_note })
+      .then((r) => r.data.data),
+
+  // PATCH /admin/orders/:order_id/shipment-note — change which
+  // required_note option an EXISTING shipment was created with (GHN
+  // allows this up until the shipment is picked up). See
+  // OrderService.updateShipmentRequiredNote's doc comment.
+  updateShipmentRequiredNote: (
+    order_id: number,
+    required_note: GhnRequiredNote,
+  ) =>
+    api
+      .patch<
+        ApiResponse<{ tracking_code: string; required_note: GhnRequiredNote }>
+      >(`/admin/orders/${order_id}/shipment-note`, { required_note })
       .then((r) => r.data.data),
 
   // POST /admin/orders/:order_id/refund — only valid while the order is

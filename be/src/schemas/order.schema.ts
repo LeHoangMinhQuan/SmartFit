@@ -42,6 +42,38 @@ export const listOrdersSchema = z.object({
   }),
 });
 
+export const assignOrderStaffSchema = z.object({
+  params: z.object({ order_id: z.coerce.number().int().positive() }),
+  body: z.object({
+    staff_id: z.number().int().positive(),
+  }),
+});
+
+// GHN's 3 allowed values for a shipment's "buyer can inspect goods"
+// policy — see ghn.service.ts's createShipmentForOrder/
+// updateShipmentRequiredNote comments.
+const requiredNoteEnum = z.enum([
+  "CHOTHUHANG",
+  "CHOXEMHANGKHONGTHU",
+  "KHONGCHOXEMHANG",
+]);
+
+export const retryShipmentSchema = z.object({
+  params: z.object({ order_id: z.coerce.number().int().positive() }),
+  // Optional — falls back to ghn.service.ts's DEFAULT_REQUIRED_NOTE if
+  // staff doesn't pick one.
+  body: z.object({
+    required_note: requiredNoteEnum.optional(),
+  }),
+});
+
+export const updateShipmentRequiredNoteSchema = z.object({
+  params: z.object({ order_id: z.coerce.number().int().positive() }),
+  body: z.object({
+    required_note: requiredNoteEnum,
+  }),
+});
+
 export const updateOrderStatusSchema = z.object({
   params: z.object({ order_id: z.coerce.number().int().positive() }),
   body: z.object({

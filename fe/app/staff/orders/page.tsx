@@ -41,15 +41,20 @@ export default function StaffOrdersPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
   const [userIdFilter, setUserIdFilter] = useState("");
+  const [needsFulfillmentOnly, setNeedsFulfillmentOnly] = useState(false);
 
   const { data, isLoading: loading } = useQuery({
-    queryKey: ["staff-orders", { page, statusFilter, userIdFilter }],
+    queryKey: [
+      "staff-orders",
+      { page, statusFilter, userIdFilter, needsFulfillmentOnly },
+    ],
     queryFn: () =>
       adminService.getAllOrders({
         page,
         limit: 20,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(userIdFilter ? { user_id: Number(userIdFilter) } : {}),
+        ...(needsFulfillmentOnly ? { needs_fulfillment: true } : {}),
       }),
     placeholderData: keepPreviousData,
   });
@@ -124,6 +129,23 @@ export default function StaffOrdersPage() {
           placeholder="Filter by user…"
           className="w-36"
         />
+        <label className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+          <input
+            type="checkbox"
+            checked={needsFulfillmentOnly}
+            onChange={(e) => {
+              setNeedsFulfillmentOnly(e.target.checked);
+              setPage(1);
+            }}
+          />
+          Needs fulfillment
+          <span
+            className="text-xs font-normal text-amber-600"
+            title="Confirmed orders (paid / cod_confirmed) with no GHN shipment created yet"
+          >
+            (shipment missing)
+          </span>
+        </label>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
