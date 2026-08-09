@@ -86,8 +86,24 @@ export async function findOrderWithCustomerInfo(order_id: number) {
   );
 }
 
+// BUG FIX: previously plain `db("ORDER").where(...)`, with no join to
+// payment_method — every order returned from here (i.e. everything the
+// customer-facing GET /orders/:order_id and VNPay flows see) came back
+// with payment_method_name undefined. order-detail page.tsx's
+// handleCancel() reads order.payment_method_name.toLowerCase() to decide
+// COD vs. prepaid; calling toLowerCase() on undefined threw synchronously
+// out of the onClick handler, so "Cancel Order" silently did nothing on
+// any order (most visibly once an order reached "paid", since COD orders
+// are cancellable earlier too but got less testing there). Joining
+// payment_method here — same join findOrderWithCustomerInfo already does,
+// just scoped to (order_id, user_id) instead of order_id alone — fixes it
+// at the source instead of patching every caller.
 export async function findOrderByIdAndUser(order_id: number, user_id: number) {
-  return db("ORDER").where({ order_id, user_id }).first();
+  return db("ORDER as o")
+    .join("payment_method as pm", "o.payment_method_id", "pm.payment_method_id")
+    .where({ "o.order_id": order_id, "o.user_id": user_id })
+    .select("o.*", "pm.name as payment_method_name")
+    .first();
 }
 
 export async function findOrdersByUser(user_id: number, page = 1, limit = 20) {

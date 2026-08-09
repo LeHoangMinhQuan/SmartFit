@@ -41,20 +41,30 @@ export default function StatsCard({
   variant = "default",
 }: StatsCardProps) {
   return (
+    // BUG FIX: min-w-0 lets this grid cell actually shrink below its
+    // content's intrinsic width. Grid tracks (Tailwind's grid-cols-* uses
+    // minmax(0, 1fr)) could already shrink fine, but the label/value text
+    // had no wrap/truncate handling — a formatted price like
+    // "1.234.567 ₫" (Intl.NumberFormat's non-breaking space before the
+    // currency symbol) is a single unbreakable token, so as the card
+    // narrowed the text just kept its natural width and spilled out past
+    // the card's border/padding instead of shrinking with it.
     <div
       className={clsx(
-        "rounded-xl border p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl",
+        "min-w-0 rounded-xl border p-5 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl",
         variantStyles[variant],
       )}
     >
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-900">
+      <p className="truncate text-xs font-semibold uppercase tracking-wider text-slate-900">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+      <p className="mt-2 break-words text-2xl font-bold text-slate-900">
+        {value}
+      </p>
       {hint && (
         <p
           className={clsx(
-            "mt-1 text-xs",
+            "mt-1 truncate text-xs",
             trend === "up" && "text-green-600",
             trend === "down" && "text-red-600",
             (!trend || trend === "neutral") && "text-slate-400",

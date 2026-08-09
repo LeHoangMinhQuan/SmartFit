@@ -77,11 +77,21 @@ export default function OrderDetailPage() {
   const cancelMutation = useMutation({
     mutationFn: () => orderService.cancelOrder(order!.order_id),
     onSuccess: () => {
-      queryClient.setQueryData(["order", orderId], (old: typeof order) =>
-        old ? { ...old, status: "cancelled" } : old,
-      );
+      // BUG FIX: this used to optimistically force status to "cancelled"
+      // in the cache. The backend (order.service.ts's cancelOrder) actually
+      // moves a paid order to "refund_requested", not "cancelled" — so a
+      // paid order that just got cancelled displayed the wrong badge
+      // ("Cancelled") and, since "refund_requested" isn't in canCancel,
+      // no worse than before, but still lying about what happened. Refetch
+      // the real order instead of guessing its new status client-side.
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
-      toast.success("Order cancelled.");
+      const isCOD = order?.payment_method_name.toLowerCase() === "cod";
+      toast.success(
+        isCOD
+          ? "Order cancelled."
+          : "Cancellation submitted — a refund request has been sent to our team.",
+      );
     },
     onError: () => toast.error("Failed to cancel order."),
   });
