@@ -131,6 +131,71 @@ export default function PaymentResultPage({
     );
   }
 
+  // BUG FIX: showSuccess (and therefore the "Payment Successful!" screen
+  // below) was gated only on the unsigned URL's vnp_ResponseCode — it
+  // never actually looked at orderStatus once polling settled. So if the
+  // server's real, signature-verified status ended up 'payment_failed' or
+  // 'cancelled' (e.g. VNPay's redirect said success but IPN/reconcile
+  // later disagreed — see vnpay.service.ts's reconcilePendingOrder), this
+  // page would still show the big green checkmark and "Payment
+  // Successful!" heading, with only a small status chip further down
+  // quietly contradicting it. That mismatch — cheerful success screen,
+  // order actually marked failed — is the exact bug this fixes.
+  const confirmedFailure =
+    showSuccess &&
+    !polling &&
+    (orderStatus === "payment_failed" || orderStatus === "cancelled");
+
+  if (confirmedFailure) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 py-10 px-4">
+        <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white px-6 py-10 text-center shadow-sm animate-in zoom-in-95 duration-500 sm:px-10">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-rose-50 ring-8 ring-rose-50/50">
+            <AlertCircle className="h-10 w-10 text-rose-500" />
+          </div>
+
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            We need to double-check this payment
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            VNPay redirected us back as if this succeeded, but your order is
+            currently marked{" "}
+            <span className="font-semibold">{orderStatus}</span> in our system.
+            We can't confirm from here whether you were charged — please check
+            your order or contact support rather than assuming either outcome.
+          </p>
+
+          <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-amber-100 bg-amber-50/50 p-4 text-center">
+            <AlertCircle className="h-5 w-5 text-amber-500" />
+            <p className="text-sm font-medium text-amber-800">
+              Order #{orderId} — status: {orderStatus}
+            </p>
+            {vnpTxnRef && (
+              <p className="mt-1 font-mono text-xs font-semibold text-amber-500">
+                Ref: {vnpTxnRef}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => router.push(`/orders/${orderId}`)}
+              className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/30"
+            >
+              View Order
+            </button>
+            <button
+              onClick={() => router.push("/orders")}
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+            >
+              My Orders
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (showSuccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 py-10 px-4">

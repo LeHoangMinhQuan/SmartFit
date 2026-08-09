@@ -299,7 +299,24 @@ export async function processRefund(
   };
 }
 
-// ─── Reconciliation (pull-based fallback for missed/undelivered IPNs) ────────
+// UPDATE (2026-08-09): the "IMPORTANT — verify against your sandbox" note
+// below turned out to be exactly the right caution — real-world testing
+// surfaced a bug it warned about. This environment now has the `vnpay`
+// package's installed source available (node_modules/vnpay/dist), which
+// confirms queryDr's `isSuccess` field reflects vnp_ResponseCode === "00"
+// — i.e. whether the QUERY resolved at all, not whether the underlying
+// PAYMENT succeeded. The original code below treated `isSuccess === false`
+// (any non-"00" response code) as a definitive payment failure; in
+// practice this fired on response code "91" ("Không tìm thấy giao dịch
+// yêu cầu" / transaction not found) for an order the customer had, in
+// fact, just paid — VNPay's own querydr records simply hadn't caught up
+// yet. That wrongly flipped the order to 'payment_failed' — the "UI shows
+// payment successful but order status is payment_failed" bug. Fixed by
+// gating on vnp_ResponseCode explicitly: only "00" (query found the
+// transaction) is treated as answering the question at all; every other
+// code is now inconclusive-and-left-alone, same as an outright error was
+// already handled. See the response-code check right after `queryDr(...)`
+// below.
 //
 // NOTE (2026-08-01): added after tracing "order stuck in pending_payment /
 // shows cancelled despite being paid" back to two compounding issues:
@@ -321,22 +338,12 @@ export async function processRefund(
 // before assuming (1) failed. Called from expireStalePendingOrders() for
 // each stale order, just before it would otherwise be cancelled.
 //
-// IMPORTANT — verify against your sandbox before trusting this in
-// production: I don't have the `vnpay` package's installed type
-// definitions or network access to its docs site in this environment, so
-// the exact field/response shape below is built from the SDK's own
-// published example (github.com/lehuygiang28/vnpay, example/index.ts) and
-// its verifyIpnCall's `.isSuccess`/`.isVerified` convention for the return
-// shape, not a confirmed-working call. It's wrapped so a wrong assumption
-// here fails safe: any error, or any response shape that doesn't clearly
-// say "success", leaves the transaction alone and lets
-// expireStalePendingOrders() fall through to its existing
-// cancel-on-timeout behavior — exactly what happens today without this
-// function. It cannot make things worse than the current behavior, only
-// better once confirmed working. Log output during your first real test
-// (a payment where you deliberately block/delay the IPN) will show the
-// raw queryDr response — adjust the field reads below to match if they
-// don't line up.
+// It's wrapped so a wrong assumption here fails safe: any error, or any
+// response this code can't clearly read as success or failure, leaves the
+// transaction alone and lets expireStalePendingOrders() fall through to
+// its existing cancel-on-timeout behavior — exactly what happens today
+// without this function. It cannot make things worse than the current
+// behavior, only better.
 export async function reconcilePendingOrder(order_id: number): Promise<void> {
   try {
     const transaction = await PaymentModel.findTransactionByOrderId(order_id);
@@ -359,21 +366,50 @@ export async function reconcilePendingOrder(order_id: number): Promise<void> {
     );
 
     const result = queryResult as any;
-    // Prefer the SDK's normalized flag if it provides one (matching
-    // verifyIpnCall's .isSuccess elsewhere in this file); fall back to
-    // VNPay's raw vnp_TransactionStatus ("00" = success per VNPay's spec).
-    const isSuccess =
-      result?.isSuccess === true || result?.vnp_TransactionStatus === "00";
+
+    // BUG FIX (found via a report of "UI shows payment successful but
+    // order ends up payment_failed"): vnp_ResponseCode is the status of
+    // the QUERY ITSELF, not of the underlying payment — confirmed against
+    // the installed vnpay SDK's own source (node_modules/vnpay/dist,
+    // queryDr()): `isSuccess: responseData.vnp_ResponseCode === "00"`.
+    // Only when the query resolves with code "00" does VNPay return a
+    // real vnp_TransactionStatus to describe the payment's actual
+    // outcome. Any other code — most commonly "91" ("Không tìm thấy giao
+    // dịch yêu cầu" / transaction not found, which is what actually
+    // happened here) — means the query itself was inconclusive: often
+    // because VNPay hasn't recorded/propagated the transaction yet, not
+    // because the payment failed. The previous code treated
+    // `result.isSuccess === false` (i.e. any non-"00" response code,
+    // "not found" included) as a *definitive payment failure* and called
+    // applyPaymentResult(..., false, ...) — which is exactly how a
+    // customer who paid seconds before this ran got their order flipped
+    // to 'payment_failed' out from under them.
+    const responseCode = String(result?.vnp_ResponseCode ?? "");
+    if (responseCode !== "00") {
+      console.log(
+        `[reconcile] order ${order_id} queryDr response code "${responseCode}" ` +
+          `("${result?.vnp_Message ?? "no message"}") — the query itself was ` +
+          `inconclusive, not a payment failure signal. Leaving the transaction ` +
+          `pending for now; a later reconcile pass or the timeout sweep will ` +
+          `revisit it.`,
+      );
+      return;
+    }
+
+    // Query succeeded and found the transaction — now vnp_TransactionStatus
+    // is meaningful: "00" = paid, "01" = VNPay's own "not yet completed",
+    // anything else = a genuine decline/failure.
+    const isSuccess = result?.vnp_TransactionStatus === "00";
     const isDefinitiveFailure =
-      result?.isSuccess === false ||
-      (typeof result?.vnp_TransactionStatus === "string" &&
-        result.vnp_TransactionStatus !== "00" &&
-        result.vnp_TransactionStatus !== "01"); // "01" = VNPay's own "not yet completed"
+      typeof result?.vnp_TransactionStatus === "string" &&
+      result.vnp_TransactionStatus !== "00" &&
+      result.vnp_TransactionStatus !== "01";
 
     if (!isSuccess && !isDefinitiveFailure) {
-      // VNPay itself doesn't have a definitive answer yet either — leave
-      // it 'pending' and let the timeout sweep's existing cancel-on-
-      // timeout behavior handle it as before.
+      // Query succeeded but VNPay's own transaction status says "not yet
+      // completed" ("01") — still genuinely pending on their side too.
+      // Leave it and let the timeout sweep's existing cancel-on-timeout
+      // behavior handle it as before.
       return;
     }
 
