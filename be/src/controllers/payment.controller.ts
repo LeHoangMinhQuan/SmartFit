@@ -51,6 +51,12 @@ export const vnpayReturn = (_req: Request, res: Response) => {
  * IPN handler — must NEVER call next(err).
  * VNPay expects { RspCode, Message } shape, not the standard error handler shape.
  * Registered BEFORE express.json() with express.urlencoded({ extended: false }).
+ *
+ * FIXED (2026-08-09): VNPay's sandbox gateway actually calls this as a GET
+ * with the fields in the query string, not a POST body — see
+ * payment.routes.ts. Merge req.query and req.body (query first, so a real
+ * GET call's params take precedence) so this works regardless of which
+ * verb actually delivered the notification.
  */
 export const vnpayIpn = async (
   req: Request,
@@ -58,9 +64,11 @@ export const vnpayIpn = async (
   _next: NextFunction,
 ) => {
   try {
-    const result = await VNPayService.handleIpn(
-      req.body as Record<string, string>,
-    );
+    const params = {
+      ...(req.body as Record<string, string>),
+      ...(req.query as Record<string, string>),
+    };
+    const result = await VNPayService.handleIpn(params);
     res.json(result);
   } catch (err) {
     console.error("[IPN] Unexpected error:", err);

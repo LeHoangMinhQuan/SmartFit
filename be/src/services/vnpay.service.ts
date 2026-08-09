@@ -1,5 +1,5 @@
 import type { ReturnQueryFromVNPay, RefundResponse } from "vnpay";
-import { RefundTransactionType } from "vnpay";
+import { RefundTransactionType, dateFormat, getDateInGMT7 } from "vnpay";
 import db from "../config/db.js";
 import { ApiError } from "../utils/ApiError.js";
 import * as OrderModel from "../models/order.model.js";
@@ -239,8 +239,21 @@ export async function processRefund(
       vnp_Amount: Number(transaction.vnpay_amount),
       vnp_OrderInfo: `Refund for order ${order_id}${reason ? `: ${reason}` : ""}`,
       vnp_TransactionNo: Number(transaction.vnpay_transaction_no) || undefined,
-      vnp_TransactionDate: now.getTime(),
-      vnp_CreateDate: now.getTime(),
+      // BUG FIX (same root cause as reconcilePendingOrder's queryDr call):
+      // both fields need the SDK's dateFormat(getDateInGMT7(...)) output
+      // (a yyyyMMddHHmmss number), not .getTime()'s raw millisecond
+      // epoch — confirmed against the installed vnpay SDK's source.
+      // These two fields also aren't interchangeable even once formatted
+      // correctly: vnp_TransactionDate must be the ORIGINAL payment's
+      // create date ("giống vnp_CreateDate của vnp_Command=pay" per the
+      // SDK's own type doc — i.e. the transaction being refunded, not
+      // the refund itself), while vnp_CreateDate is genuinely "now" (the
+      // refund *request's* own timestamp). Using `now` for both, as
+      // before, was wrong on both counts for vnp_TransactionDate.
+      vnp_TransactionDate: dateFormat(
+        getDateInGMT7(new Date(transaction.created_at ?? now)),
+      ),
+      vnp_CreateDate: dateFormat(getDateInGMT7(now)),
       vnp_CreateBy: `staff:${staff_id}`,
       vnp_IpAddr: "127.0.0.1",
     });
@@ -350,12 +363,30 @@ export async function reconcilePendingOrder(order_id: number): Promise<void> {
     if (!transaction || transaction.status !== "pending") return;
 
     const createDate = new Date(transaction.created_at ?? Date.now());
+    // BUG FIX: vnp_TransactionDate/vnp_CreateDate must be a
+    // yyyyMMddHHmmss-formatted number in GMT+7 — confirmed against the
+    // installed vnpay SDK's own source (node_modules/vnpay/dist): its
+    // buildPaymentUrl() generates vnp_CreateDate internally as exactly
+    // `dateFormat(getDateInGMT7())`. This previously passed
+    // `createDate.getTime()` — a raw millisecond-since-epoch number
+    // (e.g. 1754730957088) — which looks superficially like a valid
+    // number but means nothing as a yyyyMMddHHmmss date to VNPay. That's
+    // the actual root cause of queryDr returning "Không tìm thấy giao
+    // dịch yêu cầu" (response code 91, transaction not found) for
+    // payments that had, in fact, gone through — VNPay simply couldn't
+    // parse the date field at all. See the response-code handling below,
+    // which (as of the previous fix) already treats a non-"00" queryDr
+    // response as inconclusive rather than a definitive failure — but
+    // with THIS fix, queryDr should now actually find genuine
+    // transactions and confirm them as paid instead of staying
+    // inconclusive/stuck in 'pending_payment' forever.
+    const vnpDate = dateFormat(getDateInGMT7(createDate));
     const queryResult = await vnpayClient.queryDr({
       vnp_RequestId: `reconcile-${transaction.transaction_id}-${Date.now()}`,
       vnp_TxnRef: transaction.vnpay_txn_ref,
       vnp_OrderInfo: `Reconcile order ${order_id}`,
-      vnp_TransactionDate: createDate.getTime(),
-      vnp_CreateDate: createDate.getTime(),
+      vnp_TransactionDate: vnpDate,
+      vnp_CreateDate: vnpDate,
       vnp_IpAddr: "127.0.0.1",
       vnp_TransactionNo: Number(transaction.vnpay_transaction_no) || 0,
     } as any);
