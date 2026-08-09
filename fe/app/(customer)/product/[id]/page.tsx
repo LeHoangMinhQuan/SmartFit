@@ -348,7 +348,7 @@ export default function ProductPage() {
             )}
 
             {/* Attributes */}
-            {selected?.attributes.length ? (
+            {/* {selected?.attributes.length ? (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
                 {selected.attributes.map((a) => (
                   <div
@@ -362,7 +362,7 @@ export default function ProductPage() {
                   </div>
                 ))}
               </div>
-            ) : null}
+            ) : null} */}
           </div>
         </div>
 
