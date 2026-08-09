@@ -72,14 +72,19 @@ export default function ProductPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productQuery.isError]);
 
-  // Gallery shows selected variant images, falling back to product-level images.
-  // Both selected.images and product.images can come back missing/undefined
-  // (e.g. locally where the upload middleware isn't wired up yet, so no
-  // product_image rows exist) — default to [] rather than crashing on
-  // `.length` of undefined.
+  // BUG FIX: this used to be a fallback (`selectedImages.length ?
+  // selectedImages : productImages`), which treats variant-specific and
+  // general product images as interchangeable alternatives — as soon as
+  // the selected variant had even one image of its own, the product's
+  // general shots (variant_id IS NULL, common to every variant) were
+  // dropped from the gallery entirely instead of being shown alongside
+  // it. The two arrays represent different things and should combine,
+  // not compete — variant-specific images first (most relevant to what
+  // the customer is currently looking at), followed by the shared
+  // general shots.
   const selectedImages = selected?.images ?? [];
   const productImages = product?.images ?? [];
-  const displayImages = selectedImages.length ? selectedImages : productImages;
+  const displayImages = [...selectedImages, ...productImages];
 
   const addToCartMutation = useMutation({
     mutationFn: (vars: { variant_id: number; quantity: number }) =>
@@ -190,7 +195,19 @@ export default function ProductPage() {
       <div className="mx-auto max-w-7xl px-6 py-10 rounded-3xl bg-white p-8 shadow-sm border border-slate-200">
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
           {/* Left — gallery */}
-          <ImageGallery images={displayImages} />
+          <ImageGallery
+            // BUG FIX: without a key, ImageGallery is the same component
+            // instance across variant switches, so its internal `active`
+            // thumbnail index persisted from the previous variant's image
+            // count/order instead of resetting — showing the wrong photo
+            // after switching variants, or throwing outright
+            // (images[active] undefined) if the new variant has fewer
+            // images than the index the customer had scrolled to. Keying
+            // on the variant id forces a clean remount (active resets to
+            // 0) whenever the selected variant changes.
+            key={selected?.variant_id ?? "none"}
+            images={displayImages}
+          />
 
           {/* Right — details */}
           <div className="flex flex-col gap-5">

@@ -19,12 +19,19 @@ export default function ImageGallery({ images }: ImageGalleryProps) {
     );
   }
 
+  // Defensive clamp: guards against images[active] being undefined if a
+  // caller ever re-renders this with a shorter `images` array without
+  // remounting (e.g. no `key` on this component, or a key that doesn't
+  // change every time it should) — active is local state, so it doesn't
+  // automatically shrink to fit a smaller array on its own.
+  const safeActive = Math.min(active, images.length - 1);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-50">
         <img
-          src={images[active].s3_url}
-          alt={`Product image ${active + 1}`}
+          src={images[safeActive].s3_url}
+          alt={`Product image ${safeActive + 1}`}
           className="h-full w-full object-cover"
         />
       </div>
@@ -37,7 +44,7 @@ export default function ImageGallery({ images }: ImageGalleryProps) {
               onClick={() => setActive(i)}
               className={clsx(
                 "h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition",
-                i === active
+                i === safeActive
                   ? "border-black"
                   : "border-transparent hover:border-gray-300",
               )}
