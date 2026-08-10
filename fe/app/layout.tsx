@@ -43,9 +43,6 @@ export const metadata: Metadata = {
     description:
       "Discover fashionable clothing and accessories at SMARTFIT. Shop the latest styles with virtual try-on for every occasion.",
     url: SITE_URL,
-    // TODO: point this at a real 1200x630 marketing image once one
-    // exists (e.g. public/images/og-cover.jpg) — until then OG consumers
-    // fall back to no image rather than a broken one.
   },
 
   twitter: {
