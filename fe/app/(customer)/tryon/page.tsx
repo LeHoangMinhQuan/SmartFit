@@ -8,9 +8,10 @@ export default async function TryOnPage({
   searchParams: Promise<{
     product_id?: string;
     variant_id?: string;
+    session_id?: string;
   }>;
 }) {
-   const params = await searchParams;
+  const params = await searchParams;
 
   return (
     <Suspense
@@ -23,6 +24,7 @@ export default async function TryOnPage({
       <PageContent
         productId={Number(params.product_id)}
         variantId={Number(params.variant_id)}
+        sessionId={params.session_id ? Number(params.session_id) : undefined}
       />
     </Suspense>
   );

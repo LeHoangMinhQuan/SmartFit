@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { tryonService } from "../../services/tryon.service";
+import { useTryOnTrackerStore } from "../../store/useTryOnTrackerStore";
 import Spinner from "../ui/Spinner";
 import type { TryOnFailureReason } from "../../interfaces";
 
@@ -30,6 +31,7 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
   const [rateLimited, setRateLimited] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const untrack = useTryOnTrackerStore((s) => s.untrack);
 
   const { data: poll = { status: "processing" }, error } = useQuery({
     queryKey: ["tryon-preview", sessionId],
@@ -46,6 +48,16 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
       return POLL_MS;
     },
   });
+
+  // The user is now looking directly at the full result on this page —
+  // the corner TryOnTracker card for this same session would just be a
+  // redundant, already-stale notification at this point.
+  useEffect(() => {
+    if (poll.status === "ready" || poll.status === "failed") {
+      untrack(sessionId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poll.status, sessionId]);
 
   useEffect(() => {
     // NOTE: a 429 while polling comes from the global 200/15min limiter,

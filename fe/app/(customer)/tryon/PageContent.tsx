@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { productService } from "../../../services/product.service";
 import { tryonService } from "../../../services/tryon.service";
 import { useAuthStore } from "../../../store/useAuthStore";
+import { useTryOnTrackerStore } from "../../../store/useTryOnTrackerStore";
 import { toast } from "../../../components/ui/Toast";
 import Spinner from "../../../components/ui/Spinner";
 import PhotoUpload from "../../../components/tryon/PhotoUpload";
@@ -17,6 +18,10 @@ type Stage = "upload" | "result";
 interface Props {
   productId: number;
   variantId: number;
+  // Present when navigated here from a TryOnTracker card ("tap to
+  // view") — jumps straight to the result stage for that session
+  // instead of making the user re-upload a photo.
+  sessionId?: number;
 }
 
 const CLOTH_TYPE_OPTIONS: { value: ClothType; label: string }[] = [
@@ -25,13 +30,23 @@ const CLOTH_TYPE_OPTIONS: { value: ClothType; label: string }[] = [
   { value: "overall", label: "Dress" },
 ];
 
-export default function TryOnPage({ productId, variantId }: Props) {
+export default function TryOnPage({
+  productId,
+  variantId,
+  sessionId: deepLinkedSessionId,
+}: Props) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const track = useTryOnTrackerStore((s) => s.track);
+  const untrack = useTryOnTrackerStore((s) => s.untrack);
 
-  const [stage, setStage] = useState<Stage>("upload");
-  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [stage, setStage] = useState<Stage>(
+    deepLinkedSessionId ? "result" : "upload",
+  );
+  const [sessionId, setSessionId] = useState<number | null>(
+    deepLinkedSessionId ?? null,
+  );
   const [clothType, setClothType] = useState<ClothType>("upper");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -49,6 +64,8 @@ export default function TryOnPage({ productId, variantId }: Props) {
   const variant =
     product?.variants.find((v) => v.variant_id === variantId) ?? null;
   const loading = !productId || !variantId ? false : productQuery.isLoading;
+  const garmentImage =
+    variant?.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url;
 
   useEffect(() => {
     if (productQuery.isError) toast.error("Failed to load product.");
@@ -71,6 +88,14 @@ export default function TryOnPage({ productId, variantId }: Props) {
     onSuccess: (session_id) => {
       setSessionId(session_id);
       setStage("result");
+      track({
+        session_id,
+        product_id: productId,
+        variant_id: variantId,
+        product_name: product?.name,
+        variant_name: variant?.name,
+        thumbnail_url: garmentImage ?? null,
+      });
     },
     onError: (e: unknown) => {
       if ((e as { response?: { status?: number } })?.response?.status === 429) {
@@ -96,6 +121,7 @@ export default function TryOnPage({ productId, variantId }: Props) {
   }
 
   function handleReset() {
+    if (sessionId) untrack(sessionId);
     setSessionId(null);
     setSelectedFile(null);
     setStage("upload");
@@ -119,9 +145,6 @@ export default function TryOnPage({ productId, variantId }: Props) {
       </div>
     );
   }
-
-  const garmentImage =
-    variant?.images?.[0]?.s3_url ?? product?.images?.[0]?.s3_url;
 
   return (
     <div className="min-h-screen bg-slate-50 py-10">

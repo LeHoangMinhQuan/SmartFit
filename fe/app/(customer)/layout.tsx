@@ -5,6 +5,7 @@ import TopBanner from "../../components/layout/TopBanner";
 import { Toaster } from "../../components/ui/Toast";
 import ChatBubble from "../../components/chat/ChatBubble";
 import ChatPanel from "../../components/chat/ChatPanel";
+import TryOnTracker from "../../components/tryon/TryOnTracker";
 
 export default function CustomerLayout({
   children,
@@ -24,6 +25,10 @@ export default function CustomerLayout({
           unmounted based on open/closed state. */}
       <ChatBubble />
       <ChatPanel />
+      {/* Try-on progress tracker — survives navigation so a customer can
+          browse other products while a preview generates in the
+          background. See store/useTryOnTrackerStore.ts. */}
+      <TryOnTracker />
     </>
   );
 }
