@@ -44,6 +44,7 @@ export default function StaffInventoryPage() {
   const [tab, setTab] = useState<Tab>("stock");
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [importsPage, setImportsPage] = useState(1);
+  const [stockPage, setStockPage] = useState(1);
   const [adjustQty, setAdjustQty] = useState<Record<string, string>>({});
   const [showImportForm, setShowImportForm] = useState(false);
   const [importForm, setImportForm] = useState({
@@ -86,13 +87,26 @@ export default function StaffInventoryPage() {
   const imports: ImportRow[] = importsQuery.data?.data ?? [];
   const importsMeta = importsQuery.data?.meta;
 
+  // Changing stores should restart pagination — otherwise switching to a
+  // store with fewer pages than the one you were just on could leave
+  // stockPage pointing past the end (empty page with no way back except
+  // manually clicking "1").
+  useEffect(() => {
+    setStockPage(1);
+  }, [selectedStoreId]);
+
   const stockQuery = useQuery({
-    queryKey: ["staff-inventory-stock", selectedStoreId],
+    queryKey: ["staff-inventory-stock", selectedStoreId, stockPage],
     queryFn: () =>
-      inventoryService.getInventory({ store_id: Number(selectedStoreId) }),
+      inventoryService.getInventory({
+        store_id: Number(selectedStoreId),
+        page: stockPage,
+        limit: 20,
+      }),
     enabled: !!selectedStoreId,
   });
-  const stock: InventoryRow[] = stockQuery.data ?? [];
+  const stock: InventoryRow[] = stockQuery.data?.data ?? [];
+  const stockMeta = stockQuery.data?.meta;
   const loading = stockQuery.isLoading;
 
   useEffect(() => {
@@ -134,14 +148,23 @@ export default function StaffInventoryPage() {
         { quantity: vars.quantity },
       ),
     onSuccess: (_data, vars) => {
-      queryClient.setQueryData<InventoryRow[]>(
-        ["staff-inventory-stock", selectedStoreId],
+      // BUG FIX (adjacent to the pagination fix above): the query key now
+      // includes `stockPage`, and the cached value is `{ data, meta }`,
+      // not a plain array — this optimistic update previously kept the
+      // old key/shape and would have silently no-op'd (updating a cache
+      // entry that no longer exists) the moment pagination landed.
+      queryClient.setQueryData<{ data: InventoryRow[]; meta: unknown }>(
+        ["staff-inventory-stock", selectedStoreId, stockPage],
         (old) =>
-          old?.map((r) =>
-            r.product_id === vars.product_id && r.variant_id === vars.variant_id
-              ? { ...r, quantity: vars.quantity }
-              : r,
-          ),
+          old && {
+            ...old,
+            data: old.data.map((r) =>
+              r.product_id === vars.product_id &&
+              r.variant_id === vars.variant_id
+                ? { ...r, quantity: vars.quantity }
+                : r,
+            ),
+          },
       );
       setAdjustQty((prev) => {
         const next = { ...prev };
@@ -354,6 +377,11 @@ export default function StaffInventoryPage() {
               rowKey={(r) => `${r.product_id}-${r.variant_id}`}
               emptyMessage="No stock records for this store."
             />
+            {stockMeta && (
+              <div className="border-t border-slate-100 p-3">
+                <Pagination meta={stockMeta} onPageChange={setStockPage} />
+              </div>
+            )}
           </div>
         ))}
 
@@ -533,6 +561,16 @@ export default function StaffInventoryPage() {
               rowKey={(r) => `${r.product_id}-${r.variant_id}-${r.import_date}`}
               emptyMessage="No import history."
             />
+            {/* BUG FIX: importsMeta/importsPage/setImportsPage were already
+                wired up above (query, state, Pagination import) but the
+                component itself was never actually rendered here — the
+                import-history tab fetched page/limit correctly but had no
+                UI to move between pages. */}
+            {importsMeta && (
+              <div className="border-t border-slate-100 p-3">
+                <Pagination meta={importsMeta} onPageChange={setImportsPage} />
+              </div>
+            )}
           </div>
         </div>
       )}

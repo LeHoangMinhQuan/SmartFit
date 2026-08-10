@@ -48,10 +48,22 @@ export async function findInventory(filters: {
     query = query.where("sp.quantity", ">=", min_quantity);
 
   const rows = await query.limit(limit).offset(offset);
-  let countQ = db("store_product");
-  if (store_id) countQ = countQ.where({ store_id });
-  const totalResult = await countQ.count("product_id as total");
-  const total = totalResult[0]?.['total'] ?? 0;
+
+  // BUG FIX: this used to build a brand-new query (`db("store_product")`)
+  // for the count, only re-applying `store_id` and silently dropping
+  // `min_quantity` — so `total` (and therefore pagination) counted ALL
+  // rows for the store regardless of the quantity filter, while `rows`
+  // itself was correctly filtered. E.g. filtering to `min_quantity=10`
+  // with only 3 matching rows still reported `total` for everything in
+  // the store, showing extra empty pages past the real last page. Fixed
+  // by applying the exact same filters to the count as the row query,
+  // instead of re-deriving a separate query and forgetting one.
+  let countQ = db("store_product as sp");
+  if (store_id) countQ = countQ.where("sp.store_id", store_id);
+  if (min_quantity !== undefined)
+    countQ = countQ.where("sp.quantity", ">=", min_quantity);
+  const totalResult = await countQ.count("sp.product_id as total");
+  const total = totalResult[0]?.["total"] ?? 0;
 
   return { rows, total: Number(total) };
 }

@@ -3,7 +3,8 @@ import ProductGrid from "@/components/product/ProductGrid";
 import ProductFilters from "@/components/product/ProductFilters";
 import Pagination from "@/components/ui/Pagination";
 import type { Category } from "@/interfaces";
-import { Suspense } from "react";
+import type { Metadata } from "next";
+import { Suspense, cache } from "react";
 import { LayoutGrid, PackageX } from "lucide-react";
 
 interface Props {
@@ -30,10 +31,15 @@ function flattenCategories(nodes: Category[]): Category[] {
   return result;
 }
 
+// React's cache() dedupes this within a single request — generateMetadata
+// and the page component below both need the category list, and without
+// this they'd each fire their own GET /categories against the backend.
+const getCategoriesCached = cache(() => categoryService.getCategories());
+
 async function resolveCategory(
   slug: string,
 ): Promise<{ id: number; name: string } | null> {
-  const categories: Category[] = await categoryService.getCategories();
+  const categories: Category[] = await getCategoriesCached();
   const flat = flattenCategories(categories);
   const decoded = decodeURIComponent(slug);
 
@@ -46,6 +52,29 @@ async function resolveCategory(
     flat.find((c) => c.name.toLowerCase() === normalized.toLowerCase());
 
   return match ? { id: match.category_id, name: match.name } : null;
+}
+
+export async function generateMetadata({
+  params,
+}: Pick<Props, "params">): Promise<Metadata> {
+  const { slug } = await params;
+  const category = await resolveCategory(slug);
+
+  if (!category) {
+    // Let the page component's own not-found UI render — this metadata
+    // just keeps a dead link from being indexed under a misleading title.
+    return { title: "Category not found", robots: { index: false } };
+  }
+
+  return {
+    title: category.name,
+    description: `Shop ${category.name.toLowerCase()} at SMARTFIT — browse the full collection with new arrivals, top sellers, and virtual try-on.`,
+    alternates: { canonical: `/category/${encodeURIComponent(category.name)}` },
+    openGraph: {
+      title: `${category.name} | SMARTFIT`,
+      description: `Shop ${category.name.toLowerCase()} at SMARTFIT.`,
+    },
+  };
 }
 
 export default async function CategoryPage({ params, searchParams }: Props) {

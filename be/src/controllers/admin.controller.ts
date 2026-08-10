@@ -249,8 +249,23 @@ export const getStoreStaff = catchAsync(async (req: Request, res: Response) => {
 // ─── Inventory ────────────────────────────────────────────────────────────────
 
 export const listInventory = catchAsync(async (req: Request, res: Response) => {
+  const { page, limit } = req.query as any;
   const result = await InventoryService.listInventory(req.query as any);
-  res.json({ data: result.rows, meta: { total: result.total } });
+  // BUG FIX: this used to return meta: { total } only — no page/limit/
+  // totalPages — so the frontend had nothing to build a Pagination
+  // component from (see getImportHistory just below, which already did
+  // this correctly; listInventory was never brought in line with it).
+  // Matches PaginationMeta / the import-history response shape exactly.
+  const limitNum = Number(limit ?? 50);
+  res.json({
+    data: result.rows,
+    meta: {
+      page: Number(page ?? 1),
+      limit: limitNum,
+      total: result.total,
+      totalPages: Math.ceil(result.total / limitNum),
+    },
+  });
 });
 
 export const adjustQuantity = catchAsync(

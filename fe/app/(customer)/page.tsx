@@ -1,8 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import NewArrivalsSection from "@/components/landing/NewArrivalsSection";
 import TopSellingSection from "@/components/landing/TopSellingSection";
 import FeaturedCategoriesSection from "@/components/landing/FeaturedCategoriesSection";
+
+export const metadata: Metadata = {
+  // No title override — inherits the root layout's default
+  // ("SMARTFIT - Your Ultimate Fashion Destination") since that IS the
+  // homepage's title; every other page uses the "%s | SMARTFIT" template.
+  alternates: { canonical: "/" },
+};
 
 export default function Home() {
   return (

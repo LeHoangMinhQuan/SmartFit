@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { productService } from "@/services/product.service";
 import ProductGrid from "@/components/product/ProductGrid";
 import Pagination from "@/components/ui/Pagination";
@@ -7,6 +8,22 @@ import { Search } from "lucide-react";
 
 interface Props {
   searchParams: Promise<{ q?: string; page?: string }>;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: Props): Promise<Metadata> {
+  const { q } = await searchParams;
+  const query = q?.trim();
+
+  return {
+    title: query ? `Search results for "${query}"` : "Search",
+    // Search-result pages are thin/duplicate content by nature (same
+    // products as their category pages, just re-sliced by keyword) —
+    // standard SEO practice is not to index them, so they don't compete
+    // with the category/product pages that should actually rank.
+    robots: { index: false, follow: true },
+  };
 }
 
 export default async function SearchPage({ searchParams }: Props) {

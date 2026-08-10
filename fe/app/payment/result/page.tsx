@@ -1,6 +1,16 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import PageContent from "./PageContent";
 import Spinner from "../../../components/ui/Spinner";
+
+// VNPay redirect target with transaction params in the URL — never
+// something a search result should show (personal + a dead link once
+// the transaction has been processed). See app/robots.ts's matching
+// disallow on /payment.
+export const metadata: Metadata = {
+  title: "Payment Result",
+  robots: { index: false, follow: false },
+};
 
 export default async function PaymentResultPage({
   searchParams,
