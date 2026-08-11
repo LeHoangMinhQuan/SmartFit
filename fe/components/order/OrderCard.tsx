@@ -61,7 +61,7 @@ export default function OrderCard({ order }: OrderCardProps) {
       {/* Top row — order ID + status */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold">
+          <p className="text-sm font-semibold text-slate-900">
             Order{" "}
             <span className="font-mono text-gray-300">#{order.order_id}</span>
           </p>
@@ -73,7 +73,7 @@ export default function OrderCard({ order }: OrderCardProps) {
       {/* Middle row — item count + shipping address */}
       <div className="mt-3 flex flex-col gap-1 text-sm text-gray-400">
         <p>
-          {itemCount} item{itemCount !== 1 ? "s" : ""}
+          {/* {itemCount} item{itemCount !== 1 ? "s" : ""} */}
           {order.shipping_address ? ` · ${order.shipping_address}` : ""}
         </p>
       </div>
@@ -81,7 +81,7 @@ export default function OrderCard({ order }: OrderCardProps) {
       {/* Bottom row — total */}
       <div className="mt-4 flex items-center justify-between">
         <p className="text-xs text-gray-500">Total</p>
-        <p className="text-sm font-semibold">
+        <p className="text-sm font-semibold text-slate-900">
           {Number(order.total_amount).toLocaleString("vi-VN")}₫
         </p>
       </div>
