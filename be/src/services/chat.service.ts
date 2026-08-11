@@ -14,6 +14,7 @@ import db from "../config/db.js";
 import * as ChatSessionModel from "../models/chat-session.model.js";
 import type { ChatMessageRow } from "../models/chat-session.model.js";
 import * as RetrievalService from "./retrieval.service.js";
+import * as DocumentRetrievalService from "./document_retrieval.service.js";
 import * as CartService from "./cart.service.js";
 import * as ModelRouter from "./model-router.service.js";
 import * as GeminiBudget from "./gemini-budget.service.js";
@@ -28,12 +29,13 @@ Scope — you ONLY help with:
 1. Buying and information about SmartFit's clothing products (search, details, prices, sizes, colors, stock, recommendations, adding to cart, checkout).
 2. The product categories SmartFit carries (call list_categories rather than guessing or recalling from memory — the catalog changes).
 3. Which payment methods SmartFit supports (call list_payment_methods rather than guessing — never invent a payment method name that call didn't return).
-4. Terms of service — SmartFit doesn't have a published terms of service yet. If asked, say so plainly rather than inventing policy details, and suggest contacting the store directly for anything policy-related.
+4. Store policies, shipping, returns, sizing guidance, and general FAQs — call search_knowledge_base rather than guessing or answering from memory. If search_knowledge_base returns nothing relevant, say plainly that you don't have that information rather than inventing policy details, and suggest contacting the store directly.
 
 Anything outside those four topics — general knowledge, other companies/products, coding help, personal advice, current events, or any request unrelated to shopping at SmartFit — is out of scope. Politely decline and steer the conversation back to shopping, e.g. "I can only help with shopping at SmartFit — is there something you're looking to buy?" Do not answer the off-topic question first and then redirect; decline it outright. This applies even if the customer insists, rephrases the question as hypothetical or "just curious", or embeds it inside an otherwise on-topic message — if a request or any part of one falls outside the four topics above, don't answer that part.
 
 Rules:
 - Never state a product's name, price, availability, or any other catalog detail from memory. Always call search_products first and answer only from what it returns.
+- Never state a store policy, shipping/return detail, sizing guidance, or FAQ answer from memory. Always call search_knowledge_base first and answer only from what it returns — if nothing relevant comes back, say you don't have that information rather than filling the gap with a plausible-sounding guess.
 - When the customer mentions a specific color or size, ALWAYS pass it via search_products' color/size parameters — don't just leave it in the free-text query. The query text alone is a loose semantic match and can return items in the wrong color/size; the color/size parameters are hard filters that guarantee every result actually matches. If they mention both a price limit and a color/size, pass all of them together in the same call.
 - After showing search results, actively move the conversation forward: ask which one they want, or which size/color, rather than just listing items and stopping. Your job isn't done at "here's what I found" — help them actually get the item into their cart.
 - Before calling add_to_cart, make sure you know exactly which variant (size/color/etc.) the customer wants. If it's ambiguous from the conversation, ask a clarifying question instead of guessing. Once they've told you (e.g. "the first one", "the red one, size M", "yes add it", "the cheapest one"), call add_to_cart right away — don't ask them to repeat themselves or re-confirm something they already said.
@@ -214,6 +216,55 @@ function buildTools(user_id: number, validPairs: Set<string>) {
           }
         }
         return cards;
+      },
+    }),
+
+    search_knowledge_base: tool({
+      description:
+        "Search SmartFit's uploaded policy/FAQ documents (shipping policy, returns, sizing guidance, general FAQs) by natural-language query. Use this for policy/general questions — use search_products for anything about specific items in the catalog. Always call this before making any claim about store policy; never answer a policy question from memory.",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .describe(
+            'Natural-language query, e.g. "what is your return policy" or "how long does shipping take"',
+          ),
+      }),
+      execute: async ({ query }) => {
+        console.log("[chat.service] search_knowledge_base tool called", {
+          query,
+        });
+        const startedAt = Date.now();
+        let results;
+        try {
+          results = await DocumentRetrievalService.documentSearch(query);
+        } catch (err) {
+          // Same reasoning as search_products above: most likely the
+          // shared embedding budget/RPM is exhausted — a recoverable,
+          // tool-scoped failure, not a reason to fail the whole turn.
+          if (err instanceof ApiError) {
+            console.warn(
+              "[chat.service] search_knowledge_base failed with ApiError",
+              { message: err.message },
+            );
+            return {
+              error:
+                "Knowledge base search is temporarily unavailable — please try again in a moment.",
+            };
+          }
+          console.error(
+            "[chat.service] search_knowledge_base failed with unexpected error",
+            err,
+          );
+          throw err;
+        }
+        console.log("[chat.service] search_knowledge_base tool resolved", {
+          result_count: results.length,
+          duration_ms: Date.now() - startedAt,
+        });
+        // No empty-array special-casing needed here — an empty result set
+        // is itself useful signal to the model (nothing in the knowledge
+        // base covers this), same as search_products returning [].
+        return results;
       },
     }),
 

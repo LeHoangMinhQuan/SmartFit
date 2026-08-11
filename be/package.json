@@ -13,7 +13,8 @@
     "build": "tsc --project tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "check:gemini": "tsx scripts/check-gemini.ts"
+    "smoke:extraction": "tsx scripts/smoke-test-extraction.ts",
+    "smoke:chunking": "tsx scripts/smoke-test-chunking.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.28",
@@ -40,6 +41,7 @@
     "multer-s3": "^3.0.1",
     "nodemailer": "^9.0.3",
     "p-queue": "^9.3.1",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.22.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^14.0.0",

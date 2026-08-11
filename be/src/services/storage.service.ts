@@ -21,11 +21,13 @@ import { env } from "../config/env.js";
  */
 
 /**
- * Build the public CDN URL for an object under the `products/` or
- * `categories/` prefix. Use this instead of the raw multer-s3 `file.location`
- * (which points at the private S3 origin and would 403 in the browser).
+ * Build the public CDN URL for an object under the `products/`,
+ * `categories/`, or `documents/` prefix. Use this instead of the raw
+ * multer-s3 `file.location` (which points at the private S3 origin and
+ * would 403 in the browser).
  *
- * @param s3Key - e.g. "products/abc123.jpg" or "categories/def456.jpg"
+ * @param s3Key - e.g. "products/abc123.jpg", "categories/def456.jpg", or
+ *                "documents/ghi789.pdf"
  */
 export function cdnUrlForKey(s3Key: string): string {
   return `https://${env.CDN_DOMAIN}/${s3Key}`;
@@ -63,6 +65,40 @@ export async function deleteS3Object(s3Key: string): Promise<void> {
   } catch (err) {
     console.warn(`[storage] Failed to delete S3 object "${s3Key}":`, err);
   }
+}
+
+/**
+ * Fetch a private S3 object's full contents into memory as a Buffer.
+ *
+ * Needed specifically for the RAG document upload feature
+ * (rag-document-upload-plan.md §4.2): documentUpload.ts streams uploads
+ * straight to S3 via multer-s3 rather than buffering them in the
+ * request (same as upload.ts's product-image pattern), so
+ * document_extraction.service.ts's buffer-in/text-out API has no buffer
+ * to work with until something fetches the object back — this is that
+ * fetch. Not used by any other existing flow (product/category images
+ * never need their raw bytes back server-side after upload), so this
+ * lives here rather than being a more generic "download" utility.
+ */
+export async function getObjectBuffer(s3Key: string): Promise<Buffer> {
+  const response = await s3.send(
+    new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: s3Key }),
+  );
+  const body = response.Body;
+  if (!body) {
+    throw new Error(`getObjectBuffer: no Body returned for key "${s3Key}"`);
+  }
+  // AWS SDK v3's GetObjectCommand Body is a Node.js Readable in this
+  // runtime (not a browser ReadableStream/Blob) — collect it into one
+  // Buffer rather than streaming, since extraction needs the whole file
+  // in memory anyway (pdf-parse has no streaming API) and documents here
+  // are capped at 20MB by documentUpload.ts, small enough that buffering
+  // isn't a real memory concern.
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Buffer>) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 /**

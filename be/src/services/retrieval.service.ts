@@ -79,7 +79,7 @@ async function embedQuery(query: string): Promise<number[]> {
   const startedAt = Date.now();
   try {
     const { embedding } = await embed({
-      model: geminiProvider.textEmbeddingModel(model),
+      model: geminiProvider.embeddingModel(model),
       value: query,
       providerOptions: {
         google: {
