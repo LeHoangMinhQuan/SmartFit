@@ -350,6 +350,10 @@ export interface WishlistItem {
   variant_name?: string;
   base_price?: string | null;
   image_url?: string | null;
+  // Added alongside the price-display consistency pass — see
+  // wishlist.model.ts's findActiveWishlist. Same shape as ProductVariant's
+  // `discount` field, reused by PriceDisplay.
+  discount?: Discount | null;
 }
 
 // Try-On
@@ -438,6 +442,9 @@ export interface ChatProductCardData {
   variant_id: number | null;
   name: string;
   price: number | null;
+  // Added alongside the price-display consistency pass — see
+  // retrieval.service.ts's ProductCard. Same shape as Discount elsewhere.
+  discount?: Discount | null;
   image_url: string | null;
   url: string;
 }

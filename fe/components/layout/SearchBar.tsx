@@ -168,7 +168,7 @@ export default function SearchBar({
                         <p className="truncate text-sm font-medium text-black">
                           {p.name}
                         </p>
-                        <div className="mt-0.5 flex items-center gap-2">
+                        <div className="mt-0.5 flex flex-wrap items-center gap-2">
                           <span
                             className={
                               p.discountActive
@@ -179,9 +179,20 @@ export default function SearchBar({
                             {p.price != null ? formatPrice(p.price) : "—"}
                           </span>
                           {p.discountActive && p.originalPrice != null && (
-                            <span className="text-xs text-gray-400 line-through">
-                              {formatPrice(p.originalPrice)}
-                            </span>
+                            <>
+                              <span className="text-xs text-gray-400 line-through">
+                                {formatPrice(p.originalPrice)}
+                              </span>
+                              {p.price != null && (
+                                <span className="rounded bg-red-100 px-1 py-0.5 text-[10px] font-semibold text-red-600">
+                                  -
+                                  {Math.round(
+                                    (1 - p.price / p.originalPrice) * 100,
+                                  )}
+                                  %
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

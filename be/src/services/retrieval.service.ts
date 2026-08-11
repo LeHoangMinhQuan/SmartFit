@@ -34,6 +34,21 @@ export interface ProductCard {
   variant_id: number | null;
   name: string;
   price: number | null;
+  // Added alongside the price-display consistency pass — same shape as
+  // ProductVariant.discount elsewhere, sourced from the same
+  // findVariantsByProduct() call just below (it already returns this per
+  // variant; it just wasn't being read here). Lets the chat widget's
+  // product card show base/discount/final the same way every other
+  // product-price surface in the app does, instead of only ever showing
+  // the already-discounted final price with no indication of the sale.
+  discount: {
+    discount_id: number;
+    voucher_code: string;
+    voucher_type: "percent" | "fixed";
+    voucher_value: number;
+    start_date: string;
+    end_date: string;
+  } | null;
   image_url: string | null;
   url: string;
 }
@@ -277,6 +292,7 @@ async function toProductCard(
       primaryVariant?.base_price != null
         ? Number(primaryVariant.base_price)
         : null,
+    discount: primaryVariant?.discount ?? null,
     image_url: images[0]?.s3_url ?? null,
     url: `/product/${product_id}`,
   };

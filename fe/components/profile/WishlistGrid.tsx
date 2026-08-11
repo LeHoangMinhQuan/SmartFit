@@ -8,9 +8,9 @@ import { wishlistService } from "../../services/wishlist.service";
 import { useWishlistStore } from "../../store/useWishlistStore";
 import { toast } from "../ui/Toast";
 import Spinner from "../ui/Spinner";
-import { formatPrice } from "../../lib/utils";
 import { Heart, Trash2 } from "lucide-react";
 import type { WishlistItem } from "../../interfaces";
+import PriceDisplay from "../product/PriceDisplay";
 
 export default function WishlistGrid() {
   const queryClient = useQueryClient();
@@ -95,8 +95,7 @@ export default function WishlistGrid() {
       {items.map((item) => {
         const key = itemKey(item);
         const busy = removingKey === key;
-        const price =
-          item.base_price != null ? formatPrice(Number(item.base_price)) : null;
+        const hasPrice = item.base_price != null;
 
         return (
           <div
@@ -138,13 +137,19 @@ export default function WishlistGrid() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-900">
-                  {price ?? "—"}
-                </span>
+              <div className="flex items-center justify-between gap-2">
+                {hasPrice ? (
+                  <PriceDisplay
+                    basePrice={Number(item.base_price)}
+                    discount={item.discount}
+                    size="sm"
+                  />
+                ) : (
+                  <span className="text-sm font-bold text-slate-900">—</span>
+                )}
                 <button
                   onClick={() => handleRemove(item)}
-                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                  className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
                   aria-label="Remove from wishlist"
                 >
                   <Trash2 className="h-4 w-4" />

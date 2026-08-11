@@ -16,6 +16,20 @@ export interface WishlistItemWithProduct {
   variant_name: string;
   base_price: string | null;
   image_url: string | null;
+  // Added alongside the price-display consistency pass — same shape as
+  // product.model.ts's per-variant `discount` field, so the frontend can
+  // reuse the same PriceDisplay component/calcDiscounted logic here as
+  // everywhere else a product price shows. Previously not selected at
+  // all, so the wishlist silently showed base price only even for
+  // items currently on sale.
+  discount: {
+    discount_id: number;
+    voucher_code: string;
+    voucher_type: "percent" | "fixed";
+    voucher_value: number;
+    start_date: string;
+    end_date: string;
+  } | null;
 }
 
 /**
@@ -56,6 +70,30 @@ export async function findActiveWishlist(
         order by pim.variant_id nulls last
         limit 1
       ) as image_url`),
+      // Correlated subquery, same "currently active" window and
+      // cheapest-first tiebreak as product.model.ts's DISCOUNTED_PRICE_SQL
+      // — a plain JOIN here would risk multiplying rows if a variant ever
+      // has more than one overlapping active discount, and this query has
+      // no GROUP BY to collapse that the way the catalog list query does.
+      db.raw(`(
+        select jsonb_build_object(
+          'discount_id', d.discount_id,
+          'voucher_code', d.voucher_code,
+          'voucher_type', d.voucher_type,
+          'voucher_value', d.voucher_value,
+          'start_date', d.start_date,
+          'end_date', d.end_date
+        )
+        from product_discount pd2
+        join discount d on d.discount_id = pd2.discount_id
+        where pd2.product_id = w.product_id and pd2.variant_id = w.variant_id
+          and d.start_date <= now() and d.end_date >= now()
+        order by (pp.base_price - case when d.voucher_type = 'percent'
+          then pp.base_price * d.voucher_value / 100
+          else d.voucher_value
+        end) asc
+        limit 1
+      ) as discount`),
     )
     .orderBy("w.created_at", "desc");
 }

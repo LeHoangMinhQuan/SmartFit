@@ -5,18 +5,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Check, Loader2 } from "lucide-react";
-import { formatPrice } from "@/lib/utils";
 import { cartService } from "@/services/cart.service";
 import { useCartStore } from "@/store/useCartStore";
 import { toast } from "@/components/ui/Toast";
+import PriceDisplay from "@/components/product/PriceDisplay";
 import type { ChatProductCardData } from "@/interfaces";
 
 /**
  * Compact product card for chat search results. Reuses the same visual
- * language as components/product/ProductCard.tsx (rounded image tile,
- * same price formatting) rather than inventing a one-off style, but isn't
- * literally the same component — ProductCard requires rating/discount
- * data that search_products' ProductCard (backend) doesn't return.
+ * language as components/product/ProductCard.tsx (rounded image tile) and
+ * the same PriceDisplay component the rest of the app uses for base
+ * price / discount rate / final price, at its "sm" size — previously
+ * this only ever showed the already-discounted final price via a bare
+ * formatPrice() call, with no indication a product was on sale, because
+ * the backend's search_products tool didn't return discount data at all
+ * (now fixed in retrieval.service.ts's toProductCard()).
  *
  * "Add to cart" hits POST /cart/items directly (cartService.addItem)
  * rather than round-tripping through the model — the card already has the
@@ -31,6 +34,7 @@ export default function ChatProductCard({
   variant_id,
   name,
   price,
+  discount,
   image_url,
   url,
 }: ChatProductCardData) {
@@ -73,9 +77,11 @@ export default function ChatProductCard({
       </Link>
       <Link href={url} className="min-w-0 flex-1">
         <p className="line-clamp-1 text-sm font-medium text-black">{name}</p>
-        <p className="text-sm font-semibold text-black">
-          {price != null ? formatPrice(price) : "Contact for price"}
-        </p>
+        {price != null ? (
+          <PriceDisplay basePrice={price} discount={discount} size="sm" />
+        ) : (
+          <p className="text-sm font-semibold text-black">Contact for price</p>
+        )}
       </Link>
       <div className="flex shrink-0 items-center gap-1.5">
         <button
