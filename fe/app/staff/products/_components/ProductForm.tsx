@@ -247,7 +247,7 @@ export default function ProductForm({
         <h1 className="text-3xl font-bold text-slate-900">
           {mode === "create"
             ? "New Product"
-            : `Edit Product #${savedProductId}`}
+            : `Edit Product`}
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           {mode === "create"

@@ -90,15 +90,113 @@ export async function notifyStaffOfConfirmedOrder(
 }
 
 /**
- * Called from order.service.ts's createOrder (COD path) and
- * vnpay.service.ts's applyPaymentResult when createShipmentForOrder
- * throws. Previously that failure only ever hit console.error — the
- * order was left confirmed/paid with shipping_order_id still NULL,
- * indistinguishable in the dashboard from an order simply waiting to be
- * picked, so nobody knew to retry it. This is the only signal staff get;
- * without ORDER_NOTIFICATION_EMAIL configured, a failed shipment is
- * invisible until someone happens to notice the order isn't moving.
+ * Called from order.service.ts's cancelOrder() the moment a prepaid order
+ * moves to 'refund_requested' — see that function's comment: cancelling a
+ * prepaid order never auto-refunds (a wrong refund is a real financial
+ * mistake), it just flags the order for a staff member to review and
+ * trigger vnpay.service.ts's processRefund from the dashboard. Without
+ * this email nothing tells staff that review is needed; the order would
+ * just sit there until someone happened to filter the orders list by
+ * status, exactly the same "nothing else pushes this information to
+ * them" gap notifyStaffOfConfirmedOrder exists for.
  */
+export async function notifyStaffOfRefundRequest(
+  order_id: number,
+): Promise<void> {
+  const to = env.ORDER_NOTIFICATION_EMAIL;
+  if (!to) {
+    console.warn(
+      `[notification] ORDER_NOTIFICATION_EMAIL not configured — skipping refund-request email for order ${order_id}`,
+    );
+    return;
+  }
+
+  try {
+    const order = await OrderModel.findOrderById(order_id);
+    if (!order) return;
+
+    await sendMail({
+      to,
+      subject: `Refund requested for order #${order_id}`,
+      html: `
+        <p>Order #${order_id} was cancelled by the customer after payment
+        and is now awaiting refund review.</p>
+        <p><strong>Amount:</strong> ${order.total_amount}</p>
+        <p><strong>Shipping address:</strong> ${order.shipping_address}</p>
+        <p>
+          This order will stay in "refund_requested" until a staff member
+          reviews it and processes the refund from the order detail page —
+          nothing happens automatically.
+        </p>
+      `,
+    });
+
+    console.log(
+      `[notification] Sent refund-request email for order ${order_id} to ${to}`,
+    );
+  } catch (err) {
+    // Same fail-safe rule as the other notify* functions in this file —
+    // must never undo or retry-block the cancellation that already
+    // committed.
+    console.error(
+      `[notification] Failed to send refund-request email for order ${order_id}:`,
+      err,
+    );
+  }
+}
+
+/**
+ * Called from vnpay.service.ts's processRefund once VNPay has responded —
+ * both on success and on failure, since a failed refund needs at least as
+ * much attention as a successful one (the order is left back in
+ * 'refund_requested' for staff to retry — see that function's comment).
+ * Confirms to whoever is watching the inbox that the Process Refund click
+ * actually did something, rather than leaving them to reload the order
+ * detail page to find out.
+ */
+export async function notifyStaffOfRefundOutcome(
+  order_id: number,
+  outcome: { status: "success" | "failed"; message: string },
+): Promise<void> {
+  const to = env.ORDER_NOTIFICATION_EMAIL;
+  if (!to) {
+    console.warn(
+      `[notification] ORDER_NOTIFICATION_EMAIL not configured — skipping refund-outcome email for order ${order_id}`,
+    );
+    return;
+  }
+
+  try {
+    const succeeded = outcome.status === "success";
+    await sendMail({
+      to,
+      subject: succeeded
+        ? `Refund confirmed for order #${order_id}`
+        : `⚠ Refund FAILED for order #${order_id}`,
+      html: `
+        <p>Order #${order_id}'s refund ${succeeded ? "was confirmed by VNPay" : "failed"}.</p>
+        <p><strong>VNPay message:</strong> ${outcome.message}</p>
+        ${
+          succeeded
+            ? ""
+            : `<p>The order remains in "refund_requested" — retry Process
+               Refund from the order detail page once the underlying issue
+               is resolved.</p>`
+        }
+      `,
+    });
+
+    console.log(
+      `[notification] Sent refund-outcome (${outcome.status}) email for order ${order_id} to ${to}`,
+    );
+  } catch (err) {
+    console.error(
+      `[notification] Failed to send refund-outcome email for order ${order_id}:`,
+      err,
+    );
+  }
+}
+
 export async function notifyStaffOfShipmentFailure(
   order_id: number,
   error: unknown,

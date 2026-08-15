@@ -298,7 +298,14 @@ export async function processRefund(
 
   if (isSuccess) {
     await OrderModel.updateOrderStatus(order_id, "refunded");
-    return { status: "success", message: "Refund confirmed by VNPay" };
+    const outcome = {
+      status: "success" as const,
+      message: "Refund confirmed by VNPay",
+    };
+    const { notifyStaffOfRefundOutcome } =
+      await import("./notification.service.js");
+    notifyStaffOfRefundOutcome(order_id, outcome).catch(() => {});
+    return outcome;
   }
 
   // Left as 'refund_requested' on failure — this function (not
@@ -306,10 +313,29 @@ export async function processRefund(
   // 'refund_requested' entry) is the only path that ever sets 'refunded',
   // so staff can just retry Process Refund from the dashboard; the order
   // can't get stuck in an unreachable state.
-  return {
-    status: "failed",
-    message: result.vnp_Message ?? "VNPay declined the refund request",
+  //
+  // BUG FIX: when the response's checksum fails verification, the vnpay
+  // SDK's queryService.refund() only overwrites `message` (to "Sai
+  // checksum" / wrong-checksum text), it does NOT refresh `vnp_Message`.
+  // `vnp_Message` is set once, earlier, straight from the response's own
+  // vnp_ResponseCode — so if VNPay happened to return code "00" ("Yêu cầu
+  // thành công" / request successful) on a response whose signature then
+  // failed to verify, `vnp_Message` is left holding that success text
+  // even though we (correctly, per isVerified above) refuse to trust the
+  // response and report status "failed". That produced exactly this bug:
+  // status "failed" paired with a success-sounding message. `message` (as
+  // opposed to `vnp_Message`) IS kept in sync on verification failure, so
+  // prefer it whenever isVerified is false.
+  const failureOutcome = {
+    status: "failed" as const,
+    message: !result.isVerified
+      ? result.message
+      : (result.vnp_Message ?? "VNPay declined the refund request"),
   };
+  const { notifyStaffOfRefundOutcome } =
+    await import("./notification.service.js");
+  notifyStaffOfRefundOutcome(order_id, failureOutcome).catch(() => {});
+  return failureOutcome;
 }
 
 // UPDATE (2026-08-09): the "IMPORTANT — verify against your sandbox" note

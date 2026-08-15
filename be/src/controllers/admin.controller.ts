@@ -308,13 +308,31 @@ export const recordImport = catchAsync(async (req: Request, res: Response) => {
 
 export const listUsers = catchAsync(async (req: Request, res: Response) => {
   const { page = 1, limit = 20 } = req.query as any;
-  const offset = (Number(page) - 1) * Number(limit);
+  const pageNum = Number(page);
+  const limitNum = Number(limit);
+  const offset = (pageNum - 1) * limitNum;
   const rows = await db("USER")
     .select("user_id", "username", "email", "phone", "created_at")
-    .limit(Number(limit))
+    .limit(limitNum)
     .offset(offset);
-  const total = await db("USER").count("user_id as total");
-  res.json({ data: rows, meta: { total: Number(total) } });
+  const totalResult = await db("USER").count("user_id as total");
+  // BUG FIX: `total` was `Number([{ total: "N" }])` — count() returns an
+  // array of one row, and Number() on an array (via its default
+  // toString(), "[object Object]" once stringified) is NaN, not the
+  // count. Same "meta is missing/wrong" family of bug as adminListOrders
+  // — pull the row's `total` field out first, and return the full
+  // PaginationMeta shape (page/limit/total/totalPages) the frontend's
+  // <Pagination> component actually reads, same as the orders-list fix.
+  const total = Number(totalResult[0]?.["total"] ?? 0);
+  res.json({
+    data: rows,
+    meta: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    },
+  });
 });
 
 export const getUser = catchAsync(async (req: Request, res: Response) => {
@@ -362,7 +380,27 @@ export const adminListOrders = catchAsync(
       ...rest,
       needs_fulfillment: needs_fulfillment === "true",
     });
-    res.json({ data: result.rows, meta: { total: result.total } });
+    // BUG FIX: this was returning only `{ total }` in meta, unlike
+    // listInventory/getImportHistory which return the full PaginationMeta
+    // shape (page/limit/total/totalPages — see interfaces.tsx on the
+    // frontend). The frontend's <Pagination> component reads
+    // `meta.totalPages` to decide whether to render at all
+    // (`if (totalPages <= 1) return null`) and to build its page-button
+    // list — with totalPages undefined that comparison is always false,
+    // so pagination rendered in a broken state and staff couldn't page
+    // past the first 20 results of a filtered/unfiltered list, making
+    // filtering look broken (results seemed "stuck"/incomplete).
+    const page = Number((req.query as any).page ?? 1);
+    const limit = Number((req.query as any).limit ?? 20);
+    res.json({
+      data: result.rows,
+      meta: {
+        page,
+        limit,
+        total: result.total,
+        totalPages: Math.ceil(result.total / limit),
+      },
+    });
   },
 );
 

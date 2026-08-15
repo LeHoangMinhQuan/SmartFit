@@ -439,13 +439,28 @@ export async function cancelOrder(order_id: number, user_id: number) {
   // instead (stock restored now; the actual VNPay refund call happens
   // separately once staff reviews and approves it — see
   // vnpay.service.ts's processRefund, triggered from the staff dashboard).
-  return db.transaction((trx) =>
-    restoreStockAndCancelOrder(
+  return db.transaction(async (trx) => {
+    await restoreStockAndCancelOrder(
       trx,
       order_id,
       isCOD ? "cancelled" : "refund_requested",
-    ),
-  );
+    );
+
+    if (!isCOD) {
+      // Staff have no other way to learn a refund needs reviewing — same
+      // "nothing else pushes this information to them" gap notification
+      // .service.ts's file-level comment describes for new orders. Fired
+      // fire-and-forget, after the DB transaction succeeds but still
+      // inside cancelOrder rather than left to the caller, so every path
+      // that can create a 'refund_requested' order sends this the same
+      // way (mirrors notifyStaffOfConfirmedOrder / ...OfShipmentFailure's
+      // own fail-safe pattern — a failed email must never undo or block
+      // the cancellation that already committed).
+      const { notifyStaffOfRefundRequest } =
+        await import("./notification.service.js");
+      notifyStaffOfRefundRequest(order_id).catch(() => {});
+    }
+  });
 }
 
 // cancelOrderBySystem() (system/webhook-triggered cancellation) was

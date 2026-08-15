@@ -62,9 +62,17 @@ router.get("/roles", authorize("admin"), Admin.listRoles);
 router.post("/roles", authorize("admin"), Admin.createRole);
 
 // ─── Stores ───────────────────────────────────────────────────────────────────
-router.get("/stores", authorize("admin"), Admin.listStores);
+// BUG FIX: list/detail (and the two read-only sub-resources below) were
+// admin-only, but store data is needed just to *view* the inventory,
+// supplier, and import-history pages (e.g. populating a store picker/
+// filter) — staff already has read access to all three of those. Staff
+// couldn't load stores at all, which broke those pages even though the
+// inventory/supplier/import-history endpoints themselves were correctly
+// staff-allowed. Mutating a store (create/update/activate) stays
+// admin-only — same read/write split used for suppliers below.
+router.get("/stores", authorize("admin", "staff"), Admin.listStores);
 router.post("/stores", authorize("admin"), Admin.createStore);
-router.get("/stores/:store_id", authorize("admin"), Admin.getStore);
+router.get("/stores/:store_id", authorize("admin", "staff"), Admin.getStore);
 router.patch("/stores/:store_id", authorize("admin"), Admin.updateStore);
 router.patch(
   "/stores/:store_id/status",
@@ -73,10 +81,14 @@ router.patch(
 );
 router.get(
   "/stores/:store_id/inventory",
-  authorize("admin"),
+  authorize("admin", "staff"),
   Admin.getStoreInventory,
 );
-router.get("/stores/:store_id/staff", authorize("admin"), Admin.getStoreStaff);
+router.get(
+  "/stores/:store_id/staff",
+  authorize("admin", "staff"),
+  Admin.getStoreStaff,
+);
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 // ⚠ Static paths (/import-history, /import) MUST come before the parameterised
