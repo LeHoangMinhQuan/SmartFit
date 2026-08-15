@@ -7,6 +7,7 @@ import { adminService } from "../../../services/staff/admin.service";
 import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import Input from "../../../components/ui/Input";
+import type { Role } from "../../../interfaces";
 
 export default function StaffListPage() {
   const router = useRouter();
@@ -16,6 +17,14 @@ export default function StaffListPage() {
     queryFn: () => adminService.getStaffList(),
   });
   const staffList = data ?? [];
+
+  // Roles for the create form's role picker — same source the staff
+  // detail page's Roles tab uses (adminService.getRoles()).
+  const { data: allRoles = [] } = useQuery({
+    queryKey: ["staff-roles"],
+    queryFn: () => adminService.getRoles(),
+  });
+
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -23,22 +32,50 @@ export default function StaffListPage() {
     start_time: "",
     password: "",
   });
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+
+  function toggleRole(role_id: number) {
+    setSelectedRoleIds((prev) =>
+      prev.includes(role_id)
+        ? prev.filter((id) => id !== role_id)
+        : [...prev, role_id],
+    );
+  }
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      adminService.createStaff({
+    mutationFn: async () => {
+      const { staff_id } = await adminService.createStaff({
         name: form.name,
         ...(form.birth_date ? { birth_date: form.birth_date } : {}),
         ...(form.start_time ? { start_time: form.start_time } : {}),
         password: form.password,
-      }),
+      });
+      // No combined "create + assign roles" endpoint on the backend —
+      // POST /admin/staff only takes name/birth_date/start_time/password
+      // (see StaffService.createStaff). Assign roles as a follow-up step
+      // with the new staff_id, same POST /admin/staff/:id/roles call the
+      // detail page's Roles tab already uses one at a time. Run them in
+      // parallel since each role assignment is independent.
+      if (selectedRoleIds.length > 0) {
+        await Promise.all(
+          selectedRoleIds.map((role_id) =>
+            adminService.assignRole(staff_id, role_id),
+          ),
+        );
+      }
+      return staff_id;
+    },
     onSuccess: () => {
       toast.success("Staff member created.");
       setForm({ name: "", birth_date: "", start_time: "", password: "" });
+      setSelectedRoleIds([]);
       setAdding(false);
       queryClient.invalidateQueries({ queryKey: ["staff-staff-list"] });
     },
-    onError: () => toast.error("Failed to create staff member."),
+    onError: () =>
+      toast.error(
+        "Failed to create staff member. Any roles that didn't get assigned can be added from their detail page.",
+      ),
   });
   const saving = createMutation.isPending;
 
@@ -100,6 +137,29 @@ export default function StaffListPage() {
             value={form.start_time}
             onChange={(e) => setForm({ ...form, start_time: e.target.value })}
           />
+          <div className="col-span-2 flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-700">Roles</label>
+            {allRoles.length === 0 ? (
+              <p className="text-xs text-gray-500">No roles defined yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {allRoles.map((r: Role) => (
+                  <label
+                    key={r.role_id}
+                    className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:cursor-pointer hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedRoleIds.includes(r.role_id)}
+                      onChange={() => toggleRole(r.role_id)}
+                      className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                    />
+                    {r.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             type="submit"
             disabled={saving}

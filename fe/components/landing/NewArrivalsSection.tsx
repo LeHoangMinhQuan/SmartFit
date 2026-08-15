@@ -13,6 +13,11 @@ function toCardProps(p: ProductSummary): ProductCardProps {
     id: p.product_id,
     name: p.name,
     price: p.price ?? 0,
+    originalPrice: p.originalPrice,
+    discount:
+      p.discountActive && p.originalPrice != null && p.price != null
+        ? Math.round((1 - p.price / p.originalPrice) * 100)
+        : undefined,
     rating: p.avg_rating ?? 0,
     imageUrl: p.image ?? undefined,
   };
@@ -23,7 +28,7 @@ export default function NewArrivalsSection() {
     data: newArrivals = [],
     isLoading,
     isError,
-    error
+    error,
   } = useQuery({
     queryKey: ["products", "new-arrivals", 8],
     queryFn: () => productService.getNewArrivals(8),
