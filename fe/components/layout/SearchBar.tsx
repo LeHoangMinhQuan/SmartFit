@@ -205,7 +205,7 @@ export default function SearchBar({
                 onClick={() => submitSearch()}
                 className="block w-full border-t border-gray-100 px-4 py-3 text-center text-sm font-medium text-black transition hover:bg-gray-50 hover:cursor-pointer"
               >
-                See all {total} result{total === 1 ? "" : "s"} for &ldquo;
+                See all {total} result{total === 1 ? " " : "s "} for &ldquo;
                 {trimmed}&rdquo;
               </button>
             </>

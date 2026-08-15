@@ -63,7 +63,7 @@ export default function OrderCard({ order }: OrderCardProps) {
         <div>
           <p className="text-sm font-semibold text-slate-900">
             Order{" "}
-            <span className="font-mono text-gray-300">#{order.order_id}</span>
+            <span className="font-mono text-gray-500">#{order.order_id}</span>
           </p>
           <p className="mt-0.5 text-xs text-gray-500">{formattedDate}</p>
         </div>
