@@ -212,9 +212,30 @@ export async function findTopSellingProducts(limit = 8) {
 
 export async function searchProducts(query: string, page = 1, limit = 20) {
   const offset = (page - 1) * limit;
-  const rows = await db("product")
-    .whereILike("name", `%${query}%`)
-    .andWhere("is_active", true)
+  // Was previously `db("product").whereILike(...)` with no image/price
+  // join at all — same bug findAllProducts had (see comment above), just
+  // never fixed here. Every row came back with no preview_image/min_price/
+  // max_price/discount fields, so any caller (e.g. SearchBar's preview
+  // dropdown) had nothing to show but the name.
+  const rows = await db("product as p")
+    .select(
+      "p.product_id",
+      "p.name",
+      "p.description",
+      "pi.s3_url as preview_image",
+      db.raw("min(pp.base_price) as min_price"),
+      db.raw("max(pp.base_price) as max_price"),
+      db.raw(DISCOUNTED_PRICE_SQL),
+      db.raw(DISCOUNT_ORIGINAL_PRICE_SQL),
+    )
+    .leftJoin("product_image as pi", function () {
+      this.on("p.product_id", "pi.product_id").andOnNull("pi.variant_id");
+    })
+    .leftJoin("product_price as pp", "p.product_id", "pp.product_id")
+    .whereILike("p.name", `%${query}%`)
+    .andWhere("p.is_active", true)
+    .groupBy("p.product_id", "p.name", "p.description", "pi.s3_url")
+    .orderBy("p.product_id")
     .limit(limit)
     .offset(offset);
   const countResult = (await db("product")
