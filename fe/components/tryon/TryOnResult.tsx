@@ -122,7 +122,7 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
         <p className="text-sm text-red-600">{message}</p>
         <button
           onClick={onReset}
-          className="rounded-lg border border-gray-300 px-5 py-2 text-sm hover:bg-gray-50"
+          className="rounded-lg border border-gray-300 bg-indigo-600 px-5 py-2 text-sm text-white transition-colors hover:bg-indigo-700 active:scale-[0.98] hover:cursor-pointer"
         >
           Try Again
         </button>
@@ -148,7 +148,7 @@ export default function TryOnResult({ sessionId, onReset }: TryOnResultProps) {
         </a>
         <button
           onClick={onReset}
-          className="rounded-lg border border-gray-300 px-5 py-2 text-sm hover:bg-gray-50"
+          className="rounded-lg border border-gray-300 bg-indigo-600 px-5 py-2 text-sm text-white transition-colors hover:bg-indigo-700 active:scale-[0.98] hover:cursor-pointer"
         >
           Try Another
         </button>
