@@ -67,7 +67,7 @@ export default function StatsCard({
             "mt-1 truncate text-xs",
             trend === "up" && "text-green-600",
             trend === "down" && "text-red-600",
-            (!trend || trend === "neutral") && "text-slate-400",
+            (!trend || trend === "neutral") && "text-slate-900",
           )}
         >
           {hint}

@@ -316,16 +316,19 @@ export interface UserAddress extends Address {
 }
 
 // Review
-export interface Review {
-  product_id: number;
-  variant_id: number;
-  user_id: number;
+// ReviewCardProps
+export interface ReviewReply {
+  reply_id: number;
   review_id: number;
-  rating: number; // 1–5
+  user_id: number | null;
+  staff_id: number | null;
   comment: string;
+  created_at: string;
+  username?: string | null; // set when user_id is present
+  avatar_url?: string | null;
+  staff_name?: string | null; // set when staff_id is present
 }
 
-// ReviewCardProps
 export interface Review {
   product_id: number;
   variant_id: number;
@@ -335,6 +338,7 @@ export interface Review {
   comment: string;
   username: string;
   avatar_url?: string;
+  replies?: ReviewReply[];
 }
 
 // Wishlist

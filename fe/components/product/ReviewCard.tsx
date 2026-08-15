@@ -1,10 +1,20 @@
-import { Star, BadgeCheck } from "lucide-react";
+import { Star, BadgeCheck, Loader2, Trash2 } from "lucide-react";
+import ReplyList, { ReplyActor } from "../ReplyList";
+import type { ReviewReply } from "../../interfaces";
 
 interface ReviewCardProps {
   username: string;
   rating: number;
   comment: string;
   date?: string;
+  replies?: ReviewReply[];
+  currentActor?: ReplyActor | null;
+  /** Shown only when currentActor is this review's own author. */
+  onDeleteReview?: () => Promise<void>;
+  deletingReview?: boolean;
+  onPostReply?: (comment: string) => Promise<unknown>;
+  onDeleteReply?: (reply_id: number) => Promise<unknown>;
+  isOwnReview?: boolean;
 }
 
 export default function ReviewCard({
@@ -12,6 +22,13 @@ export default function ReviewCard({
   rating,
   comment,
   date,
+  replies = [],
+  currentActor = null,
+  onDeleteReview,
+  deletingReview = false,
+  onPostReply,
+  onDeleteReply,
+  isOwnReview = false,
 }: ReviewCardProps) {
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md md:p-8">
@@ -33,9 +50,29 @@ export default function ReviewCard({
           })}
         </div>
 
-        {date && (
-          <span className="text-sm font-medium text-slate-400">{date}</span>
-        )}
+        <div className="flex items-center gap-3">
+          {date && (
+            <span className="text-sm font-medium text-slate-400">{date}</span>
+          )}
+          {/* Only the review's own creator can delete it — never shown
+              otherwise, including to staff/admin (that moderation path
+              is separate, in the staff dashboard). */}
+          {isOwnReview && onDeleteReview && (
+            <button
+              type="button"
+              onClick={onDeleteReview}
+              disabled={deletingReview}
+              aria-label="Delete review"
+              className="text-slate-400 transition hover:text-red-500 disabled:opacity-40"
+            >
+              {deletingReview ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Name and Verified Tick */}
@@ -52,6 +89,13 @@ export default function ReviewCard({
       <p className="text-sm leading-relaxed text-slate-600 md:text-base">
         {comment}
       </p>
+
+      <ReplyList
+        replies={replies}
+        currentActor={currentActor}
+        onPostReply={onPostReply}
+        onDeleteReply={onDeleteReply}
+      />
     </div>
   );
 }

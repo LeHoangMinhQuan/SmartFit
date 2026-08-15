@@ -38,6 +38,22 @@ export interface DashboardStats {
     revenue: number;
   }>;
   new_users_last_30d: number;
+  // Daily rollup for the trend chart — capped to the trailing 90 days
+  // when no from/to range is given (see admin.controller.ts's
+  // getDashboard comment on why this isn't truly all-time by default).
+  revenue_series: Array<{
+    date: string; // "YYYY-MM-DD"
+    revenue: number;
+    order_count: number;
+  }>;
+  // Current operational backlog — NOT scoped to the selected from/to
+  // range (see backend comment): these are "what needs handling right
+  // now" counts, so each links to a pre-filtered orders list.
+  needs_attention: {
+    unclaimed_orders: number;
+    missing_shipment: number;
+    refund_requested: number;
+  };
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
@@ -113,9 +129,9 @@ interface Supplier {
 
 export const adminService = {
   // Dashboard
-  getDashboard: () =>
+  getDashboard: (params?: { from?: string; to?: string }) =>
     api
-      .get<ApiResponse<DashboardStats>>("/admin/dashboard")
+      .get<ApiResponse<DashboardStats>>("/admin/dashboard", { params })
       .then((r) => r.data.data),
 
   // ── Products ──
@@ -278,12 +294,21 @@ export const adminService = {
     limit?: number;
     status?: OrderStatus;
     user_id?: number;
-    created_at?: string;
+    // Matches order.model.ts's findAllOrders `from`/`to` filters (ISO
+    // date strings, e.g. "2026-07-01") — used by both the staff orders
+    // page's own date filter and dashboard "drill into this range"
+    // links. (Replaces a vestigial unused `created_at` param that never
+    // actually matched any backend filter name.)
+    from?: string;
+    to?: string;
     // Confirmed (paid/cod_confirmed) orders whose GHN shipment was never
     // created — see order.model.ts's STUCK_SHIPMENT_STATUSES. Surfaced as
     // a "Needs fulfillment" filter on the staff orders list so these
     // don't silently fall through the cracks.
     needs_fulfillment?: boolean;
+    // Orders still on the SYSTEM_STAFF_ID placeholder (nobody has
+    // claimed them). Backs the dashboard's "Unclaimed Orders" card.
+    unclaimed?: boolean;
   }) =>
     api
       .get<PaginatedResponse<Order>>("/admin/orders", { params })

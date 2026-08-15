@@ -350,9 +350,22 @@ export const getUser = catchAsync(async (req: Request, res: Response) => {
 // ─── Reviews ─────────────────────────────────────────────────────────────────
 
 export const listReviews = catchAsync(async (req: Request, res: Response) => {
-  const { page, limit } = req.query as any;
-  const result = await ReviewModel.findAllReviews(page, limit);
-  res.json({ data: result.rows, meta: { total: result.total } });
+  const { page = 1, limit = 20 } = req.query as any;
+  const pageNum = Number(page);
+  const limitNum = Number(limit);
+  const result = await ReviewModel.findAllReviews(pageNum, limitNum);
+  // Same incomplete-meta bug as adminListOrders/listUsers (see those
+  // fixes) — return the full PaginationMeta shape the frontend's
+  // <Pagination>/DataTable expect.
+  res.json({
+    data: result.rows,
+    meta: {
+      page: pageNum,
+      limit: limitNum,
+      total: result.total,
+      totalPages: Math.ceil(result.total / limitNum),
+    },
+  });
 });
 
 export const adminDeleteReview = catchAsync(
@@ -372,13 +385,15 @@ export const adminDeleteReview = catchAsync(
 
 export const adminListOrders = catchAsync(
   async (req: Request, res: Response) => {
-    // needs_fulfillment arrives as the string "true"/"false" over the
-    // querystring — coerce explicitly rather than passing the raw string
-    // through, since a truthy-string check would treat "false" as true too.
-    const { needs_fulfillment, ...rest } = req.query as any;
+    // needs_fulfillment/unclaimed arrive as the string "true"/"false" over
+    // the querystring — coerce explicitly rather than passing the raw
+    // string through, since a truthy-string check would treat "false" as
+    // true too.
+    const { needs_fulfillment, unclaimed, ...rest } = req.query as any;
     const result = await OrderService.adminListOrders({
       ...rest,
       needs_fulfillment: needs_fulfillment === "true",
+      unclaimed: unclaimed === "true",
     });
     // BUG FIX: this was returning only `{ total }` in meta, unlike
     // listInventory/getImportHistory which return the full PaginationMeta
@@ -470,45 +485,147 @@ export const adminProcessRefund = catchAsync(
   },
 );
 
+// Same "real sale" status set used elsewhere on this dashboard (top
+// products, revenue) — orders that were never actually paid for
+// (pending_payment, payment_failed, cancelled before payment) shouldn't
+// count as revenue or sales activity.
+const REAL_SALE_STATUSES = ["paid", "preparing", "shipping", "delivered"];
+
+// Placeholder staff_id every order starts on before a staff member claims
+// it (see order.model.ts's own SYSTEM_STAFF_ID comment) and the statuses
+// a confirmed order can be stuck in while still missing its GHN shipment
+// (order.model.ts's STUCK_SHIPMENT_STATUSES). Duplicated here rather than
+// imported — same convention as order.service.ts's RETRYABLE_SHIPMENT_STATUSES:
+// avoids a circular import between model/service and this controller, and
+// each copy is a plain literal that isn't going to drift silently since
+// it's checked against the same fixed schema CHECK constraint everywhere.
+const SYSTEM_STAFF_ID = 1;
+const STUCK_SHIPMENT_STATUSES = ["paid", "cod_confirmed"];
+
+/**
+ * Parses optional ?from=&to= query params (ISO date strings, e.g.
+ * "2026-07-01") into a [from, to) range. Both are optional and
+ * independent — a lone `from` means "since then", a lone `to` means "up
+ * to then", neither means all-time (the dashboard's original behavior,
+ * preserved as the default so existing bookmarks/links keep working).
+ * `to` is treated as inclusive-of-that-day by adding one day, since a
+ * bare date string parses to that day's 00:00:00 otherwise and would
+ * silently exclude the selected end day's own orders.
+ */
+function parseDashboardRange(req: Request): { from?: Date; to?: Date } {
+  const { from, to } = req.query as { from?: string; to?: string };
+  const result: { from?: Date; to?: Date } = {};
+  if (from) {
+    const d = new Date(from);
+    if (!Number.isNaN(d.getTime())) result.from = d;
+  }
+  if (to) {
+    const d = new Date(to);
+    if (!Number.isNaN(d.getTime())) {
+      d.setDate(d.getDate() + 1);
+      result.to = d;
+    }
+  }
+  return result;
+}
+
+function applyDateRange(
+  query: any,
+  column: string,
+  range: { from?: Date; to?: Date },
+): any {
+  if (range.from) query = query.where(column, ">=", range.from);
+  if (range.to) query = query.where(column, "<", range.to);
+  return query;
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
-  const [total_revenue, total_orders, new_users, ordersByStatus, topProducts] =
-    await Promise.all([
-      db("ORDER")
-        .whereIn("status", ["paid", "preparing", "shipping", "delivered"])
-        .sum("total_amount as total_revenue"),
-      db("ORDER").count("order_id as total_orders"),
-      db("USER")
-        .where("created_at", ">=", db.raw("NOW() - INTERVAL '30 days'"))
-        .count("user_id as new_users"),
-      db("ORDER").select("status").count("order_id as count").groupBy("status"),
+export const getDashboard = catchAsync(async (req: Request, res: Response) => {
+  const range = parseDashboardRange(req);
+
+  const [
+    total_revenue,
+    total_orders,
+    new_users,
+    ordersByStatus,
+    topProducts,
+    revenueSeries,
+    unclaimedCount,
+    needsFulfillmentCount,
+  ] = await Promise.all([
+    applyDateRange(
+      db("ORDER").whereIn("status", REAL_SALE_STATUSES),
+      "created_at",
+      range,
+    ).sum("total_amount as total_revenue"),
+    applyDateRange(db("ORDER"), "created_at", range).count(
+      "order_id as total_orders",
+    ),
+    // "New users" always means the trailing 30 days, independent of the
+    // dashboard's selected range — it's a fixed-window signup-velocity
+    // metric, not a report over the chosen range, so it deliberately
+    // doesn't take `range` (a `from`/`to` far in the past would otherwise
+    // make this card claim near-zero new users, which isn't what it's
+    // asking).
+    db("USER")
+      .where("created_at", ">=", db.raw("NOW() - INTERVAL '30 days'"))
+      .count("user_id as new_users"),
+    applyDateRange(db("ORDER"), "created_at", range)
+      .select("status")
+      .count("order_id as count")
+      .groupBy("status"),
+    applyDateRange(
       db("order_item as oi")
         .join("product as p", "oi.product_id", "p.product_id")
         .join("ORDER as o", "oi.order_id", "o.order_id")
         .select(
           "oi.product_id",
           "p.name",
-          // NOTE (2026-08-01) — two bugs fixed here:
-          // 1. Field-name mismatch: this used to alias the sum as
-          //    `total_sold`, but the frontend's TopProduct type
-          //    (services/staff/admin.service.ts) has only ever read
-          //    `p.sold` — so the units-sold column always rendered blank.
-          //    Aliased to `sold` to match.
-          // 2. This had no order-status filter at all, so cancelled,
-          //    payment-failed, and still-pending orders all counted
-          //    towards "units sold". Joined ORDER and restricted to the
-          //    same real-sale statuses already used for total_revenue
-          //    above, so the two numbers on this dashboard agree with
-          //    each other.
           db.raw("SUM(oi.quantity) as sold"),
           db.raw("SUM(oi.subtotal) as revenue"),
         )
-        .whereIn("o.status", ["paid", "preparing", "shipping", "delivered"])
-        .groupBy("oi.product_id", "p.name")
-        .orderBy("sold", "desc")
-        .limit(5),
-    ]);
+        .whereIn("o.status", REAL_SALE_STATUSES),
+      "o.created_at",
+      range,
+    )
+      .groupBy("oi.product_id", "p.name")
+      .orderBy("sold", "desc")
+      .limit(5),
+    // Daily revenue rollup for the dashboard's trend chart — same
+    // REAL_SALE_STATUSES filter as total_revenue above so the chart and
+    // the KPI card it sits next to always agree with each other. Capped
+    // to the selected range when one is given; when no range is
+    // selected, capped to the trailing 90 days rather than truly
+    // all-time, since an unbounded day-by-day series isn't a useful
+    // chart on a store that's been running a while and would make every
+    // OTHER day's bar invisible next to it.
+    applyDateRange(
+      db("ORDER").whereIn("status", REAL_SALE_STATUSES),
+      "created_at",
+      range.from || range.to
+        ? range
+        : { from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+    )
+      .select(db.raw("DATE(created_at) as date"))
+      .select(db.raw("SUM(total_amount) as revenue"))
+      .select(db.raw("COUNT(*) as order_count"))
+      .groupByRaw("DATE(created_at)")
+      .orderByRaw("DATE(created_at) ASC"),
+    // ─── "Needs attention" — the dashboard's actionable/monitoring half ───
+    // Deliberately NOT scoped to `range`: these are current operational
+    // backlog counts ("how many things need handling right now"), not a
+    // historical report — an unclaimed order from last week still needs
+    // claiming today regardless of what date range is selected above.
+    db("ORDER")
+      .where("staff_id", SYSTEM_STAFF_ID)
+      .whereNotIn("status", ["cancelled", "refunded", "payment_failed"])
+      .count("order_id as count"),
+    db("ORDER")
+      .whereIn("status", STUCK_SHIPMENT_STATUSES)
+      .whereNull("shipping_order_id")
+      .count("order_id as count"),
+  ]);
 
   const revenue = Number(total_revenue[0]?.["total_revenue"] ?? 0);
   const orders = Number(total_orders[0]?.["total_orders"] ?? 0);
@@ -526,6 +643,25 @@ export const getDashboard = catchAsync(async (_req: Request, res: Response) => {
         sold: Number(p.sold),
         revenue: Number(p.revenue),
       })),
+      revenue_series: revenueSeries.map((r: any) => ({
+        date:
+          r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date,
+        revenue: Number(r.revenue),
+        order_count: Number(r.order_count),
+      })),
+      needs_attention: {
+        unclaimed_orders: Number(unclaimedCount[0]?.["count"] ?? 0),
+        missing_shipment: Number(needsFulfillmentCount[0]?.["count"] ?? 0),
+        // refund_requested is already a status, so it's available from
+        // orders_by_status too — surfaced again here under
+        // needs_attention purely so the frontend can render it in the
+        // same actionable-cards row as the two counts above without
+        // having to cross-reference two different parts of the payload.
+        refund_requested: Number(
+          (ordersByStatus as any[]).find((r) => r.status === "refund_requested")
+            ?.count ?? 0,
+        ),
+      },
     },
   });
 });

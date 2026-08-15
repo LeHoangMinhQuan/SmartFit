@@ -149,6 +149,12 @@ export async function findAllOrders(filters: {
   page?: number;
   limit?: number;
   needs_fulfillment?: boolean;
+  // Orders still sitting on the SYSTEM_STAFF_ID placeholder — i.e. no
+  // staff member has claimed them yet (see adminUpdateStatus's ownership
+  // comment in order.service.ts). Backs the dashboard's "Unclaimed
+  // Orders" needs-attention card so staff can click straight through to
+  // the actual list instead of just seeing a bare count.
+  unclaimed?: boolean;
 }) {
   const {
     status,
@@ -158,6 +164,7 @@ export async function findAllOrders(filters: {
     page = 1,
     limit = 20,
     needs_fulfillment,
+    unclaimed,
   } = filters;
   const offset = (page - 1) * limit;
 
@@ -183,6 +190,9 @@ export async function findAllOrders(filters: {
       .whereIn("ORDER.status", STUCK_SHIPMENT_STATUSES)
       .whereNull("ORDER.shipping_order_id");
   }
+  if (unclaimed) {
+    query = query.where("ORDER.staff_id", SYSTEM_STAFF_ID);
+  }
 
   const rows = await query
     .orderBy("ORDER.created_at", "desc")
@@ -206,6 +216,9 @@ export async function findAllOrders(filters: {
     countQ = countQ
       .whereIn("status", STUCK_SHIPMENT_STATUSES)
       .whereNull("shipping_order_id");
+  }
+  if (unclaimed) {
+    countQ = countQ.where("staff_id", SYSTEM_STAFF_ID);
   }
   const totalResult = await countQ;
   const total = totalResult[0]?.["total"] ?? 0;

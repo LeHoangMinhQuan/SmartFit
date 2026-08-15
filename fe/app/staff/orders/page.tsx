@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import {
   useQuery,
@@ -15,6 +15,7 @@ import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import OrderStatusBadge from "../../../components/order/OrderStatusBadge";
 import Input from "../../../components/ui/Input";
+import Spinner from "../../../components/ui/Spinner";
 import type { OrderStatus } from "../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
@@ -35,18 +36,95 @@ const STATUS_OPTIONS: OrderStatus[] = [
 // sync with the same check in orders/[order_id]/page.tsx.
 const TERMINAL_STATUSES: OrderStatus[] = ["cancelled", "refunded"];
 
+function isOrderStatus(v: string): v is OrderStatus {
+  return (STATUS_OPTIONS as string[]).includes(v);
+}
+
+// useSearchParams() requires a Suspense boundary above it (Next.js
+// static-rendering rule) — same reason payment/result/page.tsx and
+// tryon/page.tsx already split into a thin page + inner PageContent.
+// This page follows that same split rather than introducing a
+// differently-shaped pattern for the one page in /staff that reads the
+// URL.
 export default function StaffOrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-24">
+          <Spinner size="lg" />
+        </div>
+      }
+    >
+      <StaffOrdersPageContent />
+    </Suspense>
+  );
+}
+
+function StaffOrdersPageContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  // Filters are seeded from the URL on first render (not re-read on every
+  // navigation — Next's searchParams are already stable per-render) so
+  // links from elsewhere (the dashboard's "needs attention" cards, a
+  // shared/bookmarked URL) land pre-filtered instead of always opening on
+  // the unfiltered default. Each filter change below still updates local
+  // state directly for responsiveness; see setFilter for how the URL stays
+  // in sync afterward so the page remains bookmarkable/shareable as
+  // filters change, not just on initial load.
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get("status");
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "">(
+    initialStatus && isOrderStatus(initialStatus) ? initialStatus : "",
+  );
   const [userIdFilter, setUserIdFilter] = useState("");
-  const [needsFulfillmentOnly, setNeedsFulfillmentOnly] = useState(false);
+  const [fromFilter, setFromFilter] = useState(searchParams.get("from") ?? "");
+  const [toFilter, setToFilter] = useState(searchParams.get("to") ?? "");
+  const [needsFulfillmentOnly, setNeedsFulfillmentOnly] = useState(
+    searchParams.get("needs_fulfillment") === "true",
+  );
+  const [unclaimedOnly, setUnclaimedOnly] = useState(
+    searchParams.get("unclaimed") === "true",
+  );
+
+  // Pushes the current filter state into the URL (replace, not push — a
+  // filter tweak shouldn't pile up back-button history entries) so the
+  // page stays a shareable/bookmarkable link as staff adjust it, the same
+  // way it can already be landed on pre-filtered.
+  function syncUrl(next: {
+    status?: OrderStatus | "";
+    from?: string;
+    to?: string;
+    needs_fulfillment?: boolean;
+    unclaimed?: boolean;
+  }) {
+    const params = new URLSearchParams();
+    const status = next.status ?? statusFilter;
+    const from = next.from ?? fromFilter;
+    const to = next.to ?? toFilter;
+    const needsFulfillment = next.needs_fulfillment ?? needsFulfillmentOnly;
+    const unclaimed = next.unclaimed ?? unclaimedOnly;
+    if (status) params.set("status", status);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    if (needsFulfillment) params.set("needs_fulfillment", "true");
+    if (unclaimed) params.set("unclaimed", "true");
+    const qs = params.toString();
+    router.replace(qs ? `/staff/orders?${qs}` : "/staff/orders");
+  }
 
   const { data, isLoading: loading } = useQuery({
     queryKey: [
       "staff-orders",
-      { page, statusFilter, userIdFilter, needsFulfillmentOnly },
+      {
+        page,
+        statusFilter,
+        userIdFilter,
+        fromFilter,
+        toFilter,
+        needsFulfillmentOnly,
+        unclaimedOnly,
+      },
     ],
     queryFn: () =>
       adminService.getAllOrders({
@@ -54,7 +132,10 @@ export default function StaffOrdersPage() {
         limit: 20,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(userIdFilter ? { user_id: Number(userIdFilter) } : {}),
+        ...(fromFilter ? { from: fromFilter } : {}),
+        ...(toFilter ? { to: toFilter } : {}),
         ...(needsFulfillmentOnly ? { needs_fulfillment: true } : {}),
+        ...(unclaimedOnly ? { unclaimed: true } : {}),
       }),
     placeholderData: keepPreviousData,
   });
@@ -105,8 +186,10 @@ export default function StaffOrdersPage() {
           <select
             value={statusFilter}
             onChange={(e) => {
-              setStatusFilter(e.target.value as OrderStatus | "");
+              const value = e.target.value as OrderStatus | "";
+              setStatusFilter(value);
               setPage(1);
+              syncUrl({ status: value });
             }}
             className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -118,6 +201,28 @@ export default function StaffOrdersPage() {
             ))}
           </select>
         </div>
+        <Input
+          label="From"
+          type="date"
+          value={fromFilter}
+          onChange={(e) => {
+            setFromFilter(e.target.value);
+            setPage(1);
+            syncUrl({ from: e.target.value });
+          }}
+          className="w-40"
+        />
+        <Input
+          label="To"
+          type="date"
+          value={toFilter}
+          onChange={(e) => {
+            setToFilter(e.target.value);
+            setPage(1);
+            syncUrl({ to: e.target.value });
+          }}
+          className="w-40"
+        />
         <Input
           label="User ID"
           type="number"
@@ -140,9 +245,26 @@ export default function StaffOrdersPage() {
             onChange={(e) => {
               setNeedsFulfillmentOnly(e.target.checked);
               setPage(1);
+              syncUrl({ needs_fulfillment: e.target.checked });
             }}
           />
           Missing GHN Shipment
+        </label>
+        <label
+          className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+          title="Orders no staff member has claimed yet"
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            checked={unclaimedOnly}
+            onChange={(e) => {
+              setUnclaimedOnly(e.target.checked);
+              setPage(1);
+              syncUrl({ unclaimed: e.target.checked });
+            }}
+          />
+          Unclaimed
         </label>
       </div>
 

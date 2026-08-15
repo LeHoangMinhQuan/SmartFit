@@ -43,6 +43,14 @@ export default function ReviewSection({
     user && reviews.some((r) => r.user_id === user.user_id)
   );
 
+  // Identifies "me" for ReplyList/ReviewCard's ownership checks — this
+  // section only ever runs as a customer (or logged out), never staff;
+  // see components/ReplyList.tsx's doc comment for the staff-side
+  // equivalent in the dashboard.
+  const currentActor = user
+    ? { type: "customer" as const, id: user.user_id }
+    : null;
+
   const submitReviewMutation = useMutation({
     mutationFn: () =>
       reviewService.submitReview(product_id, variant_id as number, {
@@ -69,6 +77,50 @@ export default function ReviewSection({
     },
   });
   const submitting = submitReviewMutation.isPending;
+
+  // Only the review's own creator can delete it — enforced server-side
+  // too (review.routes.ts's DELETE looks the row up scoped to the
+  // caller's own user_id first), this is just so the button only shows
+  // where it'll actually work.
+  const deleteReviewMutation = useMutation({
+    mutationFn: ({
+      review_id,
+      variant_id: v,
+    }: {
+      review_id: number;
+      variant_id: number;
+    }) => reviewService.deleteReview(product_id, v, review_id),
+    onSuccess: () => {
+      toast.success("Review deleted.");
+      queryClient.invalidateQueries({ queryKey: ["reviews", product_id] });
+    },
+    onError: () => toast.error("Failed to delete review."),
+  });
+
+  const postReplyMutation = useMutation({
+    mutationFn: ({
+      review_id,
+      comment: replyComment,
+    }: {
+      review_id: number;
+      comment: string;
+    }) => reviewService.postReply(review_id, replyComment),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviews", product_id] });
+    },
+    onError: () => toast.error("Failed to post reply."),
+  });
+
+  // Ownership-scoped on the backend too (deleteReplyByCustomer) — only
+  // the reply's own author can delete it, not the review's author and
+  // not staff/admin (see review.routes.ts's comment on this exact rule).
+  const deleteReplyMutation = useMutation({
+    mutationFn: (reply_id: number) => reviewService.deleteReply(reply_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reviews", product_id] });
+    },
+    onError: () => toast.error("Failed to delete reply."),
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,7 +161,42 @@ export default function ReviewSection({
       ) : (
         <div className="flex flex-col gap-6">
           {reviews.map((r) => (
-            <ReviewCard key={`${r.user_id}-${r.review_id}`} {...r} />
+            <ReviewCard
+              key={`${r.user_id}-${r.review_id}`}
+              username={r.username}
+              rating={r.rating}
+              comment={r.comment}
+              replies={r.replies}
+              currentActor={currentActor}
+              isOwnReview={!!user && r.user_id === user.user_id}
+              deletingReview={
+                deleteReviewMutation.isPending &&
+                deleteReviewMutation.variables?.review_id === r.review_id
+              }
+              onDeleteReview={
+                user
+                  ? () =>
+                      deleteReviewMutation.mutateAsync({
+                        review_id: r.review_id,
+                        variant_id: r.variant_id,
+                      })
+                  : undefined
+              }
+              onPostReply={
+                currentActor
+                  ? (comment) =>
+                      postReplyMutation.mutateAsync({
+                        review_id: r.review_id,
+                        comment,
+                      })
+                  : undefined
+              }
+              onDeleteReply={
+                currentActor
+                  ? (reply_id) => deleteReplyMutation.mutateAsync(reply_id)
+                  : undefined
+              }
+            />
           ))}
         </div>
       )}

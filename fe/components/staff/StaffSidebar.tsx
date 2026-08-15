@@ -15,6 +15,7 @@ import {
   UserCog,
   Store,
   LogOut,
+  MessageSquare,
 } from "lucide-react";
 // adminOnly items mirror the backend's admin-only route groups in
 // admin.routes.ts (Staff management, Roles, Stores, Vouchers, Discounts,
@@ -56,6 +57,14 @@ const NAV_ITEMS = [
     href: "/staff/suppliers",
     label: "Suppliers",
     icon: Truck,
+    adminOnly: false,
+  },
+  {
+    // Matches admin.routes.ts: GET /admin/reviews is
+    // authorize("admin", "staff"), not admin-only.
+    href: "/staff/reviews",
+    label: "Reviews",
+    icon: MessageSquare,
     adminOnly: false,
   },
   {
