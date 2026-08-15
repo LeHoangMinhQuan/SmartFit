@@ -307,15 +307,23 @@ export const recordImport = catchAsync(async (req: Request, res: Response) => {
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export const listUsers = catchAsync(async (req: Request, res: Response) => {
-  const { page = 1, limit = 20 } = req.query as any;
+  const { page = 1, limit = 20, search } = req.query as any;
   const pageNum = Number(page);
   const limitNum = Number(limit);
   const offset = (pageNum - 1) * limitNum;
-  const rows = await db("USER")
+  // `search` powers the staff orders page's user Combobox (search by
+  // username instead of typing a raw user_id) — matches products'
+  // ILIKE-on-name search (see product.model.ts's searchProducts), same
+  // "%term%" pattern, case-insensitive.
+  const query = db("USER").modify((qb) => {
+    if (search) qb.whereILike("username", `%${search}%`);
+  });
+  const rows = await query
+    .clone()
     .select("user_id", "username", "email", "phone", "created_at")
     .limit(limitNum)
     .offset(offset);
-  const totalResult = await db("USER").count("user_id as total");
+  const totalResult = await query.clone().count("user_id as total");
   // BUG FIX: `total` was `Number([{ total: "N" }])` — count() returns an
   // array of one row, and Number() on an array (via its default
   // toString(), "[object Object]" once stringified) is NaN, not the

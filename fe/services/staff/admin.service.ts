@@ -385,6 +385,16 @@ export const adminService = {
       .get<PaginatedResponse<User>>("/admin/users", { params })
       .then((r) => r.data),
 
+  // Backs the orders page's user Combobox — search by username instead
+  // of typing a raw user_id. Same shape/limit convention as
+  // getAllUsers, just with the `search` filter added server-side.
+  searchUsers: (search: string, params?: { limit?: number }) =>
+    api
+      .get<PaginatedResponse<User>>("/admin/users", {
+        params: { search, ...params },
+      })
+      .then((r) => r.data.data),
+
   getUser: (user_id: number) =>
     api
       .get<ApiResponse<User>>(`/admin/users/${user_id}`)

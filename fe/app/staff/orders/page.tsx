@@ -15,8 +15,9 @@ import { toast } from "../../../components/ui/Toast";
 import DataTable from "../../../components/staff/DataTable";
 import OrderStatusBadge from "../../../components/order/OrderStatusBadge";
 import Input from "../../../components/ui/Input";
+import Combobox from "../../../components/ui/Combobox";
 import Spinner from "../../../components/ui/Spinner";
-import type { OrderStatus } from "../../../interfaces";
+import type { OrderStatus, User } from "../../../interfaces";
 
 const STATUS_OPTIONS: OrderStatus[] = [
   "pending_payment",
@@ -77,7 +78,8 @@ function StaffOrdersPageContent() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "">(
     initialStatus && isOrderStatus(initialStatus) ? initialStatus : "",
   );
-  const [userIdFilter, setUserIdFilter] = useState("");
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userQuery, setUserQuery] = useState("");
   const [fromFilter, setFromFilter] = useState(searchParams.get("from") ?? "");
   const [toFilter, setToFilter] = useState(searchParams.get("to") ?? "");
   const [needsFulfillmentOnly, setNeedsFulfillmentOnly] = useState(
@@ -113,13 +115,19 @@ function StaffOrdersPageContent() {
     router.replace(qs ? `/staff/orders?${qs}` : "/staff/orders");
   }
 
+  const { data: userResults = [], isFetching: searchingUsers } = useQuery({
+    queryKey: ["staff-orders-user-search", userQuery],
+    queryFn: () => adminService.searchUsers(userQuery, { limit: 10 }),
+    enabled: userQuery.trim().length > 0,
+  });
+
   const { data, isLoading: loading } = useQuery({
     queryKey: [
       "staff-orders",
       {
         page,
         statusFilter,
-        userIdFilter,
+        userId: selectedUser?.user_id,
         fromFilter,
         toFilter,
         needsFulfillmentOnly,
@@ -131,7 +139,7 @@ function StaffOrdersPageContent() {
         page,
         limit: 20,
         ...(statusFilter ? { status: statusFilter } : {}),
-        ...(userIdFilter ? { user_id: Number(userIdFilter) } : {}),
+        ...(selectedUser ? { user_id: selectedUser.user_id } : {}),
         ...(fromFilter ? { from: fromFilter } : {}),
         ...(toFilter ? { to: toFilter } : {}),
         ...(needsFulfillmentOnly ? { needs_fulfillment: true } : {}),
@@ -223,17 +231,27 @@ function StaffOrdersPageContent() {
           }}
           className="w-40"
         />
-        <Input
-          label="User ID"
-          type="number"
-          value={userIdFilter}
-          onChange={(e) => {
-            setUserIdFilter(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Filter by user…"
-          className="w-36"
-        />
+        <div className="w-56">
+          <Combobox<User>
+            label="User"
+            items={userResults}
+            value={selectedUser}
+            onChange={(u) => {
+              setSelectedUser(u);
+              setPage(1);
+            }}
+            getKey={(u) => u.user_id}
+            getLabel={(u) => u.username}
+            getSublabel={(u) => u.email}
+            query={userQuery}
+            onQueryChange={setUserQuery}
+            loading={searchingUsers}
+            placeholder="Search by username…"
+            emptyMessage={
+              userQuery.trim() ? "No users found." : "Type to search…"
+            }
+          />
+        </div>
         <label
           className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
           title="Confirmed orders (paid / cod_confirmed) with no GHN shipment created yet"
