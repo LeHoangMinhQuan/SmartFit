@@ -1,6 +1,9 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
-import { expireStalePendingOrders } from "./services/order.service.js";
+import {
+  expireStalePendingOrders,
+  autoAssignUnclaimedOrders,
+} from "./services/order.service.js";
 import db from "./config/db.js";
 
 // Start the server
@@ -74,12 +77,14 @@ async function checkEmbeddingCoverage(): Promise<void> {
     const productResult = await db("product")
       .where({ is_active: true })
       .count<{ count: string }[]>("* as count");
-    const productCount = productResult[0]?.count ?? '0';
+    const productCount = productResult[0]?.count ?? "0";
 
-    const embeddingResult = await db("product_embedding").count<{
-      count: string;
-    }[]>("* as count");
-    const embeddingCount = embeddingResult[0]?.count ?? '0';
+    const embeddingResult = await db("product_embedding").count<
+      {
+        count: string;
+      }[]
+    >("* as count");
+    const embeddingCount = embeddingResult[0]?.count ?? "0";
 
     const products = Number(productCount);
     const embeddings = Number(embeddingCount);
@@ -118,3 +123,21 @@ function runStaleOrderSweep(): void {
 
 setTimeout(runStaleOrderSweep, 10_000);
 setInterval(runStaleOrderSweep, STALE_ORDER_SWEEP_INTERVAL_MS);
+
+// Safety net for autoAssignStaff() (order.service.ts), which already runs
+// immediately once an order is confirmed (COD/VNPay paths, retryShipment)
+// — this sweep only matters if that immediate call was missed (e.g. a
+// restart between shipment creation and the assign call). Shorter
+// interval than the stale-payment sweep since an order sitting unclaimed
+// here means a real confirmed order with no staff owner, not just an
+// abandoned checkout.
+const AUTO_ASSIGN_SWEEP_INTERVAL_MS = 2 * 60 * 1000;
+
+function runAutoAssignSweep(): void {
+  autoAssignUnclaimedOrders().catch((err) => {
+    console.error("[auto-assign-sweep] failed:", err);
+  });
+}
+
+setTimeout(runAutoAssignSweep, 15_000);
+setInterval(runAutoAssignSweep, AUTO_ASSIGN_SWEEP_INTERVAL_MS);

@@ -6,7 +6,7 @@ import * as OrderModel from "../models/order.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
 import * as PaymentRefundModel from "../models/payment_refund.model.js";
 import { vnpayClient, buildTxnRef, buildPaymentUrl } from "../config/vnpay.js";
-import { expireStalePendingOrders } from "./order.service.js";
+import { expireStalePendingOrders, autoAssignStaff } from "./order.service.js";
 
 // TODO(remove for production): VNPay sandbox merchant account only has the
 // NCB test bank enabled, so we force-select it here to skip the bank-picker
@@ -122,6 +122,7 @@ async function applyPaymentResult(
       try {
         const { createShipmentForOrder } = await import("./ghn.service.js");
         await createShipmentForOrder(order_id);
+        await autoAssignStaff(order_id);
         const { notifyStaffOfConfirmedOrder } =
           await import("./notification.service.js");
         await notifyStaffOfConfirmedOrder(order_id);

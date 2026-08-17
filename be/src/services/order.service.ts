@@ -6,7 +6,11 @@ import * as VoucherModel from "../models/voucher.model.js";
 import * as ShippingModel from "../models/shipping.model.js";
 import * as PaymentModel from "../models/payment_transaction.model.js";
 import { DEFAULT_STORE_ID } from "../config/store.js";
-import { findStaffRoles, findStaffById } from "../models/staff.model.js";
+import {
+  findStaffRoles,
+  findStaffById,
+  findDefaultAssignableStaff,
+} from "../models/staff.model.js";
 
 const SYSTEM_STAFF_ID = 1;
 // Single-store scope (see ecommerce-api-plan.md scope note + §12): GHN has one
@@ -268,6 +272,7 @@ export async function createOrder(
         try {
           const { createShipmentForOrder } = await import("./ghn.service.js");
           await createShipmentForOrder(result.order_id);
+          await autoAssignStaff(result.order_id);
           const { notifyStaffOfConfirmedOrder } =
             await import("./notification.service.js");
           await notifyStaffOfConfirmedOrder(result.order_id);
@@ -528,6 +533,7 @@ export async function retryShipment(
     ? await createShipmentForOrder(order_id, required_note)
     : await createShipmentForOrder(order_id);
 
+  await autoAssignStaff(order_id);
   const { notifyStaffOfConfirmedOrder } =
     await import("./notification.service.js");
   await notifyStaffOfConfirmedOrder(order_id).catch(() => {});
@@ -687,6 +693,62 @@ export async function adminAssignStaff(
   if (!staff) throw new ApiError(404, "Staff member not found");
 
   await OrderModel.claimOrder(order_id, targetStaffId);
+}
+
+/**
+ * Auto-assign counterpart to adminAssignStaff above — same underlying
+ * claimOrder() and the same ownership rule it protects (see
+ * adminUpdateStatus's comment), just triggered by the system instead of
+ * an admin clicking a combobox. Store currently runs with one real staff
+ * account (see findDefaultAssignableStaff's comment), so there's no
+ * routing decision to make — this exists so orders don't sit unclaimed
+ * requiring a manual admin assign at all.
+ *
+ * Called right alongside notifyStaffOfConfirmedOrder (COD checkout,
+ * retryShipment, and vnpay.service.ts's IPN success path) so an order
+ * gets a staff owner the moment it's actually confirmed, and again by
+ * the sweep below as a safety net. Always a no-op rather than a thrown
+ * error on anything unexpected — must never block the payment/shipment
+ * flow it's piggybacking on.
+ */
+export async function autoAssignStaff(order_id: number): Promise<void> {
+  try {
+    const order = await OrderModel.findOrderById(order_id);
+    if (!order || order.staff_id !== SYSTEM_STAFF_ID) return;
+
+    const staff = await findDefaultAssignableStaff();
+    if (!staff) {
+      console.warn(
+        `[order] autoAssignStaff: no assignable staff account found — order ${order_id} stays unclaimed for manual assignment.`,
+      );
+      return;
+    }
+
+    await OrderModel.claimOrder(order_id, staff.staff_id);
+    console.log(
+      `[order] Auto-assigned order ${order_id} to staff_id=${staff.staff_id}.`,
+    );
+  } catch (err) {
+    // Fail-safe, matching every other notify*/auto* helper called from
+    // the confirmation paths — a failure here must never roll back or
+    // retry-block the order confirmation itself.
+    console.error(`[order] autoAssignStaff failed for order ${order_id}:`, err);
+  }
+}
+
+/**
+ * Safety-net sweep, mirroring expireStalePendingOrders' pattern (see
+ * server.ts's runStaleOrderSweep). autoAssignStaff() already runs
+ * immediately once an order is confirmed, so in the normal case this
+ * finds nothing — it only matters if that immediate call was missed
+ * (e.g. a server restart between shipment creation and the assign call).
+ */
+export async function autoAssignUnclaimedOrders(): Promise<number> {
+  const orderIds = await OrderModel.findUnclaimedActionableOrderIds();
+  for (const order_id of orderIds) {
+    await autoAssignStaff(order_id);
+  }
+  return orderIds.length;
 }
 
 export async function adminGetOrderDetail(order_id: number) {

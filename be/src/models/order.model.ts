@@ -226,6 +226,35 @@ export async function findAllOrders(filters: {
   return { rows: rowsWithClaim, total: Number(total) };
 }
 
+// Statuses an order can be unclaimed in without meaning anything went
+// wrong: it either never got past the payment gate (pending_payment) or
+// died before ever needing fulfillment (payment_failed, cancelled). Every
+// other status implies the order was confirmed at some point and should
+// have a staff owner.
+const NOT_YET_CONFIRMED_STATUSES = [
+  "pending_payment",
+  "payment_failed",
+  "cancelled",
+];
+
+/**
+ * Order ids still sitting on SYSTEM_STAFF_ID (unclaimed) that have moved
+ * past the payment gate — i.e. actually need a staff owner, not just
+ * abandoned at checkout. Safety-net sweep target for
+ * order.service.ts's autoAssignUnclaimedOrders(): the immediate
+ * auto-assign call (right where notifyStaffOfConfirmedOrder already
+ * fires) should catch these the moment they're confirmed, so this only
+ * exists to pick up whatever slips through that path — e.g. a server
+ * restart between shipment creation and the assign call.
+ */
+export async function findUnclaimedActionableOrderIds(): Promise<number[]> {
+  const rows = await db("ORDER")
+    .select("order_id")
+    .where("staff_id", SYSTEM_STAFF_ID)
+    .whereNotIn("status", NOT_YET_CONFIRMED_STATUSES);
+  return rows.map((r: { order_id: number }) => r.order_id);
+}
+
 export async function updateOrderStatus(order_id: number, status: OrderStatus) {
   return db("ORDER")
     .where({ order_id })

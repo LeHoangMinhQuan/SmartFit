@@ -48,6 +48,16 @@ export async function notifyStaffOfConfirmedOrder(
       )
       .join("");
 
+    // Same formatting the frontend uses (lib/utils.ts's formatPrice) so
+    // the amount in this email matches what staff see on the order
+    // detail page — Intl.NumberFormat works identically server-side.
+    const formattedTotal = new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+      maximumFractionDigits: 0,
+    }).format(Number(order.total_amount));
+    const orderDetailUrl = `${env.FRONTEND_URL}/staff/orders/${order_id}`;
+
     await sendMail({
       to,
       subject: `New order #${order_id} ready for fulfillment`,
@@ -59,10 +69,12 @@ export async function notifyStaffOfConfirmedOrder(
               ? " (paid via VNPay)"
               : ""
         } and a GHN shipment has been created.</p>
+        <p><strong>Total:</strong> ${formattedTotal}</p>
         <p><strong>Tracking code:</strong> ${shipping?.tracking_code ?? "(not available — check GHN manually)"}</p>
         <p><strong>Shipping address:</strong> ${order.shipping_address}</p>
         <p><strong>Items:</strong></p>
         <ul>${itemsHtml}</ul>
+        <p><a href="${orderDetailUrl}">View order #${order_id} →</a></p>
         <p>
           GHN webhook auto-tracking is not enabled for this store, so delivery
           status won't update on its own — please check the tracking code

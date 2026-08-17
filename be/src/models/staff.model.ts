@@ -52,6 +52,27 @@ export async function findAllStaff(
   return { rows, total: Number(total) };
 }
 
+/**
+ * Auto-assign target for order.service.ts's autoAssignStaff() /
+ * autoAssignUnclaimedOrders(). Store currently runs with exactly one real
+ * staff account alongside the System/admin placeholder (see
+ * ecommerce-api-plan.md scope note), so "the assignable staff member" is
+ * unambiguous — this just picks the lowest staff_id that isn't
+ * SYSTEM_STAFF_ID, which deterministically resolves to that one account.
+ *
+ * If a second staff account is ever added, this keeps running (it'll
+ * just always pick the same one) but stops being the right answer —
+ * swap it for a real load-balancing strategy (round-robin / least-busy)
+ * at that point rather than relying on "lowest id" implicitly meaning
+ * "the one staff member".
+ */
+export async function findDefaultAssignableStaff() {
+  return db("staff")
+    .whereNot({ staff_id: SYSTEM_STAFF_ID })
+    .orderBy("staff_id", "asc")
+    .first();
+}
+
 export async function updateStaff(
   staff_id: number,
   data: Partial<Pick<Staff, "name" | "birth_date" | "start_time">>,

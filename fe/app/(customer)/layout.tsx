@@ -18,16 +18,9 @@ export default function CustomerLayout({
       <Header />
       <main>{children}</main>
       <Footer />
-      {/* Mounted once here — toast.success/error/info from anywhere render into this */}
       <Toaster />
-      {/* AI shopping assistant — reachable from every customer page, not a
-          dedicated route. See ChatPanel.tsx for why it's never conditionally
-          unmounted based on open/closed state. */}
       <ChatBubble />
       <ChatPanel />
-      {/* Try-on progress tracker — survives navigation so a customer can
-          browse other products while a preview generates in the
-          background. See store/useTryOnTrackerStore.ts. */}
       <TryOnTracker />
     </>
   );
