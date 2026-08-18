@@ -56,7 +56,7 @@ export async function notifyStaffOfConfirmedOrder(
       currency: "VND",
       maximumFractionDigits: 0,
     }).format(Number(order.total_amount));
-    const orderDetailUrl = `${env.FRONTEND_URL}/staff/orders/${order_id}`;
+    const orderDetailUrl = `https://shop.lhmquan.qzz.io/staff/orders/${order_id}`;
 
     await sendMail({
       to,
